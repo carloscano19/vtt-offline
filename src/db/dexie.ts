@@ -52,7 +52,7 @@ export async function searchAssets(query: string): Promise<AssetItem[]> {
   if (!q) return getAllAssets();
 
   return await db.assets
-    .filter((asset) => asset.name.toLowerCase().includes(q) || (asset.tags && asset.tags.some((t) => t.toLowerCase().includes(q))))
+    .filter((asset) => Boolean(asset.name.toLowerCase().includes(q) || (asset.tags && asset.tags.some((t) => t.toLowerCase().includes(q)))))
     .toArray();
 }
 
