@@ -3,8 +3,8 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import { IPC_CHANNELS } from '../src/types/ipc';
 
-process.env.DIST = path.join(__dirname, '../dist');
-process.env.VITE_PUBLIC = app.isPackaged ? process.env.DIST : path.join(process.env.DIST, '../public');
+process.env.DIST = path.join(__dirname, '..', 'dist');
+process.env.VITE_PUBLIC = app.isPackaged ? process.env.DIST : path.join(process.env.DIST, '..', 'public');
 
 let masterWindow: BrowserWindow | null = null;
 let playersWindow: BrowserWindow | null = null;

@@ -227,7 +227,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
         <button
           onClick={() => setShowSaveLoadModal(true)}
           className="btn-icon text-slate-300 hover:text-white"
-          title="Guardar / Cargar Partida (Ctrl+S)"
+          title="Guardar / Cargar Partida (Cmd/Ctrl+S)"
         >
           <Save className="w-5 h-5" />
         </button>
@@ -238,7 +238,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           onClick={undo}
           disabled={!canUndo}
           className={`btn-icon ${!canUndo ? 'opacity-30 cursor-not-allowed' : 'text-slate-300 hover:text-white'}`}
-          title="Deshacer (Ctrl+Z)"
+          title="Deshacer (Cmd/Ctrl+Z)"
         >
           <Undo2 className="w-4 h-4" />
         </button>
@@ -247,7 +247,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           onClick={redo}
           disabled={!canRedo}
           className={`btn-icon ${!canRedo ? 'opacity-30 cursor-not-allowed' : 'text-slate-300 hover:text-white'}`}
-          title="Rehacer (Ctrl+Y)"
+          title="Rehacer (Cmd/Ctrl+Y o Cmd+Shift+Z)"
         >
           <Redo2 className="w-4 h-4" />
         </button>
