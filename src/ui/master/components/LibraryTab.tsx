@@ -47,21 +47,65 @@ export const LibraryTab: React.FC = () => {
 
   const handleAddToBoard = (asset: AssetItem) => {
     const isMap = asset.type === 'map';
-    const scale = isMap && asset.width ? 1 : 1;
+    const currentGridSize = game.grid.size || 70;
+
+    let posX = game.masterCamera.x;
+    let posY = game.masterCamera.y;
+    let scale = 1;
+
+    if (isMap) {
+      const ppg = (asset as any).mapData?.pixelsPerGrid || (asset.width ? asset.width / 10 : 70);
+      scale = currentGridSize / ppg;
+      const mapW = (asset.width || 1000) * scale;
+      const mapH = (asset.height || 1000) * scale;
+
+      posX = game.masterCamera.x - mapW / 2;
+      posY = game.masterCamera.y - mapH / 2;
+
+      const existingMaps = game.entities.filter((e) => e.type === 'map');
+      const isOverlapping = existingMaps.some((m) => {
+        const mW = (m.mapData?.gridWidth ?? 10) * (m.mapData?.pixelsPerGrid ?? 70) * m.scaleX;
+        const mH = (m.mapData?.gridHeight ?? 10) * (m.mapData?.pixelsPerGrid ?? 70) * m.scaleY;
+        return !(posX + mapW <= m.x || posX >= m.x + mW || posY + mapH <= m.y || posY >= m.y + mH);
+      });
+
+      if (isOverlapping && existingMaps.length > 0) {
+        let maxRight = -Infinity;
+        let refY = posY;
+        for (const m of existingMaps) {
+          const mW = (m.mapData?.gridWidth ?? 10) * (m.mapData?.pixelsPerGrid ?? 70) * m.scaleX;
+          const right = m.x + mW;
+          if (right > maxRight) {
+            maxRight = right;
+            refY = m.y;
+          }
+        }
+        posX = maxRight + currentGridSize * 2;
+        posY = refY;
+      }
+    } else {
+      // Token: lado mayor ocupa 1 casilla y centrado en la cuadrícula
+      const maxDim = Math.max(asset.width || 70, asset.height || 70);
+      scale = maxDim > 0 ? currentGridSize / maxDim : 1;
+      const halfGrid = currentGridSize / 2;
+      posX = Math.floor(game.masterCamera.x / currentGridSize) * currentGridSize + halfGrid;
+      posY = Math.floor(game.masterCamera.y / currentGridSize) * currentGridSize + halfGrid;
+    }
 
     const newEntity: Entity = {
       id: `entity_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       type: isMap ? 'map' : 'token',
       name: asset.name,
       assetId: asset.id,
-      x: game.masterCamera.x,
-      y: game.masterCamera.y,
+      x: posX,
+      y: posY,
       rotation: 0,
       scaleX: scale,
       scaleY: scale,
       zIndex: isMap ? 0 : 10,
       visibleToPlayers: isMap, // Mapas visibles, tokens ocultos por defecto
       locked: false,
+      mapData: (asset as any).mapData,
       side: isMap ? undefined : 'jugador',
       statuses: []
     };
@@ -98,13 +142,36 @@ export const LibraryTab: React.FC = () => {
           if (file.type.includes('gif') || lower.endsWith('.gif')) type = 'gif';
           if (file.type.includes('video') || lower.endsWith('.mp4') || lower.endsWith('.webm')) type = 'video';
 
+          let width: number | undefined;
+          let height: number | undefined;
+          try {
+            const objectUrl = URL.createObjectURL(file);
+            const img = new Image();
+            img.src = objectUrl;
+            if (typeof img.decode === 'function') {
+              await img.decode();
+            } else {
+              await new Promise<void>((res, rej) => {
+                img.onload = () => res();
+                img.onerror = rej;
+              });
+            }
+            width = img.naturalWidth || img.width;
+            height = img.naturalHeight || img.height;
+            URL.revokeObjectURL(objectUrl);
+          } catch {
+            // Si falla la decodificación previa, continuar
+          }
+
           const asset: AssetItem = {
             id: `asset_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
             name: name.replace(/\.[^/.]+$/, ''),
             type,
             mimeType: file.type || 'image/png',
             blob: file,
-            createdAt: Date.now()
+            createdAt: Date.now(),
+            width,
+            height
           };
           await saveAsset(asset);
         }
@@ -171,7 +238,10 @@ export const LibraryTab: React.FC = () => {
                     JSON.stringify({
                       id: asset.id,
                       name: asset.name,
-                      type: asset.type
+                      type: asset.type,
+                      width: asset.width,
+                      height: asset.height,
+                      mapData: (asset as any).mapData
                     })
                   );
                 }}

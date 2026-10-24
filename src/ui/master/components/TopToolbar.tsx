@@ -89,15 +89,46 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
 
           await saveAsset(asset);
 
-          // Crear entidad en el tablero
-          const scale = game.grid.size / parsed.pixelsPerGrid;
+          // Posicionamiento de mapa nuevo:
+          // Colocar en el centro de la vista actual del máster
+          const currentGridSize = game.grid.size || parsed.pixelsPerGrid || 70;
+          const scale = currentGridSize / parsed.pixelsPerGrid;
+          const mapW = parsed.widthPx * scale;
+          const mapH = parsed.heightPx * scale;
+
+          let mapX = game.masterCamera.x - mapW / 2;
+          let mapY = game.masterCamera.y - mapH / 2;
+
+          // Si se solapa con algún mapa existente, desplazar a la derecha del mapa más a la derecha + 2 casillas
+          const existingMaps = game.entities.filter((e) => e.type === 'map');
+          const isOverlapping = existingMaps.some((m) => {
+            const mW = (m.mapData?.gridWidth ?? 10) * (m.mapData?.pixelsPerGrid ?? 70) * m.scaleX;
+            const mH = (m.mapData?.gridHeight ?? 10) * (m.mapData?.pixelsPerGrid ?? 70) * m.scaleY;
+            return !(mapX + mapW <= m.x || mapX >= m.x + mW || mapY + mapH <= m.y || mapY >= m.y + mH);
+          });
+
+          if (isOverlapping && existingMaps.length > 0) {
+            let maxRight = -Infinity;
+            let refY = mapY;
+            for (const m of existingMaps) {
+              const mW = (m.mapData?.gridWidth ?? 10) * (m.mapData?.pixelsPerGrid ?? 70) * m.scaleX;
+              const right = m.x + mW;
+              if (right > maxRight) {
+                maxRight = right;
+                refY = m.y;
+              }
+            }
+            mapX = maxRight + currentGridSize * 2;
+            mapY = refY;
+          }
+
           const entity: Entity = {
             id: `entity_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
             type: 'map',
             name: asset.name,
             assetId: asset.id,
-            x: 0,
-            y: 0,
+            x: mapX,
+            y: mapY,
             rotation: 0,
             scaleX: scale,
             scaleY: scale,
@@ -117,6 +148,28 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
             type = 'video';
           }
 
+          // Obtener dimensiones reales de la imagen
+          let natW = 70;
+          let natH = 70;
+          try {
+            const objUrl = URL.createObjectURL(file);
+            const img = new Image();
+            img.src = objUrl;
+            if (typeof img.decode === 'function') {
+              await img.decode();
+            } else {
+              await new Promise<void>((res, rej) => {
+                img.onload = () => res();
+                img.onerror = rej;
+              });
+            }
+            natW = img.naturalWidth || img.width || 70;
+            natH = img.naturalHeight || img.height || 70;
+            URL.revokeObjectURL(objUrl);
+          } catch {
+            // Fallback si falla decode
+          }
+
           const assetId = `asset_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
           const asset: AssetItem = {
             id: assetId,
@@ -124,22 +177,33 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
             type,
             mimeType: file.type || 'image/png',
             blob: file,
-            createdAt: Date.now()
+            createdAt: Date.now(),
+            width: natW,
+            height: natH
           };
 
           await saveAsset(asset);
 
-          // Crear token en el centro del máster (oculto para jugadores por defecto)
+          // Escalar automáticamente para que su lado mayor ocupe exactamente 1 casilla (grid.size)
+          const currentGridSize = game.grid.size || 70;
+          const maxDim = Math.max(natW, natH);
+          const tokenScale = maxDim > 0 ? currentGridSize / maxDim : 1;
+
+          // Centrar en una casilla de la cuadrícula en la vista actual
+          const halfGrid = currentGridSize / 2;
+          const centeredX = Math.floor(game.masterCamera.x / currentGridSize) * currentGridSize + halfGrid;
+          const centeredY = Math.floor(game.masterCamera.y / currentGridSize) * currentGridSize + halfGrid;
+
           const entity: Entity = {
             id: `entity_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
             type: 'token',
             name: asset.name,
             assetId: asset.id,
-            x: game.masterCamera.x,
-            y: game.masterCamera.y,
+            x: centeredX,
+            y: centeredY,
             rotation: 0,
-            scaleX: 1,
-            scaleY: 1,
+            scaleX: tokenScale,
+            scaleY: tokenScale,
             zIndex: 10,
             visibleToPlayers: false, // Tokens ocultos para jugadores por defecto
             locked: false,

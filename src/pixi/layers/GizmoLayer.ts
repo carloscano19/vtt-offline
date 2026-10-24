@@ -14,12 +14,17 @@ export type TransformHandleType = 'rotate' | 'scale-tl' | 'scale-tr' | 'scale-br
 export class GizmoLayer extends Container {
   private graphics: Graphics;
   private isMaster: boolean;
+  private tokensLayer?: any;
 
   constructor(isMaster: boolean) {
     super();
     this.isMaster = isMaster;
     this.graphics = new Graphics();
     this.addChild(this.graphics);
+  }
+
+  public setTokensLayer(layer: any) {
+    this.tokensLayer = layer;
   }
 
   public update(selectedEntities: Entity[]) {
@@ -40,7 +45,7 @@ export class GizmoLayer extends Container {
     this.drawTransformGizmo(entity);
   }
 
-  private getEntityLocalBounds(entity: Entity) {
+  public getEntityLocalBounds(entity: Entity) {
     if (entity.type === 'map') {
       const w = (entity.mapData?.gridWidth ?? 10) * (entity.mapData?.pixelsPerGrid ?? 70);
       const h = (entity.mapData?.gridHeight ?? 10) * (entity.mapData?.pixelsPerGrid ?? 70);
@@ -53,12 +58,21 @@ export class GizmoLayer extends Container {
     }
 
     // Token u objeto (anclado al centro)
-    const size = 70;
+    let w = 70;
+    let h = 70;
+    if (this.tokensLayer && typeof this.tokensLayer.getEntityBounds === 'function') {
+      const bounds = this.tokensLayer.getEntityBounds(entity.id);
+      if (bounds) {
+        w = bounds.width;
+        h = bounds.height;
+      }
+    }
+
     return {
-      offsetX: -size / 2,
-      offsetY: -size / 2,
-      width: size,
-      height: size
+      offsetX: -w / 2,
+      offsetY: -h / 2,
+      width: w,
+      height: h
     };
   }
 

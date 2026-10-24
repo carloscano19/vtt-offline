@@ -104,9 +104,10 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
 
       let updatedEntities = state.game.entities;
 
-      // Si cambia el tamaño de la cuadrícula, reescalar todos los mapas para seguir alineados
-      if (partial.size && partial.size !== oldGrid.size) {
+      // Si cambia el tamaño de la cuadrícula, reescalar proporcionalmente mapas y tokens para seguir alineados
+      if (partial.size && partial.size !== oldGrid.size && oldGrid.size > 0) {
         const newSize = partial.size;
+        const gridRatio = newSize / oldGrid.size;
         updatedEntities = state.game.entities.map((entity) => {
           if (entity.type === 'map' && entity.mapData && entity.mapData.pixelsPerGrid > 0) {
             const newScale = newSize / entity.mapData.pixelsPerGrid;
@@ -114,6 +115,12 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
               ...entity,
               scaleX: newScale,
               scaleY: newScale
+            };
+          } else if (entity.type === 'token' || entity.type === 'object') {
+            return {
+              ...entity,
+              scaleX: entity.scaleX * gridRatio,
+              scaleY: entity.scaleY * gridRatio
             };
           }
           return entity;

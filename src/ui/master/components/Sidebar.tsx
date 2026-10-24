@@ -19,7 +19,11 @@ export const Sidebar: React.FC = () => {
           {activeSidebarTab === 'properties' && <Sliders className="w-4 h-4 text-sky-400" />}
           {activeSidebarTab === 'layers' && <Layers className="w-4 h-4 text-sky-400" />}
           {activeSidebarTab === 'library' && <FolderOpen className="w-4 h-4 text-sky-400" />}
-          <span className="capitalize">{activeSidebarTab}</span>
+          <span>
+            {activeSidebarTab === 'properties' && 'Propiedades'}
+            {activeSidebarTab === 'layers' && 'Capas'}
+            {activeSidebarTab === 'library' && 'Biblioteca'}
+          </span>
         </div>
         <button
           onClick={() => setActiveSidebarTab(null)}

@@ -194,27 +194,86 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
     // Herramienta Seleccionar
     if (activeTool === 'select') {
-      // 1. Si hay una entidad seleccionada y no bloqueada, comprobar si se pincha en manija de rotación o escalado
+      // 1. Si hay una entidad seleccionada y no bloqueada, comprobar manijas del Gizmo (rotación o escalado)
       const selectedEntity = game.entities.find((ent) => selectedEntityIds.includes(ent.id) && !ent.locked);
       if (selectedEntity) {
-        // Comprobar manija de rotación (arriba de la entidad)
-        const rotHandleLocalDist = selectedEntity.type === 'map' ? 30 : 50;
-        const rotHandleWorld = {
-          x: selectedEntity.x + Math.sin(selectedEntity.rotation) * rotHandleLocalDist * selectedEntity.scaleY,
-          y: selectedEntity.y - Math.cos(selectedEntity.rotation) * rotHandleLocalDist * selectedEntity.scaleY
+        let bW = 70;
+        let bH = 70;
+        let offX = -35;
+        let offY = -35;
+
+        if (selectedEntity.type === 'map') {
+          bW = (selectedEntity.mapData?.gridWidth ?? 10) * (selectedEntity.mapData?.pixelsPerGrid ?? 70);
+          bH = (selectedEntity.mapData?.gridHeight ?? 10) * (selectedEntity.mapData?.pixelsPerGrid ?? 70);
+          offX = 0;
+          offY = 0;
+        } else if (rendererRef.current?.tokensLayer) {
+          const tBounds = rendererRef.current.tokensLayer.getEntityBounds(selectedEntity.id);
+          if (tBounds) {
+            bW = tBounds.width;
+            bH = tBounds.height;
+            offX = -bW / 2;
+            offY = -bH / 2;
+          }
+        }
+
+        const cosR = Math.cos(selectedEntity.rotation);
+        const sinR = Math.sin(selectedEntity.rotation);
+
+        const localToWorld = (lx: number, ly: number) => {
+          const scaledX = lx * selectedEntity.scaleX;
+          const scaledY = ly * selectedEntity.scaleY;
+          return {
+            x: selectedEntity.x + (scaledX * cosR - scaledY * sinR),
+            y: selectedEntity.y + (scaledX * sinR + scaledY * cosR)
+          };
         };
-        const distToRotHandle = Math.hypot(worldPos.x - rotHandleWorld.x, worldPos.y - rotHandleWorld.y);
-        if (distToRotHandle < 20 / camera.zoom) {
+
+        // Comprobar manija de rotación (arriba de la caja)
+        const rotDistLocal = 25 / Math.abs(selectedEntity.scaleY || 1);
+        const rotLocalX = offX + bW / 2;
+        const rotLocalY = offY - rotDistLocal;
+        const rotWorld = localToWorld(rotLocalX, rotLocalY);
+
+        if (Math.hypot(worldPos.x - rotWorld.x, worldPos.y - rotWorld.y) < 18 / camera.zoom) {
           interactionState.current.isTransforming = 'rotate';
           interactionState.current.dragEntityId = selectedEntity.id;
           interactionState.current.startMouse = { x: e.clientX, y: e.clientY };
           interactionState.current.startEntityRotation = selectedEntity.rotation;
           return;
         }
+
+        // Comprobar manijas de esquina para escalado
+        const corners = [
+          { x: offX, y: offY },
+          { x: offX + bW, y: offY },
+          { x: offX + bW, y: offY + bH },
+          { x: offX, y: offY + bH }
+        ];
+
+        let hitCorner = false;
+        for (const c of corners) {
+          const cornerWorld = localToWorld(c.x, c.y);
+          if (Math.hypot(worldPos.x - cornerWorld.x, worldPos.y - cornerWorld.y) < 18 / camera.zoom) {
+            interactionState.current.isTransforming = 'scale';
+            interactionState.current.dragEntityId = selectedEntity.id;
+            interactionState.current.startMouse = { x: e.clientX, y: e.clientY };
+            interactionState.current.startEntityScale = { x: selectedEntity.scaleX, y: selectedEntity.scaleY };
+            hitCorner = true;
+            break;
+          }
+        }
+        if (hitCorner) return;
       }
 
-      // 2. Buscar entidad bajo el cursor (orden descendente por zIndex)
-      const sortedEntities = [...game.entities].sort((a, b) => (b.zIndex ?? 0) - (a.zIndex ?? 0));
+      // 2. Buscar entidad bajo el cursor (prioridad: tokens > objetos > mapas, y zIndex descendente)
+      const typePriority: Record<string, number> = { token: 300, object: 200, map: 100 };
+      const sortedEntities = [...game.entities].sort((a, b) => {
+        const pDiff = (typePriority[b.type] ?? 0) - (typePriority[a.type] ?? 0);
+        if (pDiff !== 0) return pDiff;
+        return (b.zIndex ?? 0) - (a.zIndex ?? 0);
+      });
+
       const hitEntity = sortedEntities.find((ent) => {
         // No seleccionar entidades bloqueadas por accidente en el tablero
         if (ent.locked) return false;
@@ -225,10 +284,15 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           return worldPos.x >= ent.x && worldPos.x <= ent.x + mapW && worldPos.y >= ent.y && worldPos.y <= ent.y + mapH;
         }
 
-        // Token u objeto
-        const radius = (ent.type === 'token' ? 35 : 45) * Math.max(ent.scaleX, ent.scaleY);
+        // Token u objeto: consultar radio o tamaño real
+        let baseRadius = (ent.type === 'token' ? 35 : 45);
+        if (rendererRef.current?.tokensLayer) {
+          const tb = rendererRef.current.tokensLayer.getEntityBounds(ent.id);
+          if (tb) baseRadius = tb.radius;
+        }
+        const effectiveRadius = Math.max(25, baseRadius * Math.max(Math.abs(ent.scaleX), Math.abs(ent.scaleY)));
         const dist = Math.hypot(worldPos.x - ent.x, worldPos.y - ent.y);
-        return dist <= radius;
+        return dist <= effectiveRadius;
       });
 
       if (hitEntity) {
@@ -279,7 +343,26 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       return;
     }
 
-    // 4. Arrastre y movimiento de entidad
+    // 4. Escalado con Gizmo
+    if (interactionState.current.isTransforming === 'scale' && interactionState.current.dragEntityId) {
+      const entity = game.entities.find((ent) => ent.id === interactionState.current.dragEntityId);
+      if (entity) {
+        // Distancia del puntero respecto al centro de la entidad vs distancia inicial
+        const currentDist = Math.hypot(worldPos.x - entity.x, worldPos.y - entity.y);
+        const startWorld = screenToWorld(interactionState.current.startMouse, camera, width, height);
+        const startDist = Math.hypot(startWorld.x - entity.x, startWorld.y - entity.y);
+
+        if (startDist > 5) {
+          const ratio = Math.max(0.1, currentDist / startDist);
+          const newScaleX = parseFloat((interactionState.current.startEntityScale.x * ratio).toFixed(3));
+          const newScaleY = parseFloat((interactionState.current.startEntityScale.y * ratio).toFixed(3));
+          updateEntity(entity.id, { scaleX: newScaleX, scaleY: newScaleY }, false);
+        }
+      }
+      return;
+    }
+
+    // 5. Arrastre y movimiento de entidad
     if (interactionState.current.isDraggingEntity && interactionState.current.dragEntityId) {
       const dx = worldPos.x - interactionState.current.startMouse.x;
       const dy = worldPos.y - interactionState.current.startMouse.y;
@@ -326,11 +409,15 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       }
     }
 
-    // Si estábamos rotando, registrar cambio definitivo en historial
-    if (interactionState.current.isTransforming === 'rotate' && interactionState.current.dragEntityId) {
+    // Si estábamos transformando (rotación o escalado), registrar cambio definitivo en historial
+    if (interactionState.current.isTransforming && interactionState.current.dragEntityId) {
       const entity = game.entities.find((ent) => ent.id === interactionState.current.dragEntityId);
       if (entity) {
-        updateEntity(entity.id, { rotation: entity.rotation }, true);
+        if (interactionState.current.isTransforming === 'rotate') {
+          updateEntity(entity.id, { rotation: entity.rotation }, true);
+        } else if (interactionState.current.isTransforming === 'scale') {
+          updateEntity(entity.id, { scaleX: entity.scaleX, scaleY: entity.scaleY }, true);
+        }
       }
     }
 
@@ -369,12 +456,22 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       }
 
       const entityType = asset.type === 'map' ? 'map' : 'token';
+      const currentGridSize = game.grid.size || 70;
 
-      // Calcular escala inicial:
-      // Para mapas: grid.size / pixelsPerGrid para encajar exactamente con la cuadrícula
       let scale = 1;
-      if (entityType === 'map' && asset.mapData?.pixelsPerGrid) {
-        scale = game.grid.size / asset.mapData.pixelsPerGrid;
+      let finalX = worldPos.x;
+      let finalY = worldPos.y;
+
+      if (entityType === 'map') {
+        const ppg = asset.mapData?.pixelsPerGrid || (asset.width ? asset.width / 10 : 70);
+        scale = currentGridSize / ppg;
+      } else {
+        const maxDim = Math.max(asset.width || 70, asset.height || 70);
+        scale = maxDim > 0 ? currentGridSize / maxDim : 1;
+        // Centrar token en la celda
+        const halfGrid = currentGridSize / 2;
+        finalX = Math.floor(worldPos.x / currentGridSize) * currentGridSize + halfGrid;
+        finalY = Math.floor(worldPos.y / currentGridSize) * currentGridSize + halfGrid;
       }
 
       const newEntity: Entity = {
@@ -382,8 +479,8 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         type: entityType,
         name: asset.name,
         assetId: asset.id,
-        x: worldPos.x,
-        y: worldPos.y,
+        x: finalX,
+        y: finalY,
         rotation: 0,
         scaleX: scale,
         scaleY: scale,

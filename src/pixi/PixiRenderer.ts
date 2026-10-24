@@ -90,6 +90,7 @@ export class PixiRenderer {
       // 6. Capa de Gizmos de transformación (Solo Máster)
       this.gizmoLayer = new GizmoLayer(this.isMaster);
       this.gizmoLayer.label = 'GizmoLayer';
+      this.gizmoLayer.setTokensLayer(this.tokensLayer);
       this.worldContainer.addChild(this.gizmoLayer);
 
       this.isInitialized = true;

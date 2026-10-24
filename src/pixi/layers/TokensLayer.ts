@@ -166,4 +166,22 @@ export class TokensLayer extends Container {
   public getEntityContainer(id: string): Container | undefined {
     return this.containerMap.get(id);
   }
+
+  public getEntityBounds(id: string): { width: number; height: number; radius: number } {
+    const container = this.containerMap.get(id);
+    if (!container) return { width: 70, height: 70, radius: 35 };
+
+    const sprite = container.getChildByLabel('sprite') as Sprite;
+    if (sprite && sprite.texture && sprite.texture !== Texture.EMPTY) {
+      const w = sprite.texture.width || 70;
+      const h = sprite.texture.height || 70;
+      return {
+        width: w,
+        height: h,
+        radius: Math.max(w, h) / 2
+      };
+    }
+
+    return { width: 70, height: 70, radius: 35 };
+  }
 }
