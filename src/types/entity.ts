@@ -1,4 +1,4 @@
-export type EntityType = 'map' | 'token' | 'object' | 'door' | 'light';
+export type EntityType = 'map' | 'token' | 'object' | 'door' | 'light' | 'wall';
 
 export type TokenSide = 'jugador' | 'enemigo' | 'neutral';
 
@@ -113,7 +113,7 @@ export interface Entity {
   id: string;
   type: EntityType;
   name: string;
-  assetId: string; // Referencia a la biblioteca Dexie
+  assetId?: string; // Referencia a la biblioteca Dexie (opcional para paredes dibujadas)
 
   // Transformaciones espaciales en el mundo (píxeles globales)
   x: number;
@@ -129,6 +129,11 @@ export interface Entity {
 
   // Datos específicos de mapa (coordenadas relativas locales)
   mapData?: MapData;
+
+  // Datos específicos de pared dibujada ('wall')
+  points?: Point2D[];
+  closed?: boolean;
+  mapId?: string; // ID del mapa al que está anclada (si se dibujó sobre él)
 
   // Fase 2: Visión
   vision?: TokenVision;

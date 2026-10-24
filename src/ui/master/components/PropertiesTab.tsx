@@ -1,7 +1,7 @@
 import React from 'react';
 import { useGameStore } from '../../../stores/useGameStore';
 import { useUIStore } from '../../../stores/useUIStore';
-import { Lock, Unlock, Eye, EyeOff, Trash2, Shield, Users, Crosshair } from 'lucide-react';
+import { Lock, Unlock, Eye, EyeOff, Trash2, Shield, Users, Crosshair, BrickWall } from 'lucide-react';
 import { TokenSide } from '../../../types/entity';
 
 export const PropertiesTab: React.FC = () => {
@@ -43,7 +43,7 @@ export const PropertiesTab: React.FC = () => {
       <div>
         <div className="flex items-center justify-between mb-1.5">
           <span className="uppercase text-[10px] tracking-wider text-slate-400 font-bold">
-            {selectedEntity.type === 'map' ? 'Mapa' : selectedEntity.type === 'token' ? 'Token' : 'Objeto'}
+            {selectedEntity.type === 'map' ? 'Mapa' : selectedEntity.type === 'token' ? 'Token' : selectedEntity.type === 'wall' ? 'Pared Invisible' : 'Objeto'}
           </span>
           <div className="flex items-center gap-1">
             <button
@@ -172,6 +172,35 @@ export const PropertiesTab: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Datos de pared si corresponde */}
+      {selectedEntity.type === 'wall' && (
+        <div className="bg-slate-800/60 p-2.5 rounded border border-slate-700 space-y-2">
+          <div className="flex items-center gap-2 text-red-400 font-semibold">
+            <BrickWall className="w-4 h-4" />
+            <span>Propiedades de Pared Invisible</span>
+          </div>
+          <p className="text-slate-400">Nodos de línea: <span className="text-white font-mono">{selectedEntity.points?.length || 0}</span></p>
+          {selectedEntity.mapId ? (
+            <p className="text-slate-400">
+              Vinculada a mapa: <span className="text-sky-300 font-mono">
+                {game.entities.find((e) => e.id === selectedEntity.mapId)?.name || selectedEntity.mapId}
+              </span> (coordenadas locales)
+            </p>
+          ) : (
+            <p className="text-slate-400">Vinculada a: <span className="text-slate-300">Tablero global</span></p>
+          )}
+          <label className="flex items-center gap-2 cursor-pointer pt-1 text-slate-300">
+            <input
+              type="checkbox"
+              checked={!!selectedEntity.closed}
+              onChange={(e) => handleUpdate({ closed: e.target.checked })}
+              className="w-3.5 h-3.5 accent-sky-500 rounded cursor-pointer"
+            />
+            <span>Polígono cerrado (unir fin con inicio)</span>
+          </label>
+        </div>
+      )}
 
       {/* Datos del mapa UVTT si corresponde */}
       {selectedEntity.type === 'map' && selectedEntity.mapData && (

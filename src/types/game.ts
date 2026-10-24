@@ -9,7 +9,7 @@ export interface GridConfig {
 }
 
 export type RulerMode = 'straight' | 'radial';
-export type DiagonalRule = '5e' | 'alternate'; // 5e: todas 1; alternate: 1-2-1-2
+export type DiagonalRule = '5e' | 'alternate' | 'real'; // 5e: todas 1; alternate: 1-2-1-2; real: distancia euclídea continua
 
 export interface RulerState {
   active: boolean;

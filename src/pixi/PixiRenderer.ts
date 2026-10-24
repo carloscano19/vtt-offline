@@ -1,11 +1,13 @@
 import { Application, Container } from 'pixi.js';
 import { GameState, RulerState } from '../types/game';
+import { Point2D } from '../types/entity';
 import { MapsLayer } from './layers/MapsLayer';
 import { DebugVttLayer } from './layers/DebugVttLayer';
 import { GridLayer } from './layers/GridLayer';
 import { TokensLayer } from './layers/TokensLayer';
 import { RulerLayer } from './layers/RulerLayer';
 import { GizmoLayer } from './layers/GizmoLayer';
+import { WallsLayer } from './layers/WallsLayer';
 
 export class PixiRenderer {
   public app!: Application;
@@ -17,6 +19,7 @@ export class PixiRenderer {
   public tokensLayer!: TokensLayer;
   public rulerLayer!: RulerLayer;
   public gizmoLayer!: GizmoLayer;
+  public wallsLayer!: WallsLayer;
 
   private isMaster: boolean;
   public isInitialized = false;
@@ -82,12 +85,17 @@ export class PixiRenderer {
       // Fase 3: Dynamic Lighting & Filters
       // Fase 4: Status Icons
 
-      // 5. Capa de Regla
+      // 5. Capa de Paredes Invisibles Dibujadas (Solo Máster)
+      this.wallsLayer = new WallsLayer(this.isMaster);
+      this.wallsLayer.label = 'WallsLayer';
+      this.worldContainer.addChild(this.wallsLayer);
+
+      // 6. Capa de Regla
       this.rulerLayer = new RulerLayer(this.isMaster);
       this.rulerLayer.label = 'RulerLayer';
       this.worldContainer.addChild(this.rulerLayer);
 
-      // 6. Capa de Gizmos de transformación (Solo Máster)
+      // 7. Capa de Gizmos de transformación (Solo Máster)
       this.gizmoLayer = new GizmoLayer(this.isMaster);
       this.gizmoLayer.label = 'GizmoLayer';
       this.gizmoLayer.setTokensLayer(this.tokensLayer);
@@ -103,7 +111,8 @@ export class PixiRenderer {
     game: GameState,
     ruler: RulerState,
     selectedIds: string[] = [],
-    showDebugOverlay = true
+    showDebugOverlay = true,
+    activeDraftWallPoints: Point2D[] = []
   ) {
     if (!this.isInitialized || this.isDestroyed || !this.app || !this.app.renderer) return;
 
@@ -122,6 +131,7 @@ export class PixiRenderer {
     this.debugVttLayer.update(game.entities, showDebugOverlay);
     this.gridLayer.update(game.grid, camera, width, height);
     this.tokensLayer.syncEntities(game.entities, selectedIds);
+    this.wallsLayer.update(game.entities, selectedIds, activeDraftWallPoints);
     this.rulerLayer.update(ruler, game.grid.size);
 
     const selectedEntities = game.entities.filter((e) => selectedIds.includes(e.id));

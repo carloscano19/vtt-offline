@@ -64,28 +64,39 @@ export const RulerModal: React.FC<RulerModalProps> = ({ isOpen, onClose }) => {
         {ruler.mode === 'straight' && (
           <div className="space-y-1.5">
             <label className="text-xs text-slate-400 block font-medium">Cálculo de diagonales</label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 onClick={() => setRulerDiagonalRule('5e')}
-                className={`p-2 rounded border text-xs font-medium transition-all ${
+                className={`p-2 rounded border text-xs font-medium transition-all text-center ${
                   ruler.diagonalRule === '5e'
                     ? 'bg-sky-950/80 border-sky-500 text-sky-300'
                     : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
                 }`}
               >
                 <div>D&D 5e</div>
-                <div className="text-[10px] text-slate-500">Todas cuentan 1</div>
+                <div className="text-[10px] text-slate-500">Todas 1</div>
               </button>
               <button
                 onClick={() => setRulerDiagonalRule('alternate')}
-                className={`p-2 rounded border text-xs font-medium transition-all ${
+                className={`p-2 rounded border text-xs font-medium transition-all text-center ${
                   ruler.diagonalRule === 'alternate'
                     ? 'bg-sky-950/80 border-sky-500 text-sky-300'
                     : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
                 }`}
               >
-                <div>Alterna (3.5 / PF)</div>
-                <div className="text-[10px] text-slate-500">1-2-1-2 casillas</div>
+                <div>Alterna</div>
+                <div className="text-[10px] text-slate-500">1-2-1-2</div>
+              </button>
+              <button
+                onClick={() => setRulerDiagonalRule('real')}
+                className={`p-2 rounded border text-xs font-medium transition-all text-center ${
+                  ruler.diagonalRule === 'real'
+                    ? 'bg-sky-950/80 border-sky-500 text-sky-300'
+                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                }`}
+              >
+                <div>Real</div>
+                <div className="text-[10px] text-slate-500">Euclídea (1 dec)</div>
               </button>
             </div>
           </div>

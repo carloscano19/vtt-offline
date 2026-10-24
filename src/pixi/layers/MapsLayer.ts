@@ -33,7 +33,7 @@ export class MapsLayer extends Container {
 
       // Carga asíncrona de textura si aún no se ha cargado o si cambió el assetId
       const currentLoadedAssetId = (sprite as any)._loadedAssetId;
-      if (sprite.texture === Texture.EMPTY || currentLoadedAssetId !== entity.assetId) {
+      if (entity.assetId && (sprite.texture === Texture.EMPTY || currentLoadedAssetId !== entity.assetId)) {
         (sprite as any)._loadedAssetId = entity.assetId;
         getTextureForAsset(entity.assetId).then((tex) => {
           if (tex && sprite && !sprite.destroyed) {

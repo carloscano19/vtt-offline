@@ -1,7 +1,7 @@
 import React from 'react';
 import { useGameStore } from '../../../stores/useGameStore';
 import { useUIStore } from '../../../stores/useUIStore';
-import { Lock, Unlock, Eye, EyeOff, Map as MapIcon, User, Box, ArrowUp, ArrowDown, Trash2 } from 'lucide-react';
+import { Lock, Unlock, Eye, EyeOff, Map as MapIcon, User, Box, ArrowUp, ArrowDown, Trash2, BrickWall } from 'lucide-react';
 
 export const LayersTab: React.FC = () => {
   const game = useGameStore((s) => s.game);
@@ -34,6 +34,8 @@ export const LayersTab: React.FC = () => {
         return <MapIcon className="w-3.5 h-3.5 text-amber-400" />;
       case 'token':
         return <User className="w-3.5 h-3.5 text-sky-400" />;
+      case 'wall':
+        return <BrickWall className="w-3.5 h-3.5 text-red-400" />;
       default:
         return <Box className="w-3.5 h-3.5 text-purple-400" />;
     }

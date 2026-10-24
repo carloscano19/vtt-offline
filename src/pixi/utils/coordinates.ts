@@ -63,3 +63,28 @@ export function localToWorld(
     y: entityPos.y + rotatedY
   };
 }
+
+/**
+ * Transforma un punto de coordenadas globales del mundo a coordenadas locales de una entidad/mapa
+ */
+export function worldToLocal(
+  worldPoint: Point2D,
+  entityPos: Point2D,
+  rotation: number,
+  scaleX: number,
+  scaleY: number
+): Point2D {
+  const dx = worldPoint.x - entityPos.x;
+  const dy = worldPoint.y - entityPos.y;
+
+  const cos = Math.cos(-rotation);
+  const sin = Math.sin(-rotation);
+
+  const unrotatedX = dx * cos - dy * sin;
+  const unrotatedY = dx * sin + dy * cos;
+
+  return {
+    x: scaleX !== 0 ? unrotatedX / scaleX : unrotatedX,
+    y: scaleY !== 0 ? unrotatedY / scaleY : unrotatedY
+  };
+}

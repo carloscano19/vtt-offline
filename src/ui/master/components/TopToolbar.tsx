@@ -14,7 +14,8 @@ import {
   Undo2,
   Redo2,
   Layers,
-  Settings2
+  Settings2,
+  BrickWall
 } from 'lucide-react';
 import { useUIStore, ActiveTool } from '../../../stores/useUIStore';
 import { useGameStore } from '../../../stores/useGameStore';
@@ -260,6 +261,14 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           title="Regla de distancia (M)"
         >
           <Ruler className="w-5 h-5" />
+        </button>
+
+        <button
+          onClick={() => handleToolChange('wall')}
+          className={`btn-icon ${activeTool === 'wall' ? 'active' : ''}`}
+          title="Pared invisible (W) - Clic para añadir nodos, Doble clic o Enter para terminar, Esc para cancelar"
+        >
+          <BrickWall className="w-5 h-5" />
         </button>
 
         <div className="w-[1px] h-6 bg-slate-700 mx-1.5" />

@@ -34,11 +34,16 @@ describe('rulerCalculator', () => {
     expect(calculateRulerDistance(start, { x: 280, y: 280 }, gridSize, 'straight', 'alternate').distanceSquares).toBe(6);
   });
 
-  it('calcula distancia radial', () => {
+  it('calcula distancia euclídea continua en regla real con 1 decimal', () => {
     const start = { x: 0, y: 0 };
-    const end = { x: 140, y: 0 }; // radio de 2 casillas
-    const result = calculateRulerDistance(start, end, gridSize, 'radial', '5e');
-    expect(result.distanceSquares).toBe(2);
-    expect(result.displayText).toContain('2 casillas');
+    // Triángulo 3 - 4 - 5 casillas: dx = 3*70 = 210, dy = 4*70 = 280 -> hipotenusa = 5*70 = 350 px -> 5 casillas
+    const result = calculateRulerDistance(start, { x: 210, y: 280 }, gridSize, 'straight', 'real');
+    expect(result.distanceSquares).toBe(5);
+    expect(result.displayText).toBe('5 casillas');
+
+    // 1 diagonal (70, 70): sqrt(2) * 70 / 70 ≈ 1.414 -> redondeado a 1.4
+    const diag = calculateRulerDistance(start, { x: 70, y: 70 }, gridSize, 'straight', 'real');
+    expect(diag.distanceSquares).toBe(1.4);
+    expect(diag.displayText).toBe('1.4 casillas');
   });
 });

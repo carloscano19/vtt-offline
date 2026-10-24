@@ -56,14 +56,22 @@ export const SaveLoadModal: React.FC = () => {
   // 2. Guardar como...
   const handleSaveAs = async () => {
     const newName = prompt('Nombre para la nueva copia de la partida:', `${gameName} (Copia)`);
-    if (!newName) return;
+    if (!newName || !newName.trim()) return;
+    const trimmed = newName.trim();
     const newId = `game_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    const newGame = { ...game, id: newId, name: newName };
+    const now = Date.now();
+    const newGame = {
+      ...game,
+      id: newId,
+      name: trimmed,
+      createdAt: now,
+      updatedAt: now
+    };
     await saveGameToDb(newGame);
     setGame(newGame);
-    setGameName(newName);
+    setGameName(trimmed);
     await refreshList();
-    showStatus(`Partida guardada como "${newName}"`);
+    showStatus(`Partida guardada como "${trimmed}"`);
   };
 
   // 3. Nueva partida

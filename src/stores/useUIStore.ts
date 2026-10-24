@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { Point2D } from '../types/entity';
 import { DiagonalRule, RulerMode, RulerState } from '../types/game';
 
-export type ActiveTool = 'select' | 'pan' | 'ruler';
+export type ActiveTool = 'select' | 'pan' | 'ruler' | 'wall';
 export type SidebarTab = 'properties' | 'layers' | 'library';
 
 interface UIStoreState {

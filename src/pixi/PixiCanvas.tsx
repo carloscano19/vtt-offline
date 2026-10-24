@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { PixiRenderer } from './PixiRenderer';
 import { useGameStore } from '../stores/useGameStore';
 import { useUIStore } from '../stores/useUIStore';
-import { screenToWorld, snapPointToGrid } from './utils/coordinates';
+import { screenToWorld, snapPointToGrid, localToWorld, worldToLocal } from './utils/coordinates';
 import { Entity, Point2D } from '../types/entity';
 
 interface PixiCanvasProps {
@@ -30,12 +30,19 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
   const endRulerMeasure = useUIStore((s) => s.endRulerMeasure);
   const showDebugVttOverlay = useUIStore((s) => s.showDebugVttOverlay);
 
+  // Estado para la herramienta de Paredes invisibles
+  const [draftWallPoints, setDraftWallPoints] = useState<Point2D[]>([]);
+  const [hoverCursor, setHoverCursor] = useState<string>('default');
+
   // Estado de interacción de ratón
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const interactionState = useRef<{
     isPanning: boolean;
     isDraggingEntity: boolean;
     isTransforming: 'rotate' | 'scale' | null;
+    isDraggingWallNode: boolean;
+    dragWallEntityId: string | null;
+    dragWallNodeIndex: number;
     dragEntityId: string | null;
     startMouse: Point2D;
     startEntityPos: Point2D;
@@ -46,6 +53,9 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     isPanning: false,
     isDraggingEntity: false,
     isTransforming: null,
+    isDraggingWallNode: false,
+    dragWallEntityId: null,
+    dragWallNodeIndex: -1,
     dragEntityId: null,
     startMouse: { x: 0, y: 0 },
     startEntityPos: { x: 0, y: 0 },
@@ -53,6 +63,15 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     startEntityScale: { x: 1, y: 1 },
     startCamera: { x: 0, y: 0 }
   });
+
+  // Helper para obtener coordenadas locales del puntero relativas al canvas
+  const getLocalPointer = useCallback((e: { clientX: number; clientY: number }): Point2D => {
+    const rect = containerRef.current?.getBoundingClientRect() || { left: 0, top: 0 };
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+  }, []);
 
   // 1. Inicialización robusta de PixiRenderer compatible con React StrictMode
   useEffect(() => {
@@ -73,7 +92,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       }
 
       container.replaceChildren(canvas);
-      renderer.sync(game, ruler, selectedEntityIds, showDebugVttOverlay);
+      renderer.sync(game, ruler, selectedEntityIds, showDebugVttOverlay, draftWallPoints);
     }).catch((err) => {
       console.error('[PixiCanvas] Error al inicializar PixiRenderer:', err);
     });
@@ -93,19 +112,78 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
   // 2. Sincronización continua de estado con PixiRenderer
   useEffect(() => {
     if (rendererRef.current) {
-      rendererRef.current.sync(game, ruler, selectedEntityIds, showDebugVttOverlay);
+      rendererRef.current.sync(game, ruler, selectedEntityIds, showDebugVttOverlay, draftWallPoints);
     }
-  }, [game, ruler, selectedEntityIds, showDebugVttOverlay]);
+  }, [game, ruler, selectedEntityIds, showDebugVttOverlay, draftWallPoints]);
 
-  // 3. Atajos de teclado para la barra espaciadora (Paneo temporal)
+  // Finalizar o cancelar pared con teclado
+  const finishDraftWall = useCallback(() => {
+    if (draftWallPoints.length < 2) {
+      setDraftWallPoints([]);
+      return;
+    }
+
+    // Comprobar si el primer nodo de la pared cae dentro de algún mapa para vincularlo
+    const firstPt = draftWallPoints[0];
+    const maps = game.entities.filter((e) => e.type === 'map');
+    const containingMap = maps.find((m) => {
+      const mW = (m.mapData?.gridWidth ?? 10) * (m.mapData?.pixelsPerGrid ?? 70) * m.scaleX;
+      const mH = (m.mapData?.gridHeight ?? 10) * (m.mapData?.pixelsPerGrid ?? 70) * m.scaleY;
+      return firstPt.x >= m.x && firstPt.x <= m.x + mW && firstPt.y >= m.y && firstPt.y <= m.y + mH;
+    });
+
+    let finalPoints = draftWallPoints;
+    let mapId: string | undefined = undefined;
+
+    if (containingMap) {
+      mapId = containingMap.id;
+      const mapPos = { x: containingMap.x, y: containingMap.y };
+      finalPoints = draftWallPoints.map((p) =>
+        worldToLocal(p, mapPos, containingMap.rotation, containingMap.scaleX, containingMap.scaleY)
+      );
+    }
+
+    const wallEntity: Entity = {
+      id: `wall_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      type: 'wall',
+      name: `Pared ${game.entities.filter((e) => e.type === 'wall').length + 1}`,
+      x: containingMap ? containingMap.x : 0,
+      y: containingMap ? containingMap.y : 0,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      zIndex: 50,
+      visibleToPlayers: false, // Paredes invisibles nunca visibles a jugadores
+      locked: false,
+      points: finalPoints,
+      closed: false,
+      mapId
+    };
+
+    addEntity(wallEntity);
+    selectEntity(wallEntity.id);
+    setDraftWallPoints([]);
+  }, [draftWallPoints, game.entities, addEntity, selectEntity]);
+
+  // 3. Atajos de teclado para la barra espaciadora, Enter y Esc
   useEffect(() => {
     if (!isMaster) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      const activeTag = (document.activeElement?.tagName || '').toLowerCase();
+      if (activeTag === 'input' || activeTag === 'textarea') return;
+
       if (e.code === 'Space' && !e.repeat) {
-        const activeTag = (document.activeElement?.tagName || '').toLowerCase();
-        if (activeTag !== 'input' && activeTag !== 'textarea') {
-          setIsSpacePressed(true);
+        setIsSpacePressed(true);
+      } else if (e.code === 'Enter') {
+        if (activeTool === 'wall') {
+          e.preventDefault();
+          finishDraftWall();
+        }
+      } else if (e.code === 'Escape') {
+        if (activeTool === 'wall') {
+          e.preventDefault();
+          setDraftWallPoints([]);
         }
       }
     };
@@ -122,7 +200,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [isMaster]);
+  }, [isMaster, activeTool, finishDraftWall]);
 
   // Funciones auxiliares de cámara y coordenadas
   const getCamera = useCallback(() => {
@@ -154,7 +232,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
     const { width, height } = getCanvasDimensions();
     const camera = getCamera();
-    const mousePos = { x: e.clientX, y: e.clientY };
+    const mousePos = getLocalPointer(e);
 
     const worldBefore = screenToWorld(mousePos, camera, width, height);
 
@@ -168,23 +246,59 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     setCamera({ x: newCamX, y: newCamY, zoom: newZoom });
   };
 
+  // Helper para calcular la posición mundial de un nodo de pared
+  const getWallNodeWorldPos = useCallback(
+    (wall: Entity, pt: Point2D): Point2D => {
+      if (wall.mapId) {
+        const parentMap = game.entities.find((e) => e.id === wall.mapId);
+        if (parentMap) {
+          const mapPos = { x: parentMap.x, y: parentMap.y };
+          return localToWorld(pt, mapPos, parentMap.rotation, parentMap.scaleX, parentMap.scaleY);
+        }
+      }
+      return pt;
+    },
+    [game.entities]
+  );
+
   // 5. Manejo de clics e interacciones de ratón
   const handlePointerDown = (e: React.PointerEvent) => {
     if (!isMaster) return;
 
     const { width, height } = getCanvasDimensions();
     const camera = getCamera();
-    const worldPos = screenToWorld({ x: e.clientX, y: e.clientY }, camera, width, height);
+    const localMouse = getLocalPointer(e);
+    const worldPos = screenToWorld(localMouse, camera, width, height);
 
     // Paneo con botón central (botón 1) o barra espaciadora pulsada o herramienta Paneo
     if (e.button === 1 || isSpacePressed || activeTool === 'pan') {
       interactionState.current.isPanning = true;
-      interactionState.current.startMouse = { x: e.clientX, y: e.clientY };
+      interactionState.current.startMouse = localMouse;
       interactionState.current.startCamera = { x: camera.x, y: camera.y };
       return;
     }
 
     if (e.button !== 0) return; // Solo clic izquierdo para el resto de acciones
+
+    // Herramienta Pared invisible
+    if (activeTool === 'wall') {
+      let ptToAdd = worldPos;
+      if (game.grid.snapToGrid && game.grid.size > 0 && !e.altKey) {
+        ptToAdd = snapPointToGrid(worldPos, game.grid.size);
+      }
+
+      // Si es doble clic en el mismo punto, finalizar pared
+      if (
+        draftWallPoints.length > 0 &&
+        Math.hypot(ptToAdd.x - draftWallPoints[draftWallPoints.length - 1].x, ptToAdd.y - draftWallPoints[draftWallPoints.length - 1].y) < 5
+      ) {
+        finishDraftWall();
+        return;
+      }
+
+      setDraftWallPoints((prev) => [...prev, ptToAdd]);
+      return;
+    }
 
     // Herramienta Regla
     if (activeTool === 'ruler') {
@@ -194,9 +308,11 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
     // Herramienta Seleccionar
     if (activeTool === 'select') {
-      // 1. Si hay una entidad seleccionada y no bloqueada, comprobar manijas del Gizmo (rotación o escalado)
+      const handleHitRadius = Math.max(12 / camera.zoom, 14);
+
+      // 1. Si hay una entidad seleccionada y no bloqueada, comprobar manijas del Gizmo
       const selectedEntity = game.entities.find((ent) => selectedEntityIds.includes(ent.id) && !ent.locked);
-      if (selectedEntity) {
+      if (selectedEntity && selectedEntity.type !== 'wall') {
         let bW = 70;
         let bH = 70;
         let offX = -35;
@@ -220,7 +336,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         const cosR = Math.cos(selectedEntity.rotation);
         const sinR = Math.sin(selectedEntity.rotation);
 
-        const localToWorld = (lx: number, ly: number) => {
+        const localToWorldPos = (lx: number, ly: number) => {
           const scaledX = lx * selectedEntity.scaleX;
           const scaledY = ly * selectedEntity.scaleY;
           return {
@@ -229,21 +345,21 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           };
         };
 
-        // Comprobar manija de rotación (arriba de la caja)
+        // Manija de rotación (arriba de la caja)
         const rotDistLocal = 25 / Math.abs(selectedEntity.scaleY || 1);
         const rotLocalX = offX + bW / 2;
         const rotLocalY = offY - rotDistLocal;
-        const rotWorld = localToWorld(rotLocalX, rotLocalY);
+        const rotWorld = localToWorldPos(rotLocalX, rotLocalY);
 
-        if (Math.hypot(worldPos.x - rotWorld.x, worldPos.y - rotWorld.y) < 18 / camera.zoom) {
+        if (Math.hypot(worldPos.x - rotWorld.x, worldPos.y - rotWorld.y) <= handleHitRadius) {
           interactionState.current.isTransforming = 'rotate';
           interactionState.current.dragEntityId = selectedEntity.id;
-          interactionState.current.startMouse = { x: e.clientX, y: e.clientY };
+          interactionState.current.startMouse = localMouse;
           interactionState.current.startEntityRotation = selectedEntity.rotation;
           return;
         }
 
-        // Comprobar manijas de esquina para escalado
+        // Manijas de esquina para escalado
         const corners = [
           { x: offX, y: offY },
           { x: offX + bW, y: offY },
@@ -253,11 +369,11 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
         let hitCorner = false;
         for (const c of corners) {
-          const cornerWorld = localToWorld(c.x, c.y);
-          if (Math.hypot(worldPos.x - cornerWorld.x, worldPos.y - cornerWorld.y) < 18 / camera.zoom) {
+          const cornerWorld = localToWorldPos(c.x, c.y);
+          if (Math.hypot(worldPos.x - cornerWorld.x, worldPos.y - cornerWorld.y) <= handleHitRadius) {
             interactionState.current.isTransforming = 'scale';
             interactionState.current.dragEntityId = selectedEntity.id;
-            interactionState.current.startMouse = { x: e.clientX, y: e.clientY };
+            interactionState.current.startMouse = localMouse;
             interactionState.current.startEntityScale = { x: selectedEntity.scaleX, y: selectedEntity.scaleY };
             hitCorner = true;
             break;
@@ -266,8 +382,22 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         if (hitCorner) return;
       }
 
-      // 2. Buscar entidad bajo el cursor (prioridad: tokens > objetos > mapas, y zIndex descendente)
-      const typePriority: Record<string, number> = { token: 300, object: 200, map: 100 };
+      // 2. Si hay una pared seleccionada, comprobar si se pincha en alguno de sus nodos para arrastrarlo
+      if (selectedEntity && selectedEntity.type === 'wall' && selectedEntity.points) {
+        for (let i = 0; i < selectedEntity.points.length; i++) {
+          const nodeWorld = getWallNodeWorldPos(selectedEntity, selectedEntity.points[i]);
+          if (Math.hypot(worldPos.x - nodeWorld.x, worldPos.y - nodeWorld.y) <= handleHitRadius) {
+            interactionState.current.isDraggingWallNode = true;
+            interactionState.current.dragWallEntityId = selectedEntity.id;
+            interactionState.current.dragWallNodeIndex = i;
+            interactionState.current.startMouse = worldPos;
+            return;
+          }
+        }
+      }
+
+      // 3. Buscar entidad bajo el cursor (prioridad: tokens > objetos > paredes > mapas, y zIndex descendente)
+      const typePriority: Record<string, number> = { token: 300, object: 200, wall: 150, map: 100 };
       const sortedEntities = [...game.entities].sort((a, b) => {
         const pDiff = (typePriority[b.type] ?? 0) - (typePriority[a.type] ?? 0);
         if (pDiff !== 0) return pDiff;
@@ -275,8 +405,28 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       });
 
       const hitEntity = sortedEntities.find((ent) => {
-        // No seleccionar entidades bloqueadas por accidente en el tablero
         if (ent.locked) return false;
+
+        if (ent.type === 'wall' && ent.points && ent.points.length >= 2) {
+          // Comprobar cercanía a cualquier segmento de la pared
+          const pts = ent.points;
+          const count = ent.closed ? pts.length : pts.length - 1;
+          for (let i = 0; i < count; i++) {
+            const p1 = getWallNodeWorldPos(ent, pts[i]);
+            const p2 = getWallNodeWorldPos(ent, pts[(i + 1) % pts.length]);
+            // Distancia punto a segmento
+            const l2 = (p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2;
+            if (l2 === 0) continue;
+            let t = ((worldPos.x - p1.x) * (p2.x - p1.x) + (worldPos.y - p1.y) * (p2.y - p1.y)) / l2;
+            t = Math.max(0, Math.min(1, t));
+            const projX = p1.x + t * (p2.x - p1.x);
+            const projY = p1.y + t * (p2.y - p1.y);
+            if (Math.hypot(worldPos.x - projX, worldPos.y - projY) <= 12 / camera.zoom) {
+              return true;
+            }
+          }
+          return false;
+        }
 
         if (ent.type === 'map') {
           const mapW = (ent.mapData?.gridWidth ?? 10) * (ent.mapData?.pixelsPerGrid ?? 70) * ent.scaleX;
@@ -285,7 +435,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         }
 
         // Token u objeto: consultar radio o tamaño real
-        let baseRadius = (ent.type === 'token' ? 35 : 45);
+        let baseRadius = ent.type === 'token' ? 35 : 45;
         if (rendererRef.current?.tokensLayer) {
           const tb = rendererRef.current.tokensLayer.getEntityBounds(ent.id);
           if (tb) baseRadius = tb.radius;
@@ -297,10 +447,12 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
       if (hitEntity) {
         selectEntity(hitEntity.id, e.shiftKey);
-        interactionState.current.isDraggingEntity = true;
-        interactionState.current.dragEntityId = hitEntity.id;
-        interactionState.current.startMouse = worldPos;
-        interactionState.current.startEntityPos = { x: hitEntity.x, y: hitEntity.y };
+        if (hitEntity.type !== 'wall') {
+          interactionState.current.isDraggingEntity = true;
+          interactionState.current.dragEntityId = hitEntity.id;
+          interactionState.current.startMouse = worldPos;
+          interactionState.current.startEntityPos = { x: hitEntity.x, y: hitEntity.y };
+        }
       } else {
         if (!e.shiftKey) {
           clearSelection();
@@ -314,12 +466,13 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
     const { width, height } = getCanvasDimensions();
     const camera = getCamera();
-    const worldPos = screenToWorld({ x: e.clientX, y: e.clientY }, camera, width, height);
+    const localMouse = getLocalPointer(e);
+    const worldPos = screenToWorld(localMouse, camera, width, height);
 
     // 1. Paneo de cámara
     if (interactionState.current.isPanning) {
-      const dx = (e.clientX - interactionState.current.startMouse.x) / camera.zoom;
-      const dy = (e.clientY - interactionState.current.startMouse.y) / camera.zoom;
+      const dx = (localMouse.x - interactionState.current.startMouse.x) / camera.zoom;
+      const dy = (localMouse.y - interactionState.current.startMouse.y) / camera.zoom;
       setCamera({
         x: interactionState.current.startCamera.x - dx,
         y: interactionState.current.startCamera.y - dy
@@ -347,7 +500,6 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     if (interactionState.current.isTransforming === 'scale' && interactionState.current.dragEntityId) {
       const entity = game.entities.find((ent) => ent.id === interactionState.current.dragEntityId);
       if (entity) {
-        // Distancia del puntero respecto al centro de la entidad vs distancia inicial
         const currentDist = Math.hypot(worldPos.x - entity.x, worldPos.y - entity.y);
         const startWorld = screenToWorld(interactionState.current.startMouse, camera, width, height);
         const startDist = Math.hypot(startWorld.x - entity.x, startWorld.y - entity.y);
@@ -362,7 +514,29 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       return;
     }
 
-    // 5. Arrastre y movimiento de entidad
+    // 5. Arrastre de nodo de pared
+    if (interactionState.current.isDraggingWallNode && interactionState.current.dragWallEntityId) {
+      const wall = game.entities.find((ent) => ent.id === interactionState.current.dragWallEntityId);
+      if (wall && wall.points) {
+        let newPt = worldPos;
+        if (game.grid.snapToGrid && game.grid.size > 0 && !e.altKey) {
+          newPt = snapPointToGrid(worldPos, game.grid.size);
+        }
+        if (wall.mapId) {
+          const parentMap = game.entities.find((e) => e.id === wall.mapId);
+          if (parentMap) {
+            const mapPos = { x: parentMap.x, y: parentMap.y };
+            newPt = worldToLocal(newPt, mapPos, parentMap.rotation, parentMap.scaleX, parentMap.scaleY);
+          }
+        }
+        const updatedPoints = [...wall.points];
+        updatedPoints[interactionState.current.dragWallNodeIndex] = newPt;
+        updateEntity(wall.id, { points: updatedPoints }, false);
+      }
+      return;
+    }
+
+    // 6. Arrastre y movimiento de entidad
     if (interactionState.current.isDraggingEntity && interactionState.current.dragEntityId) {
       const dx = worldPos.x - interactionState.current.startMouse.x;
       const dy = worldPos.y - interactionState.current.startMouse.y;
@@ -375,8 +549,75 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           x: newX,
           y: newY
         },
-        false // No registrar cada frame intermedio en el historial
+        false
       );
+      return;
+    }
+
+    // 7. Cálculo de cursor dinámico cuando no se está arrastrando nada
+    if (activeTool === 'select') {
+      const selectedEntity = game.entities.find((ent) => selectedEntityIds.includes(ent.id) && !ent.locked);
+      let newCursor = 'default';
+
+      if (selectedEntity && selectedEntity.type !== 'wall') {
+        const handleHitRadius = Math.max(12 / camera.zoom, 14);
+
+        let bW = 70;
+        let bH = 70;
+        let offX = -35;
+        let offY = -35;
+
+        if (selectedEntity.type === 'map') {
+          bW = (selectedEntity.mapData?.gridWidth ?? 10) * (selectedEntity.mapData?.pixelsPerGrid ?? 70);
+          bH = (selectedEntity.mapData?.gridHeight ?? 10) * (selectedEntity.mapData?.pixelsPerGrid ?? 70);
+          offX = 0;
+          offY = 0;
+        } else if (rendererRef.current?.tokensLayer) {
+          const tBounds = rendererRef.current.tokensLayer.getEntityBounds(selectedEntity.id);
+          if (tBounds) {
+            bW = tBounds.width;
+            bH = tBounds.height;
+            offX = -bW / 2;
+            offY = -bH / 2;
+          }
+        }
+
+        const cosR = Math.cos(selectedEntity.rotation);
+        const sinR = Math.sin(selectedEntity.rotation);
+
+        const localToWorldPos = (lx: number, ly: number) => {
+          const scaledX = lx * selectedEntity.scaleX;
+          const scaledY = ly * selectedEntity.scaleY;
+          return {
+            x: selectedEntity.x + (scaledX * cosR - scaledY * sinR),
+            y: selectedEntity.y + (scaledX * sinR + scaledY * cosR)
+          };
+        };
+
+        // Comprobar rotación
+        const rotDistLocal = 25 / Math.abs(selectedEntity.scaleY || 1);
+        const rotWorld = localToWorldPos(offX + bW / 2, offY - rotDistLocal);
+        if (Math.hypot(worldPos.x - rotWorld.x, worldPos.y - rotWorld.y) <= handleHitRadius) {
+          newCursor = 'grab';
+        } else {
+          // Comprobar esquinas (0: TL, 1: TR, 2: BR, 3: BL)
+          const corners = [
+            { x: offX, y: offY, cursor: 'nwse-resize' },
+            { x: offX + bW, y: offY, cursor: 'nesw-resize' },
+            { x: offX + bW, y: offY + bH, cursor: 'nwse-resize' },
+            { x: offX, y: offY + bH, cursor: 'nesw-resize' }
+          ];
+          for (const c of corners) {
+            const cw = localToWorldPos(c.x, c.y);
+            if (Math.hypot(worldPos.x - cw.x, worldPos.y - cw.y) <= handleHitRadius) {
+              newCursor = c.cursor;
+              break;
+            }
+          }
+        }
+      }
+
+      setHoverCursor(newCursor);
     }
   };
 
@@ -409,6 +650,14 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       }
     }
 
+    // Si estábamos arrastrando un nodo de pared, registrar en historial al soltar
+    if (interactionState.current.isDraggingWallNode && interactionState.current.dragWallEntityId) {
+      const wall = game.entities.find((ent) => ent.id === interactionState.current.dragWallEntityId);
+      if (wall && wall.points) {
+        updateEntity(wall.id, { points: [...wall.points] }, true);
+      }
+    }
+
     // Si estábamos transformando (rotación o escalado), registrar cambio definitivo en historial
     if (interactionState.current.isTransforming && interactionState.current.dragEntityId) {
       const entity = game.entities.find((ent) => ent.id === interactionState.current.dragEntityId);
@@ -428,6 +677,9 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     interactionState.current.isPanning = false;
     interactionState.current.isDraggingEntity = false;
     interactionState.current.isTransforming = null;
+    interactionState.current.isDraggingWallNode = false;
+    interactionState.current.dragWallEntityId = null;
+    interactionState.current.dragWallNodeIndex = -1;
     interactionState.current.dragEntityId = null;
   };
 
@@ -449,7 +701,8 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       const asset = JSON.parse(data);
       const { width, height } = getCanvasDimensions();
       const camera = getCamera();
-      let worldPos = screenToWorld({ x: e.clientX, y: e.clientY }, camera, width, height);
+      const localMouse = getLocalPointer(e);
+      let worldPos = screenToWorld(localMouse, camera, width, height);
 
       if (game.grid.snapToGrid && game.grid.size > 0) {
         worldPos = snapPointToGrid(worldPos, game.grid.size);
@@ -485,7 +738,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         scaleX: scale,
         scaleY: scale,
         zIndex: entityType === 'map' ? 0 : 10,
-        visibleToPlayers: entityType === 'map', // Mapas visibles, tokens ocultos por defecto
+        visibleToPlayers: entityType === 'map',
         locked: false,
         mapData: asset.mapData,
         side: entityType === 'token' ? 'jugador' : undefined,
@@ -499,16 +752,22 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     }
   };
 
+  // Determinar cursor CSS dinámico
+  let activeCursor = 'default';
+  if (isSpacePressed || interactionState.current.isPanning) {
+    activeCursor = 'cursor-grab active:cursor-grabbing';
+  } else if (activeTool === 'wall') {
+    activeCursor = 'cursor-crosshair';
+  } else if (activeTool === 'ruler') {
+    activeCursor = 'cursor-crosshair';
+  } else if (hoverCursor !== 'default') {
+    activeCursor = `cursor-${hoverCursor}`;
+  }
+
   return (
     <div
       ref={containerRef}
-      className={`relative w-full h-full overflow-hidden select-none ${
-        isSpacePressed || interactionState.current.isPanning
-          ? 'cursor-grab active:cursor-grabbing'
-          : activeTool === 'ruler'
-          ? 'cursor-crosshair'
-          : 'cursor-default'
-      }`}
+      className={`relative w-full h-full overflow-hidden select-none ${activeCursor}`}
       onWheel={handleWheel}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
