@@ -28,9 +28,10 @@ export function calculateRulerDistance(
   if (mode === 'radial') {
     const radiusSquares = pixelDistance / gridSize;
     const roundedSquares = Math.round(radiusSquares * 10) / 10;
+    const feet = Math.round(roundedSquares * 5 * 10) / 10;
     return {
       distanceSquares: roundedSquares,
-      displayText: `${roundedSquares} casillas (r = ${Math.round(pixelDistance)}px)`,
+      displayText: `r = ${roundedSquares} casillas · ${feet} pies`,
       stepsX: Math.round(dx / gridSize),
       stepsY: Math.round(dy / gridSize),
       pixelDistance
@@ -47,19 +48,21 @@ export function calculateRulerDistance(
   if (diagonalRule === 'real') {
     // Distancia euclídea continua en casillas con 1 decimal
     const dist = Math.round((pixelDistance / gridSize) * 10) / 10;
+    const feet = Math.round(dist * 5 * 10) / 10;
     distanceSquares = dist;
-    displayText = `${dist} casillas`;
+    displayText = `${dist} casillas · ${feet} pies`;
   } else if (diagonalRule === '5e') {
     // Regla D&D 5e: Todas las diagonales cuentan como 1 casilla (distancia Chebyshev)
     distanceSquares = Math.max(stepsX, stepsY);
-    displayText = `${distanceSquares} ${distanceSquares === 1 ? 'casilla' : 'casillas'}`;
+    const feet = distanceSquares * 5;
+    displayText = `${distanceSquares} ${distanceSquares === 1 ? 'casilla' : 'casillas'} · ${feet} pies`;
   } else {
     // Regla alterna (1-2-1-2 / D&D 3.5 / Pathfinder):
-    // 1 diagonal = 1 casilla, 2 diagonales = 3 casillas, 3 = 4, 4 = 6...
     const diagonals = Math.min(stepsX, stepsY);
     const straights = Math.max(stepsX, stepsY) - diagonals;
     distanceSquares = straights + Math.floor(diagonals * 1.5);
-    displayText = `${distanceSquares} ${distanceSquares === 1 ? 'casilla' : 'casillas'}`;
+    const feet = distanceSquares * 5;
+    displayText = `${distanceSquares} ${distanceSquares === 1 ? 'casilla' : 'casillas'} · ${feet} pies`;
   }
 
   return {

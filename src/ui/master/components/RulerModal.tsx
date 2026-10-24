@@ -33,7 +33,7 @@ export const RulerModal: React.FC<RulerModalProps> = ({ isOpen, onClose }) => {
 
         {/* Modo de medición */}
         <div className="space-y-1.5">
-          <label className="text-xs text-slate-400 block font-medium">Modo de medición</label>
+          <label className="text-xs text-slate-400 block font-medium">Modo de medición (D&D 5e)</label>
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => setRulerMode('straight')}
@@ -44,7 +44,7 @@ export const RulerModal: React.FC<RulerModalProps> = ({ isOpen, onClose }) => {
               }`}
             >
               <Slash className="w-4 h-4" />
-              <span>Línea recta</span>
+              <span>Línea</span>
             </button>
             <button
               onClick={() => setRulerMode('radial')}
@@ -55,52 +55,13 @@ export const RulerModal: React.FC<RulerModalProps> = ({ isOpen, onClose }) => {
               }`}
             >
               <CircleDot className="w-4 h-4" />
-              <span>Radial (Círculo)</span>
+              <span>Círculo</span>
             </button>
           </div>
+          <p className="text-[10px] text-slate-500 pt-1">
+            Regla D&D 5e: 1 casilla = 5 pies. Las diagonales cuentan 1 casilla en cualquier ángulo.
+          </p>
         </div>
-
-        {/* Regla de diagonales (solo relevante en modo línea recta) */}
-        {ruler.mode === 'straight' && (
-          <div className="space-y-1.5">
-            <label className="text-xs text-slate-400 block font-medium">Cálculo de diagonales</label>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                onClick={() => setRulerDiagonalRule('5e')}
-                className={`p-2 rounded border text-xs font-medium transition-all text-center ${
-                  ruler.diagonalRule === '5e'
-                    ? 'bg-sky-950/80 border-sky-500 text-sky-300'
-                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
-                }`}
-              >
-                <div>D&D 5e</div>
-                <div className="text-[10px] text-slate-500">Todas 1</div>
-              </button>
-              <button
-                onClick={() => setRulerDiagonalRule('alternate')}
-                className={`p-2 rounded border text-xs font-medium transition-all text-center ${
-                  ruler.diagonalRule === 'alternate'
-                    ? 'bg-sky-950/80 border-sky-500 text-sky-300'
-                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
-                }`}
-              >
-                <div>Alterna</div>
-                <div className="text-[10px] text-slate-500">1-2-1-2</div>
-              </button>
-              <button
-                onClick={() => setRulerDiagonalRule('real')}
-                className={`p-2 rounded border text-xs font-medium transition-all text-center ${
-                  ruler.diagonalRule === 'real'
-                    ? 'bg-sky-950/80 border-sky-500 text-sky-300'
-                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
-                }`}
-              >
-                <div>Real</div>
-                <div className="text-[10px] text-slate-500">Euclídea (1 dec)</div>
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Visibilidad para jugadores */}
         <div className="pt-2 border-t border-slate-700/80">

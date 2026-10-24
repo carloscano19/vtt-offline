@@ -352,10 +352,10 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
         <button
           onClick={() => setShowDisplaysModal(true)}
           className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-xs font-medium flex items-center gap-1.5 text-slate-200"
-          title="Gestionar en qué monitor o TV se proyecta la ventana de jugadores"
+          title="Abrir o gestionar la pantalla de jugadores para monitor o TV"
         >
           <Monitor className="w-4 h-4 text-emerald-400" />
-          <span>Pantalla jugadores</span>
+          <span>Abrir pantalla de jugadores</span>
         </button>
       </div>
 

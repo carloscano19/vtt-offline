@@ -11,6 +11,7 @@ import { SaveLoadModal } from './components/SaveLoadModal';
 import { DisplaysModal } from './components/DisplaysModal';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { saveAutoSaveToDb, loadAutoSaveFromDb } from '../../modules/persistence/saveManager';
+import { syncChannel } from '../../modules/sync/syncChannel';
 
 export const MasterApp: React.FC = () => {
   useKeyboardShortcuts();
@@ -39,28 +40,37 @@ export const MasterApp: React.FC = () => {
     return () => clearInterval(timer);
   }, [game]);
 
-  // 3. Autoguardado antes de cerrar la app (petición desde Electron main)
+  // 3. Autoguardado web en beforeunload y pagehide
   useEffect(() => {
-    if (window.electronAPI) {
-      const cleanup = window.electronAPI.onRequestSaveBeforeQuit(async () => {
-        await saveAutoSaveToDb(game);
-      });
-      return cleanup;
-    }
+    const handleBeforeUnload = () => {
+      saveAutoSaveToDb(game);
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handleBeforeUnload);
+    };
   }, [game]);
 
-  // 4. Sincronización ligera por IPC hacia la ventana de jugadores (sin blobs)
+  // 4. Sincronización ligera por BroadcastChannel hacia la ventana de jugadores (sin blobs)
   useEffect(() => {
-    if (window.electronAPI) {
-      window.electronAPI.sendStateToPlayers(game);
-    }
+    syncChannel.sendState(game);
   }, [game]);
 
   useEffect(() => {
-    if (window.electronAPI) {
-      window.electronAPI.sendRulerToPlayers(ruler);
-    }
+    syncChannel.sendRuler(ruler);
   }, [ruler]);
+
+  // Responder a peticiones de sincronización de la ventana de jugadores cuando acaba de abrirse
+  useEffect(() => {
+    const cleanup = syncChannel.onRequestState(() => {
+      syncChannel.sendState(game);
+      syncChannel.sendRuler(ruler);
+    });
+    return cleanup;
+  }, [game, ruler]);
 
   return (
     <div className="w-screen h-screen flex flex-col bg-slate-950 overflow-hidden">

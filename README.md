@@ -1,19 +1,23 @@
 # VTT Offline 🎲🗺️
 
-Tablero virtual de rol (VTT) 100% offline para partidas presenciales. El máster gestiona la partida desde su portátil con todas las herramientas de control y proyecta únicamente el tablero en una segunda pantalla conectada por HDMI (TV o monitor) para los jugadores.
+Tablero virtual de rol (VTT) 100% offline y Progressive Web App (PWA) para partidas presenciales. El máster gestiona la partida desde su ordenador con todas las herramientas de control y proyecta únicamente el tablero en una segunda pantalla (TV o monitor secundario conectado por HDMI) para los jugadores.
+
+Desplegable de forma inmediata como SPA estática en **Vercel**, **Netlify** o **GitHub Pages**, o ejecutable en red local. Funciona sin internet tras la primera carga gracias a su Service Worker y persistencia en IndexedDB.
 
 ---
 
 ## 🛠️ Stack Tecnológico
 
-- **Entorno de Escritorio**: Electron + Vite
-- **Frontend**: React 18 + TypeScript + Tailwind CSS
+- **Aplicación Web**: Vite + React 18 + TypeScript + Tailwind CSS
+- **PWA / Offline**: Service Worker con `vite-plugin-pwa` (Workbox) y Web App Manifest
 - **Renderizado 2D/WebGL**: PixiJS v8
 - **Gestión de Estado**: Zustand
+- **Sincronización Multiventana**: BroadcastChannel API (sincronización instantánea de estado, regla y cámara entre pestañas/ventanas del navegador)
 - **Persistencia Local**: Dexie (IndexedDB)
-- **Empaquetado de Partidas**: JSZip (.vttsave)
+- **Gestión de Pantallas**: Window Management API (`window.getScreenDetails`)
+- **Acceso a Archivos**: File System Access API (`showSaveFilePicker` / `showOpenFilePicker`) con fallback de descarga/subida clásica
+- **Empaquetado de Partidas**: JSZip (`.vttsave`)
 - **Iconografía**: Lucide React
-- **Totalmente Offline**: Sin dependencias ni peticiones de red en tiempo de ejecución.
 
 ---
 
@@ -24,7 +28,7 @@ Tablero virtual de rol (VTT) 100% offline para partidas presenciales. El máster
 
 ---
 
-## 🚀 Instalación y Puesta en Marcha
+## 🚀 Instalación y Puesta en Marcha en Local
 
 ### 1. Clonar e Instalar Dependencias
 
@@ -40,9 +44,11 @@ npm install
 npm run dev
 ```
 
-Este comando arrancará el servidor de desarrollo de Vite y abrirá automáticamente las dos ventanas de Electron:
-1. **Ventana Máster**: Con la interfaz completa, barra superior, panel lateral y herramientas de control.
-2. **Ventana Jugadores**: Vista limpia y sin UI. Si hay una segunda pantalla conectada, se abre a pantalla completa en ella. Si no hay segunda pantalla, se abre en modo ventana normal para permitir pruebas durante el desarrollo.
+Abre tu navegador en `http://localhost:5173`:
+1. **Ventana Máster**: La vista principal con la barra superior de herramientas, biblioteca de assets, control de capas y propiedades.
+2. **Ventana de Jugadores**: Pulsa en el botón superior **"Abrir pantalla de jugadores"** (o accede a `http://localhost:5173/?window=players`).
+   - En navegadores compatibles (Chrome / Edge con Window Management API), te permite elegir directamente en qué pantalla secundaria abrirla.
+   - En cualquier otro navegador, abre una ventana emergente limpia: arrástrala a la TV/monitor y pulsa <kbd>F11</kbd> o el botón flotante de pantalla completa.
 
 ### 3. Ejecutar Tests
 
@@ -50,74 +56,57 @@ Este comando arrancará el servidor de desarrollo de Vite y abrirá automáticam
 npm test
 ```
 
-Ejecuta la suite de pruebas unitarias con Vitest (cálculos de distancias de regla y parser de mapas Universal VTT).
+Ejecuta la suite de pruebas unitarias con Vitest (parser de Universal VTT y cálculos de distancias de regla D&D 5e).
 
 ---
 
-## 📦 Generación de Ejecutables
+## 🌐 Despliegue en Vercel
 
-### Compilación Básica
-Compila el código TypeScript y empaqueta el frontend y los scripts de Electron:
-```bash
-npm run build
-```
+El proyecto incluye el archivo de configuración [`vercel.json`](file:///Users/carloscano/Desktop/Carlos%20apps/VTT%20Rol/vercel.json) configurado para aplicaciones Single-Page Application (SPA) con Vite.
 
-### Ejecutable para Windows (`.exe` / instalador y portable)
-```bash
-npm run dist:win
-```
-Genera los instaladores en la carpeta `release/`.
-
-### Ejecutable para macOS (`.dmg` / `.zip`)
-```bash
-npm run dist:mac
-```
+1. Conecta el repositorio en [Vercel](https://vercel.com).
+2. Parámetros de compilación:
+   - **Framework Preset**: `Vite`
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+3. ¡Listo! La aplicación se desplegará y funcionará 100% offline tras abrirla por primera vez.
 
 ---
 
-## 🖥️ Arquitectura de Ventanas y Sincronización
+## 🖥️ Arquitectura de Sincronización Web
 
-- **Ventana Máster**:
-  - Alberga el estado maestro de la partida (`useGameStore`).
-  - Permite importar mapas, colocar tokens, dibujar cuadrículas, medir distancias y gestionar capas.
-  - Muestra elementos visibles y ocultos (los ocultos aparecen semitransparentes con indicador de ojo).
-  - Incluye controles de cámara para "Enviar vista a jugadores" o activar "Seguir mi cámara".
-  - Botón "Pantalla jugadores" para mover la ventana de jugadores a cualquier monitor/TV detectado en caliente y activar pantalla completa.
-- **Ventana Jugadores**:
-  - Vista pasiva de sólo lectura.
-  - Sincronización ligera por IPC: **nunca** se transmiten imágenes ni datos binarios por IPC, solo estados y posiciones. Los assets se cargan directamente desde la base de datos compartida IndexedDB (Dexie) y se cachean en memoria.
-  - Filtrado estricto: Las entidades con `visibleToPlayers = false` no existen en la escena de jugadores.
-  - Atajo <kbd>F11</kbd> en la ventana de jugadores para alternar pantalla completa.
+- **Sin Servidor ni Backend**: Toda la sincronización se realiza en el cliente a través de **BroadcastChannel API**.
+- **Sincronización Ligera**: Nunca se transfieren blobs ni imágenes por el canal. La ventana máster envía el estado ligero (entidades, identificadores, regla y cámara). La ventana de jugadores carga las texturas desde la base de datos compartida IndexedDB (Dexie) por `assetId`.
+- **Filtrado Estricto**: Las entidades con `visibleToPlayers = false` (o paredes invisibles) nunca se renderizan en la pantalla de jugadores.
+- **Autoguardado Seguro**: Cada 60 segundos y automáticamente al cerrar o recargar la pestaña (`beforeunload` / `pagehide`).
 
 ---
 
 ## 📐 Mapas Universal VTT y Cuadrícula
 
-- Soporte nativo para archivos Universal VTT (`.dd2vtt`, `.uvtt`, `.df2vtt`).
-- Paredes, portales y luces se transforman desde coordenadas locales relativas al origen del mapa.
-- Al importar un mapa, su escala se calcula automáticamente como `cuadrícula / pixelsPerGrid` para que coincida exactamente con la cuadrícula global.
-- Al modificar el tamaño de casilla de la cuadrícula, todos los mapas presentes se reescalan automáticamente para mantenerse perfectamente alineados.
-- Desplazamiento de mapas con ajuste magnético (Snap to Grid) a las intersecciones de la cuadrícula.
-- Tablero infinito con capacidad para colocar múltiples mapas simultáneos.
+- Soporte para mapas `.dd2vtt`, `.uvtt` y `.df2vtt`.
+- Ajuste automático de escala `grid.size / pixelsPerGrid` para alinear casillas a la cuadrícula global.
+- Ajuste magnético (Snap to Grid) y desplazamiento fluido.
+- Herramienta de **Pared Invisible** (<kbd>W</kbd>) para añadir muros no visibles a jugadores que vinculan su posición al mapa.
 
 ---
 
-## 📏 Herramienta de Regla
+## 📏 Regla Simplificada (D&D 5e)
 
-- **Modo Línea Recta**: Medición en casillas.
-- **Modo Radial**: Círculo con radio en casillas y píxeles.
-- **Regla de Diagonales**:
-  - **D&D 5e**: Cada diagonal cuenta como 1 casilla (distancia Chebyshev).
-  - **Alterna (3.5 / Pathfinder)**: Diagonales alternan 1-2-1-2 casillas (1, 3, 4, 6...).
-- **Visibilidad Compartida**: Interruptor para proyectar la regla en tiempo real a la pantalla de los jugadores o mantenerla visible solo para el máster.
+- Medición en casillas y pies (**1 casilla = 5 pies**), por ejemplo: `6 casillas · 30 pies`.
+- Dos modos de medición:
+  - **Línea**: Distancia Chebyshev oficial D&D 5e en cualquier ángulo libre.
+  - **Círculo**: Radio circular en casillas y pies.
+- Interruptor para mostrar o esconder la regla a los jugadores en tiempo real.
 
 ---
 
-## 💾 Sistema de Guardado y Archivos `.vttsave`
+## 💾 Partidas y Archivos
 
-- **Autoguardado Automático**: Cada 60 segundos y al cerrar la aplicación (con confirmación por IPC y timeout de 3 segundos).
-- **Guardar / Guardar como / Cargar**: Almacenamiento instantáneo en Dexie IndexedDB.
-- **Exportar e Importar `.vttsave`**: Archivo comprimido ZIP que contiene el JSON con todo el estado de la partida y una carpeta con todos los blobs de imágenes/mapas utilizados, lo que permite transferir partidas completas a otro ordenador sin conexión a internet.
+- **Duplicar partida**: Genera una copia independiente con nuevo ID y nombre `<nombre> (Copia)`.
+- **Guardar en archivo...**: Exporta la partida y todos sus mapas/tokens en un archivo `.vttsave` (ZIP) usando la File System Access API o descarga directa.
+- **Abrir archivo...**: Abre archivos `.vttsave` e importa mapas y tokens a IndexedDB.
+- **Autoguardado**: Copia de seguridad automática en el navegador.
 
 ---
 
@@ -125,11 +114,13 @@ npm run dist:mac
 
 | Atajo | Acción |
 |---|---|
+| <kbd>V</kbd> | Herramienta de Selección y movimiento |
+| <kbd>H</kbd> / <kbd>Espacio</kbd> + Arrastrar | Paneo de cámara |
+| <kbd>M</kbd> | Regla de distancia |
+| <kbd>W</kbd> | Pared invisible (Doble clic o Enter termina, Esc cancela) |
 | <kbd>Supr</kbd> / <kbd>Backspace</kbd> | Eliminar entidades seleccionadas |
-| <kbd>Ctrl</kbd> + <kbd>S</kbd> | Guardar partida / autoguardado |
-| <kbd>Ctrl</kbd> + <kbd>Z</kbd> | Deshacer |
-| <kbd>Ctrl</kbd> + <kbd>Y</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> | Rehacer |
-| <kbd>Espacio</kbd> + Arrastrar | Paneo de cámara |
-| <kbd>Rueda del ratón</kbd> | Zoom centrado en la posición del cursor |
-| <kbd>Esc</kbd> | Cancelar herramienta / limpiar selección |
-| <kbd>F11</kbd> (en ventana jugadores) | Alternar pantalla completa |
+| <kbd>Ctrl</kbd> / <kbd>Cmd</kbd> + <kbd>S</kbd> | Abrir Gestor de Partidas / Guardar |
+| <kbd>Ctrl</kbd> / <kbd>Cmd</kbd> + <kbd>Z</kbd> | Deshacer |
+| <kbd>Ctrl</kbd> / <kbd>Cmd</kbd> + <kbd>Y</kbd> / <kbd>Shift</kbd>+<kbd>Cmd</kbd>+<kbd>Z</kbd> | Rehacer |
+| <kbd>Rueda del ratón</kbd> | Zoom centrado en la posición del puntero |
+| <kbd>F11</kbd> (en jugadores) | Alternar pantalla completa |
