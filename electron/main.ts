@@ -42,7 +42,8 @@ function createMasterWindow() {
     minWidth: 1024,
     minHeight: 700,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
+      preload: path.join(__dirname, 'preload.mjs'),
+      sandbox: false,
       nodeIntegration: false,
       contextIsolation: true
     }
@@ -50,6 +51,10 @@ function createMasterWindow() {
 
   if (VITE_DEV_SERVER_URL) {
     masterWindow.loadURL(`${VITE_DEV_SERVER_URL}?window=master`);
+    masterWindow.webContents.openDevTools();
+    masterWindow.webContents.on('console-message', (_event, level, message) => {
+      console.log(`[Master Console ${level}] ${message}`);
+    });
   } else {
     masterWindow.loadFile(path.join(process.env.DIST!, 'index.html'), {
       query: { window: 'master' }
@@ -73,7 +78,8 @@ function createPlayersWindow() {
   let windowOptions: Electron.BrowserWindowConstructorOptions = {
     title: 'VTT Offline - Jugadores',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
+      preload: path.join(__dirname, 'preload.mjs'),
+      sandbox: false,
       nodeIntegration: false,
       contextIsolation: true
     },
@@ -105,6 +111,10 @@ function createPlayersWindow() {
 
   if (VITE_DEV_SERVER_URL) {
     playersWindow.loadURL(`${VITE_DEV_SERVER_URL}?window=players`);
+    playersWindow.webContents.openDevTools({ mode: 'detach' });
+    playersWindow.webContents.on('console-message', (_event, level, message) => {
+      console.log(`[Players Console ${level}] ${message}`);
+    });
   } else {
     playersWindow.loadFile(path.join(process.env.DIST!, 'index.html'), {
       query: { window: 'players' }

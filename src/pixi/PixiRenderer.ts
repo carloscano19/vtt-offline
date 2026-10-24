@@ -19,60 +19,83 @@ export class PixiRenderer {
   public gizmoLayer!: GizmoLayer;
 
   private isMaster: boolean;
+  public isInitialized = false;
+  public isDestroyed = false;
+  private initPromise: Promise<void> | null = null;
 
   constructor(isMaster: boolean) {
     this.isMaster = isMaster;
   }
 
   public async init(canvas: HTMLCanvasElement, resizeTo: HTMLElement) {
+    if (this.isDestroyed) return;
+
     this.app = new Application();
-    await this.app.init({
-      canvas,
-      resizeTo,
-      backgroundColor: 0x090d16,
-      antialias: true,
-      resolution: window.devicePixelRatio || 1,
-      autoDensity: true
-    });
+    this.initPromise = (async () => {
+      await this.app.init({
+        canvas,
+        resizeTo,
+        backgroundColor: 0x090d16,
+        antialias: true,
+        resolution: window.devicePixelRatio || 1,
+        autoDensity: true
+      });
 
-    this.worldContainer = new Container();
-    this.worldContainer.label = 'WorldContainer';
-    this.app.stage.addChild(this.worldContainer);
+      if (this.isDestroyed) {
+        // Si fue destruido mientras se inicializaba, limpiar inmediatamente
+        try {
+          if (this.app.renderer) {
+            this.app.destroy({ removeView: false }, { children: true });
+          }
+        } catch (e) {
+          console.warn('[PixiRenderer] Limpieza tras destrucción temprana:', e);
+        }
+        return;
+      }
 
-    // 1. Capa de Mapas
-    this.mapsLayer = new MapsLayer(this.isMaster);
-    this.mapsLayer.label = 'MapsLayer';
-    this.worldContainer.addChild(this.mapsLayer);
+      this.worldContainer = new Container();
+      this.worldContainer.label = 'WorldContainer';
+      this.app.stage.addChild(this.worldContainer);
 
-    // 2. Capa de Depuración UVTT (Paredes, Portales, Luces - Solo Máster)
-    this.debugVttLayer = new DebugVttLayer(this.isMaster);
-    this.debugVttLayer.label = 'DebugVttLayer';
-    this.worldContainer.addChild(this.debugVttLayer);
+      // 1. Capa de Mapas
+      this.mapsLayer = new MapsLayer(this.isMaster);
+      this.mapsLayer.label = 'MapsLayer';
+      this.worldContainer.addChild(this.mapsLayer);
 
-    // 3. Capa de Cuadrícula
-    this.gridLayer = new GridLayer();
-    this.gridLayer.label = 'GridLayer';
-    this.worldContainer.addChild(this.gridLayer);
+      // 2. Capa de Depuración UVTT (Paredes, Portales, Luces - Solo Máster)
+      this.debugVttLayer = new DebugVttLayer(this.isMaster);
+      this.debugVttLayer.label = 'DebugVttLayer';
+      this.worldContainer.addChild(this.debugVttLayer);
 
-    // 4. Capa de Tokens y Objetos
-    this.tokensLayer = new TokensLayer(this.isMaster);
-    this.tokensLayer.label = 'TokensLayer';
-    this.worldContainer.addChild(this.tokensLayer);
+      // 3. Capa de Cuadrícula
+      this.gridLayer = new GridLayer();
+      this.gridLayer.label = 'GridLayer';
+      this.worldContainer.addChild(this.gridLayer);
 
-    // (Hooks para Fases posteriores):
-    // Fase 2: Vision & FogOfWar
-    // Fase 3: Dynamic Lighting
-    // Fase 4: Status Icons
+      // 4. Capa de Tokens y Objetos
+      this.tokensLayer = new TokensLayer(this.isMaster);
+      this.tokensLayer.label = 'TokensLayer';
+      this.worldContainer.addChild(this.tokensLayer);
 
-    // 5. Capa de Regla
-    this.rulerLayer = new RulerLayer(this.isMaster);
-    this.rulerLayer.label = 'RulerLayer';
-    this.worldContainer.addChild(this.rulerLayer);
+      // (Hooks para Fases 2, 3, 4):
+      // Fase 2: Vision & FogOfWar
+      // Fase 3: Dynamic Lighting & Filters
+      // Fase 4: Status Icons
 
-    // 6. Capa de Gizmos de transformación (Solo Máster)
-    this.gizmoLayer = new GizmoLayer(this.isMaster);
-    this.gizmoLayer.label = 'GizmoLayer';
-    this.worldContainer.addChild(this.gizmoLayer);
+      // 5. Capa de Regla
+      this.rulerLayer = new RulerLayer(this.isMaster);
+      this.rulerLayer.label = 'RulerLayer';
+      this.worldContainer.addChild(this.rulerLayer);
+
+      // 6. Capa de Gizmos de transformación (Solo Máster)
+      this.gizmoLayer = new GizmoLayer(this.isMaster);
+      this.gizmoLayer.label = 'GizmoLayer';
+      this.worldContainer.addChild(this.gizmoLayer);
+
+      this.isInitialized = true;
+    })();
+
+    await this.initPromise;
   }
 
   public sync(
@@ -81,7 +104,7 @@ export class PixiRenderer {
     selectedIds: string[] = [],
     showDebugOverlay = true
   ) {
-    if (!this.app || !this.app.renderer) return;
+    if (!this.isInitialized || this.isDestroyed || !this.app || !this.app.renderer) return;
 
     const width = this.app.screen.width;
     const height = this.app.screen.height;
@@ -104,9 +127,25 @@ export class PixiRenderer {
     this.gizmoLayer.update(selectedEntities);
   }
 
-  public destroy() {
-    if (this.app) {
-      this.app.destroy(true, { children: true });
+  public async destroy() {
+    if (this.isDestroyed) return;
+    this.isDestroyed = true;
+
+    // Si la inicialización sigue en curso, esperar a que termine antes de destruir
+    if (this.initPromise) {
+      try {
+        await this.initPromise;
+      } catch {
+        // Ignorar fallo de init si se interrumpió
+      }
+    }
+
+    if (this.app && this.app.renderer) {
+      try {
+        this.app.destroy({ removeView: false }, { children: true });
+      } catch (err) {
+        console.warn('[PixiRenderer] Error durante destroy:', err);
+      }
     }
   }
 }

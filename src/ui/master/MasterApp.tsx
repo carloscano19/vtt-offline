@@ -4,6 +4,7 @@ import { useUIStore } from '../../stores/useUIStore';
 import { TopToolbar } from './components/TopToolbar';
 import { Sidebar } from './components/Sidebar';
 import { PixiCanvas } from '../../pixi/PixiCanvas';
+import { CanvasErrorBoundary } from '../common/CanvasErrorBoundary';
 import { GridModal } from './components/GridModal';
 import { RulerModal } from './components/RulerModal';
 import { SaveLoadModal } from './components/SaveLoadModal';
@@ -72,7 +73,9 @@ export const MasterApp: React.FC = () => {
       {/* Área central: Tablero PixiJS y panel lateral derecho */}
       <div className="flex-1 flex overflow-hidden relative">
         <main className="flex-1 h-full relative">
-          <PixiCanvas isMaster={true} />
+          <CanvasErrorBoundary fallbackTitle="Error en el tablero del Máster">
+            <PixiCanvas isMaster={true} />
+          </CanvasErrorBoundary>
         </main>
         <Sidebar />
       </div>

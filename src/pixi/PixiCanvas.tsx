@@ -11,7 +11,6 @@ interface PixiCanvasProps {
 
 export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<PixiRenderer | null>(null);
 
   // Stores
@@ -55,24 +54,39 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     startCamera: { x: 0, y: 0 }
   });
 
-  // 1. Inicialización de PixiRenderer
+  // 1. Inicialización robusta de PixiRenderer compatible con React StrictMode
   useEffect(() => {
-    if (!canvasRef.current || !containerRef.current) return;
+    if (!containerRef.current) return;
+
+    let isCancelled = false;
+    const container = containerRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.className = 'block w-full h-full touch-none';
 
     const renderer = new PixiRenderer(isMaster);
     rendererRef.current = renderer;
 
-    let isMounted = true;
-    renderer.init(canvasRef.current, containerRef.current).then(() => {
-      if (isMounted) {
-        renderer.sync(game, ruler, selectedEntityIds, showDebugVttOverlay);
+    renderer.init(canvas, container).then(() => {
+      if (isCancelled) {
+        renderer.destroy();
+        return;
       }
+
+      container.replaceChildren(canvas);
+      renderer.sync(game, ruler, selectedEntityIds, showDebugVttOverlay);
+    }).catch((err) => {
+      console.error('[PixiCanvas] Error al inicializar PixiRenderer:', err);
     });
 
     return () => {
-      isMounted = false;
+      isCancelled = true;
       renderer.destroy();
-      rendererRef.current = null;
+      if (rendererRef.current === renderer) {
+        rendererRef.current = null;
+      }
+      if (container.contains(canvas)) {
+        container.removeChild(canvas);
+      }
     };
   }, [isMaster]);
 
@@ -405,8 +419,6 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       onPointerLeave={handlePointerUp}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
-    >
-      <canvas ref={canvasRef} className="block w-full h-full touch-none" />
-    </div>
+    />
   );
 };

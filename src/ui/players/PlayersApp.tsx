@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useGameStore } from '../../stores/useGameStore';
 import { useUIStore } from '../../stores/useUIStore';
 import { PixiCanvas } from '../../pixi/PixiCanvas';
+import { CanvasErrorBoundary } from '../common/CanvasErrorBoundary';
 
 export const PlayersApp: React.FC = () => {
   const setGame = useGameStore((s) => s.setGame);
@@ -52,7 +53,9 @@ export const PlayersApp: React.FC = () => {
 
   return (
     <div className="w-screen h-screen bg-slate-950 overflow-hidden relative select-none">
-      <PixiCanvas isMaster={false} />
+      <CanvasErrorBoundary fallbackTitle="Error en el tablero de Jugadores">
+        <PixiCanvas isMaster={false} />
+      </CanvasErrorBoundary>
     </div>
   );
 };
