@@ -3,6 +3,7 @@ import { MapData, MapWall, MapPortal, MapLight } from '../../types/entity';
 
 export interface ParsedUVTTResult {
   imageBlob: Blob;
+  mimeType: string;
   pixelsPerGrid: number;
   gridWidth: number;
   gridHeight: number;
@@ -11,25 +12,57 @@ export interface ParsedUVTTResult {
   mapData: MapData;
 }
 
-export function base64ToBlob(base64: string, mimeType = 'image/png'): Blob {
-  // Manejo de data URL si contiene cabecera data:image/...;base64,
+/**
+ * Detecta el tipo MIME real a partir de los bytes mágicos de la cabecera
+ */
+export function detectMimeType(bytes: Uint8Array): string {
+  if (bytes.length >= 12) {
+    // PNG: 89 50 4E 47 0D 0A 1A 0A
+    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+      return 'image/png';
+    }
+    // WebP: RIFF (bytes 0-3) y WEBP (bytes 8-11) - Formato estándar de Dungeondraft
+    if (
+      bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+      bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+    ) {
+      return 'image/webp';
+    }
+    // JPEG: FF D8 FF
+    if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+      return 'image/jpeg';
+    }
+    // GIF: GIF87a o GIF89a
+    if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38) {
+      return 'image/gif';
+    }
+  }
+  return 'image/webp'; // Fallback prioritario para Universal VTT / Dungeondraft
+}
+
+export function base64ToBlob(base64: string, fallbackMime?: string): { blob: Blob; mimeType: string } {
   let cleanBase64 = base64;
-  let detectedMime = mimeType;
+  let headerMime: string | undefined;
+
   if (base64.startsWith('data:')) {
     const parts = base64.split(',');
     const header = parts[0];
     cleanBase64 = parts[1];
     const match = header.match(/:(.*?);/);
-    if (match) detectedMime = match[1];
+    if (match) headerMime = match[1];
   }
 
   const byteCharacters = atob(cleanBase64);
-  const byteNumbers = new Array(byteCharacters.length);
+  const byteArray = new Uint8Array(byteCharacters.length);
   for (let i = 0; i < byteCharacters.length; i++) {
-    byteNumbers[i] = byteCharacters.charCodeAt(i);
+    byteArray[i] = byteCharacters.charCodeAt(i);
   }
-  const byteArray = new Uint8Array(byteNumbers);
-  return new Blob([byteArray], { type: detectedMime });
+
+  // Detectar MIME por bytes mágicos (más fiable que cabeceras)
+  const mimeType = headerMime || detectMimeType(byteArray) || fallbackMime || 'image/webp';
+  const blob = new Blob([byteArray], { type: mimeType });
+
+  return { blob, mimeType };
 }
 
 export function parseUVTT(jsonString: string): ParsedUVTTResult {
@@ -120,10 +153,11 @@ export function parseUVTT(jsonString: string): ParsedUVTTResult {
     }
   }
 
-  const imageBlob = base64ToBlob(data.image, 'image/png');
+  const { blob: imageBlob, mimeType } = base64ToBlob(data.image, 'image/webp');
 
   return {
     imageBlob,
+    mimeType,
     pixelsPerGrid: ppg,
     gridWidth,
     gridHeight,

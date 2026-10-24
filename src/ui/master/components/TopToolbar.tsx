@@ -80,7 +80,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
             id: assetId,
             name: name.replace(/\.[^/.]+$/, ''),
             type: 'map',
-            mimeType: parsed.imageBlob.type,
+            mimeType: parsed.mimeType,
             blob: parsed.imageBlob,
             createdAt: Date.now(),
             width: parsed.widthPx,
@@ -102,7 +102,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
             scaleX: scale,
             scaleY: scale,
             zIndex: 0,
-            visibleToPlayers: true,
+            visibleToPlayers: true, // Mapas visibles para jugadores por defecto
             locked: false,
             mapData: parsed.mapData
           };
@@ -129,7 +129,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
 
           await saveAsset(asset);
 
-          // Crear token en el centro del máster
+          // Crear token en el centro del máster (oculto para jugadores por defecto)
           const entity: Entity = {
             id: `entity_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
             type: 'token',
@@ -141,7 +141,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
             scaleX: 1,
             scaleY: 1,
             zIndex: 10,
-            visibleToPlayers: true,
+            visibleToPlayers: false, // Tokens ocultos para jugadores por defecto
             locked: false,
             side: 'jugador',
             statuses: []

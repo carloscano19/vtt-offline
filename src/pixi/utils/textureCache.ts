@@ -1,4 +1,4 @@
-import { Assets, Texture } from 'pixi.js';
+import { Texture } from 'pixi.js';
 import { getAsset } from '../../db/dexie';
 
 const cache = new Map<string, Texture>();
@@ -6,7 +6,7 @@ const objectUrlMap = new Map<string, string>();
 
 /**
  * Carga una textura PixiJS a partir de un assetId almacenado en Dexie.
- * La textura se cachea en memoria para evitar recargas constantes.
+ * Utiliza HTMLImageElement y decode() para máxima robustez ante URLs blob sin extensión (WebP, PNG, etc.).
  */
 export async function getTextureForAsset(assetId: string): Promise<Texture | null> {
   if (!assetId) return null;
@@ -17,7 +17,7 @@ export async function getTextureForAsset(assetId: string): Promise<Texture | nul
 
   const asset = await getAsset(assetId);
   if (!asset || !asset.blob) {
-    console.warn(`[textureCache] No se encontró el asset con id: ${assetId}`);
+    console.error(`[textureCache] No se encontró el asset en Dexie: ID "${assetId}"`);
     return null;
   }
 
@@ -28,11 +28,28 @@ export async function getTextureForAsset(assetId: string): Promise<Texture | nul
   }
 
   try {
-    const texture = await Assets.load(objectUrl);
+    const img = new Image();
+    img.src = objectUrl;
+
+    // img.decode() decodifica de forma asíncrona la imagen en GPU/memoria
+    if (typeof img.decode === 'function') {
+      await img.decode();
+    } else {
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = (e) => reject(e);
+      });
+    }
+
+    // Crear textura a partir del elemento HTMLImage ya decodificado
+    const texture = Texture.from(img);
     cache.set(assetId, texture);
     return texture;
   } catch (err) {
-    console.error(`[textureCache] Error al cargar la textura para el asset ${assetId}:`, err);
+    console.error(
+      `[textureCache] Error crítico al cargar textura para asset: ID="${asset.id}", Nombre="${asset.name}", Tipo="${asset.type}", MIME="${asset.mimeType}":`,
+      err
+    );
     return null;
   }
 }

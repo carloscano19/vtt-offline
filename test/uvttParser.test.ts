@@ -71,9 +71,21 @@ describe('uvttParser', () => {
     expect(result.mapData.lights[0].color).toBe('#ffaa00');
   });
 
-  it('decodifica la imagen en un Blob válido', () => {
+  it('decodifica la imagen en un Blob válido con detección de tipo MIME PNG', () => {
     const result = parseUVTT(dummyUVTT);
     expect(result.imageBlob).toBeInstanceOf(Blob);
     expect(result.imageBlob.size).toBeGreaterThan(0);
+    expect(result.mimeType).toBe('image/png');
+  });
+
+  it('detecta correctamente formato WebP (común en Dungeondraft)', () => {
+    const webpUVTT = JSON.stringify({
+      format: 0.2,
+      resolution: { map_origin: { x: 0, y: 0 }, map_size: { x: 5, y: 5 }, pixels_per_grid: 70 },
+      image: 'UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA=='
+    });
+    const result = parseUVTT(webpUVTT);
+    expect(result.mimeType).toBe('image/webp');
+    expect(result.imageBlob.type).toBe('image/webp');
   });
 });

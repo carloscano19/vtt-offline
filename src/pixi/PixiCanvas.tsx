@@ -388,7 +388,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         scaleX: scale,
         scaleY: scale,
         zIndex: entityType === 'map' ? 0 : 10,
-        visibleToPlayers: true,
+        visibleToPlayers: entityType === 'map', // Mapas visibles, tokens ocultos por defecto
         locked: false,
         mapData: asset.mapData,
         side: entityType === 'token' ? 'jugador' : undefined,

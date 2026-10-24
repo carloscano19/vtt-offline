@@ -29,8 +29,12 @@ export class MapsLayer extends Container {
         sprite.label = entity.id;
         this.spriteMap.set(entity.id, sprite);
         this.addChild(sprite);
+      }
 
-        // Carga asíncrona de textura desde IndexedDB
+      // Carga asíncrona de textura si aún no se ha cargado o si cambió el assetId
+      const currentLoadedAssetId = (sprite as any)._loadedAssetId;
+      if (sprite.texture === Texture.EMPTY || currentLoadedAssetId !== entity.assetId) {
+        (sprite as any)._loadedAssetId = entity.assetId;
         getTextureForAsset(entity.assetId).then((tex) => {
           if (tex && sprite && !sprite.destroyed) {
             sprite.texture = tex;
@@ -38,14 +42,14 @@ export class MapsLayer extends Container {
         });
       }
 
-      // Actualizar transformaciones
+      // Actualizar transformaciones espaciales en el mundo
       sprite.x = entity.x;
       sprite.y = entity.y;
       sprite.rotation = entity.rotation;
       sprite.scale.set(entity.scaleX, entity.scaleY);
       sprite.zIndex = entity.zIndex ?? 0;
 
-      // Opacidad según visibilidad para jugadores
+      // Opacidad según visibilidad para jugadores en la vista del máster
       if (this.isMaster) {
         sprite.alpha = entity.visibleToPlayers ? 1.0 : 0.45;
       } else {

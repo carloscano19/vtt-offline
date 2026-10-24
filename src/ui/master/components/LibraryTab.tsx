@@ -60,7 +60,7 @@ export const LibraryTab: React.FC = () => {
       scaleX: scale,
       scaleY: scale,
       zIndex: isMap ? 0 : 10,
-      visibleToPlayers: true,
+      visibleToPlayers: isMap, // Mapas visibles, tokens ocultos por defecto
       locked: false,
       side: isMap ? undefined : 'jugador',
       statuses: []
@@ -86,7 +86,7 @@ export const LibraryTab: React.FC = () => {
             id: `map_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
             name: name.replace(/\.[^/.]+$/, ''),
             type: 'map',
-            mimeType: parsed.imageBlob.type,
+            mimeType: parsed.mimeType,
             blob: parsed.imageBlob,
             createdAt: Date.now(),
             width: parsed.widthPx,

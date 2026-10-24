@@ -56,13 +56,18 @@ export class TokensLayer extends Container {
         nameText.anchor.set(0.5, 0);
         entityContainer.addChild(nameText);
 
-        // Carga asíncrona de textura
+      }
+
+      // Carga asíncrona de textura si aún no se ha cargado o si cambió el assetId
+      const currentLoadedAssetId = (entityContainer as any)._loadedAssetId;
+      const sp = entityContainer.getChildByLabel('sprite') as Sprite;
+      if (sp && (sp.texture === Texture.EMPTY || currentLoadedAssetId !== entity.assetId)) {
+        (entityContainer as any)._loadedAssetId = entity.assetId;
         getTextureForAsset(entity.assetId).then((tex) => {
           if (tex && entityContainer && !entityContainer.destroyed) {
-            const sp = entityContainer.getChildByLabel('sprite') as Sprite;
-            if (sp) {
-              sp.texture = tex;
-              // Ajustar tamaño base si es necesario
+            const innerSp = entityContainer.getChildByLabel('sprite') as Sprite;
+            if (innerSp) {
+              innerSp.texture = tex;
               this.updateEntityVisuals(entityContainer, entity, selectedIds.includes(entity.id));
             }
           }
