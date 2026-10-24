@@ -1,7 +1,11 @@
 import { app, BrowserWindow, screen, ipcMain, dialog } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { IPC_CHANNELS } from '../src/types/ipc';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 process.env.DIST = path.join(__dirname, '..', 'dist');
 process.env.VITE_PUBLIC = app.isPackaged ? process.env.DIST : path.join(process.env.DIST, '..', 'public');
@@ -38,7 +42,7 @@ function createMasterWindow() {
     minWidth: 1024,
     minHeight: 700,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true
     }
@@ -69,7 +73,7 @@ function createPlayersWindow() {
   let windowOptions: Electron.BrowserWindowConstructorOptions = {
     title: 'VTT Offline - Jugadores',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true
     },
