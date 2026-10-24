@@ -10,7 +10,7 @@ import {
 } from '../../../modules/persistence/saveManager';
 import { exportVttSave, importVttSave } from '../../../modules/persistence/exporter';
 import { StoredGame } from '../../../db/dexie';
-import { X, Save, FilePlus, Download, Upload, Trash2, RotateCcw, Clock } from 'lucide-react';
+import { X, Save, FilePlus, Download, Upload, Trash2, RotateCcw, Clock, Check } from 'lucide-react';
 
 export const SaveLoadModal: React.FC = () => {
   const showSaveLoadModal = useUIStore((s) => s.showSaveLoadModal);
@@ -25,6 +25,10 @@ export const SaveLoadModal: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [isSavingAs, setIsSavingAs] = useState(false);
+  const [saveAsName, setSaveAsName] = useState('');
+  const saveAsInputRef = useRef<HTMLInputElement>(null);
+
   const refreshList = async () => {
     const list = await listSavedGames();
     setSavedGames(list);
@@ -33,9 +37,18 @@ export const SaveLoadModal: React.FC = () => {
   useEffect(() => {
     if (showSaveLoadModal) {
       setGameName(game.name || 'Mi Partida');
+      setIsSavingAs(false);
+      setSaveAsName('');
       refreshList();
     }
   }, [showSaveLoadModal, game.name]);
+
+  useEffect(() => {
+    if (isSavingAs) {
+      saveAsInputRef.current?.focus();
+      saveAsInputRef.current?.select();
+    }
+  }, [isSavingAs]);
 
   if (!showSaveLoadModal) return null;
 
@@ -54,10 +67,19 @@ export const SaveLoadModal: React.FC = () => {
   };
 
   // 2. Guardar como...
-  const handleSaveAs = async () => {
-    const newName = prompt('Nombre para la nueva copia de la partida:', `${gameName} (Copia)`);
-    if (!newName || !newName.trim()) return;
-    const trimmed = newName.trim();
+  const startSaveAs = () => {
+    setSaveAsName(`${gameName} (Copia)`);
+    setIsSavingAs(true);
+  };
+
+  const cancelSaveAs = () => {
+    setIsSavingAs(false);
+    setSaveAsName('');
+  };
+
+  const confirmSaveAs = async () => {
+    const trimmed = saveAsName.trim();
+    if (!trimmed) return;
     const newId = `game_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const now = Date.now();
     const newGame = {
@@ -70,6 +92,7 @@ export const SaveLoadModal: React.FC = () => {
     await saveGameToDb(newGame);
     setGame(newGame);
     setGameName(trimmed);
+    setIsSavingAs(false);
     await refreshList();
     showStatus(`Partida guardada como "${trimmed}"`);
   };
@@ -220,12 +243,56 @@ export const SaveLoadModal: React.FC = () => {
                 <span>Guardar</span>
               </button>
               <button
-                onClick={handleSaveAs}
-                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded font-medium transition-colors"
+                onClick={startSaveAs}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-300 hover:text-white rounded font-medium transition-colors"
               >
                 Guardar como...
               </button>
             </div>
+
+            {/* Campo desplegable para Guardar como... */}
+            {isSavingAs && (
+              <div className="mt-2 p-2.5 bg-slate-800/90 border border-sky-500/60 rounded-md space-y-2 shadow-inner">
+                <label className="text-[11px] text-sky-300 font-medium block">
+                  Nombre para la nueva copia de la partida:
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    ref={saveAsInputRef}
+                    type="text"
+                    value={saveAsName}
+                    onChange={(e) => setSaveAsName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        confirmSaveAs();
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        cancelSaveAs();
+                      }
+                    }}
+                    className="flex-1 bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs text-white focus:outline-none focus:border-sky-400"
+                    placeholder="Nombre de la nueva partida"
+                  />
+                  <button
+                    onClick={confirmSaveAs}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-medium flex items-center gap-1 transition-colors"
+                    title="Confirmar (Enter)"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Confirmar</span>
+                  </button>
+                  <button
+                    onClick={cancelSaveAs}
+                    className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded font-medium flex items-center gap-1 transition-colors"
+                    title="Cancelar (Esc)"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span>Cancelar</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Acciones principales: Nueva, Exportar, Importar, Autoguardado */}
