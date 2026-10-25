@@ -1,4 +1,4 @@
-import { Application, Container, Renderer } from 'pixi.js';
+import { Application, Container, Graphics, Renderer } from 'pixi.js';
 import { GameState, RulerState } from '../types/game';
 import { Point2D } from '../types/entity';
 import { MapsLayer } from './layers/MapsLayer';
@@ -16,6 +16,7 @@ import { visionManager } from '../modules/vision/visionManager';
 export class PixiRenderer {
   public app!: Application;
   public worldContainer!: Container;
+  private gridClip: Graphics | null = null;
 
   public mapsLayer!: MapsLayer;
   public debugVttLayer!: DebugVttLayer;
@@ -167,6 +168,20 @@ export class PixiRenderer {
     this.mapsLayer.syncEntities(game.entities);
     this.debugVttLayer.update(game.entities, showDebugOverlay && !isPlayerPreview);
     this.gridLayer.update(game.grid, camera, width, height);
+    // Vista de jugadores con niebla: la cuadrícula queda por debajo de la niebla y
+    // se recorta a sus límites para que fuera de ellos no se vea ninguna línea.
+    const clipGrid = (!this.isMaster || isPlayerPreview) && game.fog.enabled;
+    if (clipGrid) {
+      if (!this.gridClip) {
+        this.gridClip = new Graphics();
+        this.worldContainer.addChild(this.gridClip);
+      }
+      this.gridClip.clear();
+      this.gridClip.rect(worldBounds.x, worldBounds.y, worldBounds.width, worldBounds.height).fill(0xffffff);
+      this.gridLayer.mask = this.gridClip;
+    } else if (this.gridLayer.mask) {
+      this.gridLayer.mask = null;
+    }
     this.doorsLayer.update(game.entities, selectedIds);
     this.tokensLayer.syncEntities(game.entities, selectedIds, visibilities, isPlayerPreview, game.fog.enabled);
     this.fogLayer.update(
