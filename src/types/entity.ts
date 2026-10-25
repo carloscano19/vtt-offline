@@ -108,8 +108,10 @@ export interface EntityChromaKey {
 
 export interface TokenVision {
   active: boolean;
-  rangeInSquares: number;
-  hardness: number;
+  brightRangeInSquares: number; // Alcance claro en casillas (default 4; 0 = ilimitado)
+  dimRangeInSquares: number;    // Alcance tenue en casillas adicionales (default 2)
+  rangeInSquares?: number;      // Deprecado, para compatibilidad con versiones anteriores
+  hardness?: number;
 }
 
 export interface TokenHp {

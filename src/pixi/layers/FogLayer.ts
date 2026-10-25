@@ -6,18 +6,19 @@ import { computeFogRegions } from '../../modules/vision/fogRegions';
 
 const FOG_COLOR = 0x020617;
 const EXPLORED_ALPHA = 0.65;
+const DIM_ALPHA = 0.50;
 
 /**
  * Capa de niebla de guerra. Utiliza regiones calculadas mediante álgebra booleana de polígonos
- * (polygon-clipping), de forma que visible, exploradoNoVisible y noExplorado son completamente
+ * (polygon-clipping), de forma que visibleBright, visibleDim, exploradoNoVisible y noExplorado son completamente
  * disjuntas. Cada polígono resultante se dibuja con fill normal y sus propios huecos con cut().
- * La fuente única de exploración es el estado de la partida (game.fog.explored).
  */
 export class FogLayer extends Container {
   private isMaster: boolean;
 
   private unexploredGfx = new Graphics();
   private exploredDarkGfx = new Graphics();
+  private dimDarkGfx = new Graphics();
 
   private lastKey = '';
 
@@ -27,6 +28,7 @@ export class FogLayer extends Container {
 
     this.addChild(this.unexploredGfx);
     this.addChild(this.exploredDarkGfx);
+    this.addChild(this.dimDarkGfx);
   }
 
   private renderMultiPolygon(graphics: Graphics, multi: ExploredMultiPolygon, color: number, alpha: number) {
@@ -55,7 +57,9 @@ export class FogLayer extends Container {
     visibilities: TokenVisibility[],
     explored: ExploredMultiPolygon,
     bounds: { x: number; y: number; width: number; height: number },
-    _gridSize: number
+    _gridSize: number,
+    revealed: ExploredMultiPolygon = [],
+    rememberExplored = false
   ) {
     const shouldRenderFog = fogEnabled && (!this.isMaster || isPlayerPreview);
     if (!shouldRenderFog) {
@@ -71,21 +75,33 @@ export class FogLayer extends Container {
     const bh = Number.isFinite(bounds.height) && bounds.height > 0 ? bounds.height : 4000;
 
     const visKey = visibilities
-      .map((v) => `${v.tokenId}:${Math.round(v.center.x)}:${Math.round(v.center.y)}:${v.polygon.length}`)
+      .map(
+        (v) =>
+          `${v.tokenId}:${Math.round(v.center.x)}:${Math.round(v.center.y)}:${v.brightPolygon?.length || 0}:${v.totalPolygon?.length || 0}`
+      )
       .join('|');
-    const key = `${exploredSignature(explored)}#${visKey}#${Math.round(bx)},${Math.round(by)},${Math.round(bw)},${Math.round(bh)}`;
+    const key = `${exploredSignature(explored)}#${exploredSignature(revealed)}#${rememberExplored}#${visKey}#${Math.round(bx)},${Math.round(by)},${Math.round(bw)},${Math.round(bh)}`;
     if (key === this.lastKey) return;
     this.lastKey = key;
 
-    const visionPolygons = visibilities.map((v) => v.polygon).filter((p) => p.length >= 3);
-    const regions = computeFogRegions(explored, visionPolygons, { x: bx, y: by, width: bw, height: bh });
+    const regions = computeFogRegions(
+      explored,
+      visibilities,
+      { x: bx, y: by, width: bw, height: bh },
+      revealed,
+      rememberExplored
+    );
 
     // 1. Dibuja noExplorado con negro opaco
     this.unexploredGfx.clear();
     this.renderMultiPolygon(this.unexploredGfx, regions.noExplorado, FOG_COLOR, 1.0);
 
-    // 2. Dibuja exploradoNoVisible con negro al 65%
+    // 2. Dibuja exploradoNoVisible con negro al 65% (si rememberExplored es false, estará vacío)
     this.exploredDarkGfx.clear();
     this.renderMultiPolygon(this.exploredDarkGfx, regions.exploradoNoVisible, FOG_COLOR, EXPLORED_ALPHA);
+
+    // 3. Dibuja visibleDim (zona tenue de tokens) con negro al 50%
+    this.dimDarkGfx.clear();
+    this.renderMultiPolygon(this.dimDarkGfx, regions.visibleDim, FOG_COLOR, DIM_ALPHA);
   }
 }

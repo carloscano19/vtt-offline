@@ -51,7 +51,9 @@ export type ExploredMultiPolygon = [number, number][][][];
 
 export interface FogConfig {
   enabled: boolean; // Niebla activa o desactivada para jugadores
-  explored: ExploredMultiPolygon; // Memoria de exploración (fuente única: ventana máster)
+  rememberExplored?: boolean; // Recordar zonas exploradas (default: false)
+  explored: ExploredMultiPolygon; // Memoria de exploración acumulada de tokens
+  revealed?: ExploredMultiPolygon; // Zonas reveladas manualmente con la herramienta
 }
 
 export interface PlayerViewport {

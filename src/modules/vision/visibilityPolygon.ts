@@ -4,8 +4,12 @@ import { WallSegment } from '../walls/wallManager';
 export interface TokenVisibility {
   tokenId: string;
   center: Point2D;
-  polygon: Point2D[];
-  rangePx: number;
+  brightPolygon: Point2D[];
+  totalPolygon: Point2D[];
+  polygon: Point2D[]; // alias de totalPolygon para compatibilidad
+  brightRangePx: number;
+  totalRangePx: number;
+  rangePx: number; // alias de totalRangePx para compatibilidad
   hardness: number; // 0 = difuminado, 1 = nítido
 }
 

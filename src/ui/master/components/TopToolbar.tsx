@@ -20,7 +20,8 @@ import {
   Cloud,
   CloudOff,
   RotateCcw,
-  Scan
+  Scan,
+  History
 } from 'lucide-react';
 import { useUIStore, ActiveTool } from '../../../stores/useUIStore';
 import { useGameStore } from '../../../stores/useGameStore';
@@ -256,7 +257,8 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
             side: 'jugador',
             vision: {
               active: true,
-              rangeInSquares: 12,
+              brightRangeInSquares: 4,
+              dimRangeInSquares: 2,
               hardness: 0.5
             },
             statuses: []
@@ -427,6 +429,19 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           >
             {game.fog.enabled ? <Cloud className="w-3.5 h-3.5" /> : <CloudOff className="w-3.5 h-3.5" />}
             <span>Niebla</span>
+          </button>
+
+          <button
+            onClick={() => setFogConfig({ rememberExplored: !game.fog.rememberExplored })}
+            className={`px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1.5 transition-colors ${
+              game.fog.rememberExplored
+                ? 'bg-slate-700 text-sky-300 shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+            title="Recordar zonas exploradas: si está activo, las zonas que el token deja de ver se mantienen en gris oscuro. Si está desactivado, vuelven a negro total."
+          >
+            <History className="w-3.5 h-3.5" />
+            <span>Recordar explorado</span>
           </button>
 
           <button

@@ -4,9 +4,12 @@ import { ExploredMultiPolygon } from '../../types/game';
 import { simplifyMulti, visionToMulti, ringArea } from './fogMemory';
 
 export interface FogRegions {
-  visible: ExploredMultiPolygon;
-  exploradoNoVisible: ExploredMultiPolygon;
-  noExplorado: ExploredMultiPolygon;
+  visibleBright: ExploredMultiPolygon; // Zona clara del mapa (visión clara + zonas reveladas a mano)
+  visibleDim: ExploredMultiPolygon;    // Zona tenue del mapa (50% negro)
+  exploradoNoVisible: ExploredMultiPolygon; // Memoria de exploración (65% negro, solo si rememberExplored = true)
+  noExplorado: ExploredMultiPolygon;   // Inexplorado (100% negro opaco)
+  tokenVisionTotal: ExploredMultiPolygon; // Visión real de tokens (usada para visibilidad de enemigos/objetos)
+  visible: ExploredMultiPolygon;       // Alias de mapa visible total (bright + dim) para compatibilidad
 }
 
 /**
@@ -44,43 +47,128 @@ export function snapMulti(multi: ExploredMultiPolygon): ExploredMultiPolygon {
 }
 
 /**
- * Calcula las 3 regiones geométricas disjuntas de la niebla de guerra:
- * - visible: unión de los polígonos de visión actuales.
- * - exploradoNoVisible: diferencia(explored, visible).
- * - noExplorado: diferencia(rectángulo de bounds, unión(explored, visible)).
+ * Calcula las regiones geométricas disjuntas de la niebla de guerra:
+ * - visibleBright: visión clara de tokens + zonas reveladas manualmente.
+ * - visibleDim: visión tenue de tokens (menos zona clara).
+ * - exploradoNoVisible: si rememberExplored está activo, difference(explored, visibleTotal).
+ * - noExplorado: difference(bounds, union(explored, visibleTotal)).
+ * - tokenVisionTotal: solo visión real (clara + tenue), para mostrar tokens/objetos.
  */
 export function computeFogRegions(
   explored: ExploredMultiPolygon,
-  visionPolygons: Point2D[][],
-  bounds: { x: number; y: number; width: number; height: number }
+  visibilitiesOrPolys: any[],
+  bounds: { x: number; y: number; width: number; height: number },
+  revealed: ExploredMultiPolygon = [],
+  rememberExplored = false
 ): FogRegions {
-  // Asegurar coordenadas enteras alineadas para máxima estabilidad numérica
-  const cleanExplored = snapMulti(explored);
+  const cleanExplored = snapMulti(explored || []);
+  const cleanRevealed = snapMulti(revealed || []);
 
-  // 1. visible = unión de los polígonos de visión actuales (polygon-clipping)
-  const visibleRings = visionToMulti(visionPolygons);
-  let visible: ExploredMultiPolygon = [];
-  if (visibleRings.length > 0) {
-    const united = polygonClipping.union(visibleRings);
-    visible = simplifyMulti(snapMulti(united as ExploredMultiPolygon));
+  // Extraer polígonos claros y totales
+  const brightPolysList: Point2D[][] = [];
+  const totalPolysList: Point2D[][] = [];
+
+  for (const item of visibilitiesOrPolys) {
+    if (Array.isArray(item)) {
+      if (item.length >= 3) {
+        brightPolysList.push(item);
+        totalPolysList.push(item);
+      }
+    } else if (item && typeof item === 'object') {
+      const bPoly = item.brightPolygon || item.polygon;
+      const tPoly = item.totalPolygon || item.polygon;
+      if (bPoly && bPoly.length >= 3) brightPolysList.push(bPoly);
+      if (tPoly && tPoly.length >= 3) totalPolysList.push(tPoly);
+    }
   }
 
-  // 2. exploradoNoVisible = difference(explored, visible)
-  let exploradoNoVisible: ExploredMultiPolygon = [];
-  if (cleanExplored.length > 0) {
-    if (visible.length === 0) {
-      exploradoNoVisible = cleanExplored;
+  const brightRings = visionToMulti(brightPolysList);
+  const totalRings = visionToMulti(totalPolysList);
+
+  let tokenVisionBright: ExploredMultiPolygon = [];
+  if (brightRings.length > 0) {
+    try {
+      const united = polygonClipping.union(brightRings);
+      tokenVisionBright = simplifyMulti(snapMulti(united as ExploredMultiPolygon));
+    } catch (e) {
+      console.warn('[computeFogRegions] union(brightRings) error:', e);
+    }
+  }
+
+  let tokenVisionTotal: ExploredMultiPolygon = [];
+  if (totalRings.length > 0) {
+    try {
+      const united = polygonClipping.union(totalRings);
+      tokenVisionTotal = simplifyMulti(snapMulti(united as ExploredMultiPolygon));
+    } catch (e) {
+      console.warn('[computeFogRegions] union(totalRings) error:', e);
+    }
+  }
+
+  // 1. visibleBright para el MAPA = tokenVisionBright U cleanRevealed
+  let visibleBright: ExploredMultiPolygon = [];
+  try {
+    if (tokenVisionBright.length > 0 && cleanRevealed.length > 0) {
+      visibleBright = simplifyMulti(
+        snapMulti(polygonClipping.union(tokenVisionBright, cleanRevealed) as ExploredMultiPolygon)
+      );
+    } else if (tokenVisionBright.length > 0) {
+      visibleBright = tokenVisionBright;
+    } else if (cleanRevealed.length > 0) {
+      visibleBright = cleanRevealed;
+    }
+  } catch (e) {
+    console.warn('[computeFogRegions] union(tokenVisionBright, cleanRevealed) error:', e);
+    visibleBright = tokenVisionBright.length > 0 ? tokenVisionBright : cleanRevealed;
+  }
+
+  // 2. visibleDim para el MAPA = difference(tokenVisionTotal, visibleBright)
+  let visibleDim: ExploredMultiPolygon = [];
+  if (tokenVisionTotal.length > 0) {
+    if (visibleBright.length === 0) {
+      visibleDim = tokenVisionTotal;
     } else {
       try {
-        const diff = polygonClipping.difference(cleanExplored, visible);
-        exploradoNoVisible = simplifyMulti(diff as ExploredMultiPolygon);
-      } catch (err) {
-        console.warn('[computeFogRegions] difference(cleanExplored, visible) error:', err);
+        const diffDim = polygonClipping.difference(tokenVisionTotal, visibleBright);
+        visibleDim = simplifyMulti(snapMulti(diffDim as ExploredMultiPolygon));
+      } catch (e) {
+        console.warn('[computeFogRegions] difference(tokenVisionTotal, visibleBright) error:', e);
       }
     }
   }
 
-  // 3. noExplorado = difference(rectángulo de bounds, union(explored, visible))
+  // 3. Mapa visible total = union(visibleBright, visibleDim)
+  let mapVisibleTotal: ExploredMultiPolygon = [];
+  try {
+    if (visibleBright.length > 0 && visibleDim.length > 0) {
+      mapVisibleTotal = simplifyMulti(
+        snapMulti(polygonClipping.union(visibleBright, visibleDim) as ExploredMultiPolygon)
+      );
+    } else if (visibleBright.length > 0) {
+      mapVisibleTotal = visibleBright;
+    } else if (visibleDim.length > 0) {
+      mapVisibleTotal = visibleDim;
+    }
+  } catch (e) {
+    mapVisibleTotal = visibleBright.length > 0 ? visibleBright : visibleDim;
+  }
+
+  // 4. exploradoNoVisible = si rememberExplored, difference(cleanExplored, mapVisibleTotal)
+  let exploradoNoVisible: ExploredMultiPolygon = [];
+  if (rememberExplored && cleanExplored.length > 0) {
+    if (mapVisibleTotal.length === 0) {
+      exploradoNoVisible = cleanExplored;
+    } else {
+      try {
+        const diff = polygonClipping.difference(cleanExplored, mapVisibleTotal);
+        exploradoNoVisible = simplifyMulti(snapMulti(diff as ExploredMultiPolygon));
+      } catch (err) {
+        console.warn('[computeFogRegions] difference(cleanExplored, mapVisibleTotal) error:', err);
+      }
+    }
+  }
+
+  // 5. noExplorado = difference(rectángulo de bounds, union(conocido, mapVisibleTotal))
   const boundsRing: [number, number][] = [
     [bounds.x, bounds.y],
     [bounds.x + bounds.width, bounds.y],
@@ -91,17 +179,18 @@ export function computeFogRegions(
   const boundsPoly: ExploredMultiPolygon = [[boundsRing]];
 
   let knownTotal: ExploredMultiPolygon = [];
+  const memoryToInclude = rememberExplored ? cleanExplored : [];
   try {
-    if (cleanExplored.length > 0 && visible.length > 0) {
-      knownTotal = polygonClipping.union(cleanExplored, visible) as ExploredMultiPolygon;
-    } else if (cleanExplored.length > 0) {
-      knownTotal = cleanExplored;
-    } else if (visible.length > 0) {
-      knownTotal = visible;
+    if (memoryToInclude.length > 0 && mapVisibleTotal.length > 0) {
+      knownTotal = polygonClipping.union(memoryToInclude, mapVisibleTotal) as ExploredMultiPolygon;
+    } else if (memoryToInclude.length > 0) {
+      knownTotal = memoryToInclude;
+    } else if (mapVisibleTotal.length > 0) {
+      knownTotal = mapVisibleTotal;
     }
   } catch (err) {
-    console.warn('[computeFogRegions] union(cleanExplored, visible) error:', err);
-    knownTotal = cleanExplored.length > 0 ? cleanExplored : visible;
+    console.warn('[computeFogRegions] union(memory, mapVisibleTotal) error:', err);
+    knownTotal = mapVisibleTotal.length > 0 ? mapVisibleTotal : memoryToInclude;
   }
 
   let noExplorado: ExploredMultiPolygon = [];
@@ -110,15 +199,18 @@ export function computeFogRegions(
   } else {
     try {
       const diffBounds = polygonClipping.difference(boundsPoly, knownTotal);
-      noExplorado = simplifyMulti(diffBounds as ExploredMultiPolygon);
+      noExplorado = simplifyMulti(snapMulti(diffBounds as ExploredMultiPolygon));
     } catch (err) {
       console.warn('[computeFogRegions] difference(boundsPoly, knownTotal) error:', err);
     }
   }
 
   return {
-    visible,
+    visibleBright,
+    visibleDim,
     exploradoNoVisible,
-    noExplorado
+    noExplorado,
+    tokenVisionTotal,
+    visible: mapVisibleTotal
   };
 }

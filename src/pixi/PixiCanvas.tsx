@@ -7,6 +7,7 @@ import { Entity, Point2D } from '../types/entity';
 import { CameraState } from '../types/game';
 import { syncChannel } from '../modules/sync/syncChannel';
 import { getZoomSensitivity } from '../modules/settings/zoomSensitivity';
+import { isMovementBlockedByWall } from '../modules/walls/wallManager';
 
 interface PixiCanvasProps {
   isMaster: boolean;
@@ -142,10 +143,12 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         showDebugVttOverlay,
         draftWallPoints,
         isPlayerPreviewMode,
-        showPlayerFrame
+        showPlayerFrame,
+        activeTool,
+        fogDragRect
       );
     }
-  }, [game, ruler, selectedEntityIds, showDebugVttOverlay, draftWallPoints, isPlayerPreviewMode, showPlayerFrame]);
+  }, [game, ruler, selectedEntityIds, showDebugVttOverlay, draftWallPoints, isPlayerPreviewMode, showPlayerFrame, activeTool, fogDragRect]);
 
   const revealFogRect = useGameStore((s) => s.revealFogRect);
   const hideFogRect = useGameStore((s) => s.hideFogRect);
@@ -199,13 +202,52 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     setDraftWallPoints([]);
   }, [draftWallPoints, game.entities, addEntity, selectEntity]);
 
-  // 3. Atajos de teclado para la barra espaciadora, Enter y Esc
+  // 3. Atajos de teclado para la barra espaciadora, Enter, Esc y movimiento con flechas
   useEffect(() => {
     if (!isMaster) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      const activeTag = (document.activeElement?.tagName || '').toLowerCase();
-      if (activeTag === 'input' || activeTag === 'textarea') return;
+      const activeEl = document.activeElement as HTMLElement | null;
+      const activeTag = (activeEl?.tagName || '').toLowerCase();
+      if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select' || activeEl?.isContentEditable) return;
+
+      // Movimiento de token con flechas de teclado (1 casilla centrada con detección de colisión de paredes)
+      if (
+        e.key === 'ArrowUp' ||
+        e.key === 'ArrowDown' ||
+        e.key === 'ArrowLeft' ||
+        e.key === 'ArrowRight'
+      ) {
+        if (selectedEntityIds.length === 0) return;
+        const selectedToken = game.entities.find(
+          (ent) => selectedEntityIds.includes(ent.id) && ent.type === 'token'
+        );
+        if (!selectedToken || selectedToken.locked) return;
+
+        let dx = 0;
+        let dy = 0;
+        if (e.key === 'ArrowUp') dy = -1;
+        else if (e.key === 'ArrowDown') dy = 1;
+        else if (e.key === 'ArrowLeft') dx = -1;
+        else if (e.key === 'ArrowRight') dx = 1;
+
+        const gridSize = game.grid.size > 0 ? game.grid.size : 70;
+        const currCellX = Math.floor(selectedToken.x / gridSize) * gridSize + gridSize / 2;
+        const currCellY = Math.floor(selectedToken.y / gridSize) * gridSize + gridSize / 2;
+        const targetX = currCellX + dx * gridSize;
+        const targetY = currCellY + dy * gridSize;
+
+        const fromPt: Point2D = { x: selectedToken.x, y: selectedToken.y };
+        const toPt: Point2D = { x: targetX, y: targetY };
+
+        if (!isMovementBlockedByWall(fromPt, toPt, game.entities)) {
+          e.preventDefault();
+          updateEntity(selectedToken.id, { x: targetX, y: targetY }, true);
+        } else {
+          e.preventDefault(); // Bloqueado por pared o puerta cerrada
+        }
+        return;
+      }
 
       if (e.code === 'Space' && !e.repeat) {
         setIsSpacePressed(true);
@@ -240,7 +282,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [isMaster, activeTool, finishDraftWall]);
+  }, [isMaster, activeTool, finishDraftWall, selectedEntityIds, game.entities, game.grid.size, updateEntity]);
 
   // Funciones auxiliares de cámara y coordenadas
   const getCamera = useCallback(() => {
@@ -1085,7 +1127,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         locked: false,
         mapData: asset.mapData,
         side: entityType === 'token' ? 'jugador' : undefined,
-        vision: entityType === 'token' ? { active: true, rangeInSquares: 12, hardness: 0.5 } : undefined,
+        vision: entityType === 'token' ? { active: true, brightRangeInSquares: 4, dimRangeInSquares: 2, hardness: 0.5 } : undefined,
         statuses: []
       };
 

@@ -23,7 +23,9 @@ function createDefaultGame(): GameState {
     followMasterCamera: false,
     fog: {
       enabled: true,
-      explored: []
+      rememberExplored: false,
+      explored: [],
+      revealed: []
     },
     playerViewport: { width: 1920, height: 1080 },
     combat: {
@@ -197,7 +199,8 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
         if (updated.type === 'token' && updated.side === 'jugador' && !updated.vision) {
           updated.vision = {
             active: true,
-            rangeInSquares: 12,
+            brightRangeInSquares: 4,
+            dimRangeInSquares: 2,
             hardness: 0.5
           };
         }
@@ -361,7 +364,11 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
     set((state) => ({
       game: {
         ...state.game,
-        fog: { ...state.game.fog, explored: [] },
+        fog: {
+          ...state.game.fog,
+          explored: [],
+          revealed: []
+        },
         updatedAt: Date.now()
       }
     }));
@@ -381,7 +388,10 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
     set((state) => ({
       game: {
         ...state.game,
-        fog: { ...state.game.fog, explored: revealRect(state.game.fog.explored, rect) },
+        fog: {
+          ...state.game.fog,
+          revealed: revealRect(state.game.fog.revealed || [], rect)
+        },
         updatedAt: Date.now()
       }
     }));
@@ -391,7 +401,11 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
     set((state) => ({
       game: {
         ...state.game,
-        fog: { ...state.game.fog, explored: hideRect(state.game.fog.explored, rect) },
+        fog: {
+          ...state.game.fog,
+          revealed: hideRect(state.game.fog.revealed || [], rect),
+          explored: hideRect(state.game.fog.explored || [], rect)
+        },
         updatedAt: Date.now()
       }
     }));

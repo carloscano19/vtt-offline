@@ -10,6 +10,7 @@ import { GizmoLayer } from './layers/GizmoLayer';
 import { WallsLayer } from './layers/WallsLayer';
 import { DoorsLayer } from './layers/DoorsLayer';
 import { FogLayer } from './layers/FogLayer';
+import { FogToolLayer } from './layers/FogToolLayer';
 import { PlayerFrameLayout } from './layers/PlayerFrameLayout';
 import { visionManager } from '../modules/vision/visionManager';
 
@@ -24,6 +25,7 @@ export class PixiRenderer {
   public doorsLayer!: DoorsLayer;
   public wallsLayer!: WallsLayer;
   public fogLayer!: FogLayer;
+  public fogToolLayer!: FogToolLayer;
   public rulerLayer!: RulerLayer;
   public gizmoLayer!: GizmoLayer;
   public playerFrameLayout!: PlayerFrameLayout;
@@ -117,6 +119,11 @@ export class PixiRenderer {
       this.playerFrameLayout.label = 'PlayerFrameLayout';
       this.worldContainer.addChild(this.playerFrameLayout);
 
+      // 11. Capa de herramientas de niebla (Solo Máster)
+      this.fogToolLayer = new FogToolLayer(this.isMaster);
+      this.fogToolLayer.label = 'FogToolLayer';
+      this.worldContainer.addChild(this.fogToolLayer);
+
       this.isInitialized = true;
     })();
 
@@ -130,7 +137,9 @@ export class PixiRenderer {
     showDebugOverlay = true,
     activeDraftWallPoints: Point2D[] = [],
     isPlayerPreview = false,
-    showPlayerFrame = true
+    showPlayerFrame = true,
+    activeTool = 'select',
+    fogDragRect: { start: Point2D; current: Point2D } | null = null
   ) {
     if (!this.isInitialized || this.isDestroyed || !this.app || !this.app.renderer) return;
 
@@ -194,7 +203,9 @@ export class PixiRenderer {
       visibilities,
       game.fog.explored ?? [],
       worldBounds,
-      gridSize
+      gridSize,
+      game.fog.revealed ?? [],
+      game.fog.rememberExplored ?? false
     );
     this.wallsLayer.update(game.entities, selectedIds, activeDraftWallPoints);
     this.rulerLayer.update(ruler, game.grid.size);
@@ -204,6 +215,9 @@ export class PixiRenderer {
 
     // Marco verde de la pantalla de jugadores
     this.playerFrameLayout.update(game.playerCamera, game.playerViewport, showPlayerFrame && !isPlayerPreview);
+
+    // Capa de herramientas de niebla (solo Máster)
+    this.fogToolLayer.update(activeTool, game.fog.revealed ?? [], fogDragRect, isPlayerPreview);
   }
 
   public async destroy() {

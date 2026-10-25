@@ -106,3 +106,51 @@ export function getAllWallSegments(entities: Entity[]): WallSegment[] {
 
   return segments;
 }
+
+/**
+ * Comprueba si dos segmentos de línea [p1, p2] y [p3, p4] se cruzan.
+ */
+export function segmentsIntersect(p1: Point2D, p2: Point2D, p3: Point2D, p4: Point2D): boolean {
+  const orientation = (p: Point2D, q: Point2D, r: Point2D): number => {
+    const val = (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y);
+    if (Math.abs(val) < 1e-9) return 0;
+    return val > 0 ? 1 : 2;
+  };
+
+  const onSegment = (p: Point2D, q: Point2D, r: Point2D): boolean => {
+    return (
+      q.x <= Math.max(p.x, r.x) + 1e-9 &&
+      q.x >= Math.min(p.x, r.x) - 1e-9 &&
+      q.y <= Math.max(p.y, r.y) + 1e-9 &&
+      q.y >= Math.min(p.y, r.y) - 1e-9
+    );
+  };
+
+  const o1 = orientation(p1, p2, p3);
+  const o2 = orientation(p1, p2, p4);
+  const o3 = orientation(p3, p4, p1);
+  const o4 = orientation(p3, p4, p2);
+
+  if (o1 !== o2 && o3 !== o4) return true;
+
+  if (o1 === 0 && onSegment(p1, p3, p2)) return true;
+  if (o2 === 0 && onSegment(p1, p4, p2)) return true;
+  if (o3 === 0 && onSegment(p3, p1, p4)) return true;
+  if (o4 === 0 && onSegment(p3, p2, p4)) return true;
+
+  return false;
+}
+
+/**
+ * Comprueba si el movimiento en línea recta de `from` a `to` está bloqueado por
+ * alguna pared o puerta cerrada en la partida.
+ */
+export function isMovementBlockedByWall(from: Point2D, to: Point2D, entities: Entity[]): boolean {
+  const segments = getAllWallSegments(entities);
+  for (const seg of segments) {
+    if (segmentsIntersect(from, to, seg.p1, seg.p2)) {
+      return true;
+    }
+  }
+  return false;
+}

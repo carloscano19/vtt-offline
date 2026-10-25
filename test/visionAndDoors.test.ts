@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { computeVisibilityPolygon } from '../src/modules/vision/visibilityPolygon';
-import { getAllWallSegments } from '../src/modules/walls/wallManager';
+import { getAllWallSegments, isMovementBlockedByWall } from '../src/modules/walls/wallManager';
 import { visionManager } from '../src/modules/vision/visionManager';
 import { Entity } from '../src/types/entity';
 import { useGameStore } from '../src/stores/useGameStore';
@@ -225,7 +225,8 @@ describe('Phase 2: Vision and Doors', () => {
     expect(hero).toBeDefined();
     expect(hero?.vision).toBeDefined();
     expect(hero?.vision?.active).toBe(true);
-    expect(hero?.vision?.rangeInSquares).toBe(12);
+    expect(hero?.vision?.brightRangeInSquares).toBe(4);
+    expect(hero?.vision?.dimRangeInSquares).toBe(2);
     expect(hero?.vision?.hardness).toBe(0.5);
 
     expect(goblin).toBeDefined();
@@ -283,4 +284,35 @@ describe('Phase 2: Vision and Doors', () => {
     enemyToken = useGameStore.getState().game.entities.find((e) => e.id === 'token_enemy_raw');
     expect(enemyToken?.vision?.active).toBe(true);
   });
+
+  it('isMovementBlockedByWall blocks straight-line movement through a wall or closed door', () => {
+    const wallEntity: Entity = {
+      id: 'wall_block_1',
+      type: 'wall',
+      name: 'Pared',
+      x: 0,
+      y: 0,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      zIndex: 5,
+      visibleToPlayers: true,
+      locked: true,
+      points: [
+        { x: 70, y: 0 },
+        { x: 70, y: 70 }
+      ]
+    };
+
+    const entities: Entity[] = [wallEntity];
+
+    // Trying to move through the wall from (35, 35) to (105, 35)
+    const blocked = isMovementBlockedByWall({ x: 35, y: 35 }, { x: 105, y: 35 }, entities);
+    expect(blocked).toBe(true);
+
+    // Moving up in open space (35, 35) to (35, -35)
+    const open = isMovementBlockedByWall({ x: 35, y: 35 }, { x: 35, y: -35 }, entities);
+    expect(open).toBe(false);
+  });
 });
+

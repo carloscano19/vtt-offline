@@ -16,7 +16,11 @@ export class VisionManager {
     );
 
     const tokenPart = relevantTokens
-      .map((t) => `${t.id}:${Math.round(t.x)}:${Math.round(t.y)}:${t.vision?.rangeInSquares}:${t.vision?.hardness}`)
+      .map((t) => {
+        const b = t.vision?.brightRangeInSquares ?? t.vision?.rangeInSquares ?? 4;
+        const d = t.vision?.dimRangeInSquares ?? 2;
+        return `${t.id}:${Math.round(t.x)}:${Math.round(t.y)}:${b}:${d}:${t.vision?.hardness}`;
+      })
       .join('|');
 
     const wallPart = entities
@@ -61,17 +65,43 @@ export class VisionManager {
     const visibilities: TokenVisibility[] = [];
 
     for (const token of playerVisionTokens) {
-      const rangeSquares = token.vision?.rangeInSquares ?? 12;
-      const rangePx = rangeSquares > 0 ? rangeSquares * gridSize : 0;
+      const brightSquares = token.vision?.brightRangeInSquares ?? token.vision?.rangeInSquares ?? 4;
+      const dimSquares = token.vision?.dimRangeInSquares ?? (token.vision?.rangeInSquares !== undefined ? 0 : 2);
       const hardness = token.vision?.hardness ?? 0.5;
       const center: Point2D = { x: token.x, y: token.y };
 
-      const polygon = computeVisibilityPolygon(center, rangePx, wallSegments);
+      let brightRangePx = 0;
+      let totalRangePx = 0;
+      let brightPolygon: Point2D[];
+      let totalPolygon: Point2D[];
+
+      if (brightSquares === 0) {
+        brightRangePx = 0;
+        totalRangePx = 0;
+        brightPolygon = computeVisibilityPolygon(center, 0, wallSegments);
+        totalPolygon = brightPolygon;
+      } else {
+        brightRangePx = brightSquares * gridSize;
+        brightPolygon = computeVisibilityPolygon(center, brightRangePx, wallSegments);
+
+        if (dimSquares > 0) {
+          totalRangePx = (brightSquares + dimSquares) * gridSize;
+          totalPolygon = computeVisibilityPolygon(center, totalRangePx, wallSegments);
+        } else {
+          totalRangePx = brightRangePx;
+          totalPolygon = brightPolygon;
+        }
+      }
+
       visibilities.push({
         tokenId: token.id,
         center,
-        polygon,
-        rangePx,
+        brightPolygon,
+        totalPolygon,
+        polygon: totalPolygon,
+        brightRangePx,
+        totalRangePx,
+        rangePx: totalRangePx,
         hardness
       });
     }

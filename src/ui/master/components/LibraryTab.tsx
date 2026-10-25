@@ -107,7 +107,7 @@ export const LibraryTab: React.FC = () => {
       locked: false,
       mapData: asset.mapData,
       side: isMap ? undefined : 'jugador',
-      vision: isMap ? undefined : { active: true, rangeInSquares: 12, hardness: 0.5 },
+      vision: isMap ? undefined : { active: true, brightRangeInSquares: 4, dimRangeInSquares: 2, hardness: 0.5 },
       statuses: []
     };
 

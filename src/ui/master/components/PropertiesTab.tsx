@@ -106,7 +106,8 @@ export const PropertiesTab: React.FC = () => {
                         side,
                         vision: {
                           active: true,
-                          rangeInSquares: 12,
+                          brightRangeInSquares: 4,
+                          dimRangeInSquares: 2,
                           hardness: 0.5
                         }
                       });
@@ -148,7 +149,9 @@ export const PropertiesTab: React.FC = () => {
                   handleUpdate({
                     vision: {
                       active: e.target.checked,
-                      rangeInSquares: selectedEntity.vision?.rangeInSquares ?? 12,
+                      brightRangeInSquares:
+                        selectedEntity.vision?.brightRangeInSquares ?? selectedEntity.vision?.rangeInSquares ?? 4,
+                      dimRangeInSquares: selectedEntity.vision?.dimRangeInSquares ?? 2,
                       hardness: selectedEntity.vision?.hardness ?? 0.5
                     }
                   })
@@ -160,26 +163,28 @@ export const PropertiesTab: React.FC = () => {
           </div>
 
           {Boolean(selectedEntity.vision?.active) && (
-            <div className="space-y-2 pt-1 border-t border-slate-700/60">
+            <div className="space-y-3 pt-1 border-t border-slate-700/60">
+              {/* 1. Alcance claro */}
               <div>
                 <div className="flex justify-between text-slate-400 mb-1">
-                  <span>Alcance (casillas)</span>
+                  <span>Alcance claro (casillas)</span>
                   <span className="text-white font-mono">
-                    {(selectedEntity.vision?.rangeInSquares ?? 12) === 0
+                    {(selectedEntity.vision?.brightRangeInSquares ?? selectedEntity.vision?.rangeInSquares ?? 4) === 0
                       ? 'Ilimitado'
-                      : `${selectedEntity.vision?.rangeInSquares ?? 12} cas.`}
+                      : `${selectedEntity.vision?.brightRangeInSquares ?? selectedEntity.vision?.rangeInSquares ?? 4} cas.`}
                   </span>
                 </div>
                 <input
                   type="number"
                   min="0"
                   max="100"
-                  value={selectedEntity.vision?.rangeInSquares ?? 12}
+                  value={selectedEntity.vision?.brightRangeInSquares ?? selectedEntity.vision?.rangeInSquares ?? 4}
                   onChange={(e) =>
                     handleUpdate({
                       vision: {
                         active: Boolean(selectedEntity.vision?.active),
-                        rangeInSquares: Math.max(0, parseInt(e.target.value) || 0),
+                        brightRangeInSquares: Math.max(0, parseInt(e.target.value) || 0),
+                        dimRangeInSquares: selectedEntity.vision?.dimRangeInSquares ?? 2,
                         hardness: selectedEntity.vision?.hardness ?? 0.5
                       }
                     })
@@ -187,6 +192,35 @@ export const PropertiesTab: React.FC = () => {
                   className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200"
                 />
                 <span className="text-[10px] text-slate-500">0 = Alcance ilimitado hasta paredes</span>
+              </div>
+
+              {/* 2. Alcance tenue */}
+              <div>
+                <div className="flex justify-between text-slate-400 mb-1">
+                  <span>Alcance tenue (adicionales)</span>
+                  <span className="text-white font-mono">
+                    {`+${selectedEntity.vision?.dimRangeInSquares ?? 2} cas.`}
+                  </span>
+                </div>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={selectedEntity.vision?.dimRangeInSquares ?? 2}
+                  onChange={(e) =>
+                    handleUpdate({
+                      vision: {
+                        active: Boolean(selectedEntity.vision?.active),
+                        brightRangeInSquares:
+                          selectedEntity.vision?.brightRangeInSquares ?? selectedEntity.vision?.rangeInSquares ?? 4,
+                        dimRangeInSquares: Math.max(0, parseInt(e.target.value) || 0),
+                        hardness: selectedEntity.vision?.hardness ?? 0.5
+                      }
+                    })
+                  }
+                  className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200"
+                />
+                <span className="text-[10px] text-slate-500">Casillas en penumbra (50% de oscuridad)</span>
               </div>
             </div>
           )}

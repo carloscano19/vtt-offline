@@ -15,8 +15,33 @@ export function normalizeEntity(entity: Entity): Entity {
         side,
         vision: {
           active: side === 'jugador',
-          rangeInSquares: 12,
+          brightRangeInSquares: 4,
+          dimRangeInSquares: 2,
           hardness: 0.5
+        }
+      };
+    } else {
+      // Migrar tokens antiguos con rangeInSquares único
+      const hasBright = entity.vision.brightRangeInSquares !== undefined;
+      const oldRange = entity.vision.rangeInSquares;
+      const brightRangeInSquares = hasBright
+        ? entity.vision.brightRangeInSquares
+        : oldRange !== undefined
+        ? oldRange
+        : 4;
+      const dimRangeInSquares = entity.vision.dimRangeInSquares !== undefined
+        ? entity.vision.dimRangeInSquares
+        : hasBright
+        ? 2
+        : 0;
+
+      return {
+        ...entity,
+        side,
+        vision: {
+          ...entity.vision,
+          brightRangeInSquares,
+          dimRangeInSquares
         }
       };
     }
@@ -26,7 +51,7 @@ export function normalizeEntity(entity: Entity): Entity {
 
 /**
  * Normaliza el estado completo de una partida al cargar o importar.
- * - Asegura que fog tenga enabled y explored válidos.
+ * - Asegura que fog tenga enabled, rememberExplored, explored y revealed válidos.
  * - Normaliza todas las entidades (tokens sin vision reciben vision adecuada).
  */
 export function normalizeGameState(game: GameState): GameState {
@@ -34,7 +59,9 @@ export function normalizeGameState(game: GameState): GameState {
     ...game,
     fog: {
       enabled: game.fog?.enabled ?? true,
-      explored: game.fog?.explored ?? []
+      rememberExplored: game.fog?.rememberExplored ?? false,
+      explored: game.fog?.explored ?? [],
+      revealed: game.fog?.revealed ?? []
     },
     entities: (game.entities || []).map(normalizeEntity)
   };
