@@ -16,7 +16,6 @@ import { visionManager } from '../modules/vision/visionManager';
 export class PixiRenderer {
   public app!: Application;
   public worldContainer!: Container;
-  private gridClip: Graphics | null = null;
 
   public mapsLayer!: MapsLayer;
   public debugVttLayer!: DebugVttLayer;
@@ -153,35 +152,39 @@ export class PixiRenderer {
     const gridSize = game.grid.size || 70;
     const visibilities = visionManager.getTokensVisibility(game.entities, gridSize);
 
-    // Calcular límites envolventes de los mapas o mundo para la niebla
+    // Calcular límites envolventes de los mapas visibles para jugadores
     let minX = -2000, minY = -2000, maxX = 4000, maxY = 4000;
-    const maps = game.entities.filter((e) => e.type === 'map');
-    if (maps.length > 0) {
-      minX = Math.min(...maps.map((m) => m.x)) - 1000;
-      minY = Math.min(...maps.map((m) => m.y)) - 1000;
-      maxX = Math.max(...maps.map((m) => m.x + (m.mapData?.gridWidth ?? 10) * (m.mapData?.pixelsPerGrid ?? 70) * m.scaleX)) + 1000;
-      maxY = Math.max(...maps.map((m) => m.y + (m.mapData?.gridHeight ?? 10) * (m.mapData?.pixelsPerGrid ?? 70) * m.scaleY)) + 1000;
+    const playerVisibleMaps = game.entities.filter(
+      (e) => e.type === 'map' && e.visibleToPlayers !== false
+    );
+    const targetMaps = playerVisibleMaps.length > 0 ? playerVisibleMaps : game.entities.filter((e) => e.type === 'map');
+    if (targetMaps.length > 0) {
+      minX = Math.min(...targetMaps.map((m) => m.x)) - 1000;
+      minY = Math.min(...targetMaps.map((m) => m.y)) - 1000;
+      maxX = Math.max(...targetMaps.map((m) => m.x + (m.mapData?.gridWidth ?? 10) * (m.mapData?.pixelsPerGrid ?? 70) * m.scaleX)) + 1000;
+      maxY = Math.max(...targetMaps.map((m) => m.y + (m.mapData?.gridHeight ?? 10) * (m.mapData?.pixelsPerGrid ?? 70) * m.scaleY)) + 1000;
     }
-    const worldBounds = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+    if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+      minX = -2000;
+      minY = -2000;
+      maxX = 4000;
+      maxY = 4000;
+    }
+    const worldBounds = {
+      x: minX,
+      y: minY,
+      width: Math.max(100, maxX - minX),
+      height: Math.max(100, maxY - minY)
+    };
 
     // Sincronizar capas
     this.mapsLayer.syncEntities(game.entities);
     this.debugVttLayer.update(game.entities, showDebugOverlay && !isPlayerPreview);
-    this.gridLayer.update(game.grid, camera, width, height);
+
     // Vista de jugadores con niebla: la cuadrícula queda por debajo de la niebla y
-    // se recorta a sus límites para que fuera de ellos no se vea ninguna línea.
+    // se dibuja solo dentro de los límites del mapa para no proyectar líneas en el vacío.
     const clipGrid = (!this.isMaster || isPlayerPreview) && game.fog.enabled;
-    if (clipGrid) {
-      if (!this.gridClip) {
-        this.gridClip = new Graphics();
-        this.worldContainer.addChild(this.gridClip);
-      }
-      this.gridClip.clear();
-      this.gridClip.rect(worldBounds.x, worldBounds.y, worldBounds.width, worldBounds.height).fill(0xffffff);
-      this.gridLayer.mask = this.gridClip;
-    } else if (this.gridLayer.mask) {
-      this.gridLayer.mask = null;
-    }
+    this.gridLayer.update(game.grid, camera, width, height, clipGrid ? worldBounds : undefined);
     this.doorsLayer.update(game.entities, selectedIds);
     this.tokensLayer.syncEntities(game.entities, selectedIds, visibilities, isPlayerPreview, game.fog.enabled);
     this.fogLayer.update(

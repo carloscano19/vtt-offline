@@ -10,7 +10,13 @@ export class GridLayer extends Container {
     this.addChild(this.graphics);
   }
 
-  public update(grid: GridConfig, camera: CameraState, canvasWidth: number, canvasHeight: number) {
+  public update(
+    grid: GridConfig,
+    camera: CameraState,
+    canvasWidth: number,
+    canvasHeight: number,
+    bounds?: { x: number; y: number; width: number; height: number }
+  ) {
     this.graphics.clear();
 
     if (!grid.visible || grid.opacity <= 0 || grid.size <= 0) {
@@ -21,10 +27,18 @@ export class GridLayer extends Container {
     const halfW = canvasWidth / 2 / zoom;
     const halfH = canvasHeight / 2 / zoom;
 
-    const minX = camera.x - halfW;
-    const maxX = camera.x + halfW;
-    const minY = camera.y - halfH;
-    const maxY = camera.y + halfH;
+    let minX = camera.x - halfW;
+    let maxX = camera.x + halfW;
+    let minY = camera.y - halfH;
+    let maxY = camera.y + halfH;
+
+    if (bounds) {
+      minX = Math.max(minX, bounds.x);
+      maxX = Math.min(maxX, bounds.x + bounds.width);
+      minY = Math.max(minY, bounds.y);
+      maxY = Math.min(maxY, bounds.y + bounds.height);
+      if (minX >= maxX || minY >= maxY) return;
+    }
 
     const step = grid.size;
     const startX = Math.floor(minX / step) * step;

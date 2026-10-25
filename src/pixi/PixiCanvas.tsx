@@ -108,10 +108,10 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
       container.replaceChildren(canvas);
       renderer.sync(
-        game,
-        ruler,
-        selectedEntityIds,
-        showDebugVttOverlay,
+        useGameStore.getState().game,
+        useUIStore.getState().ruler,
+        useUIStore.getState().selectedEntityIds,
+        useUIStore.getState().showDebugVttOverlay,
         draftWallPoints,
         isPlayerPreviewMode,
         showPlayerFrame
