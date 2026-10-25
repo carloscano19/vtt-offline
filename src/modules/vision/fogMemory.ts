@@ -7,7 +7,7 @@ type Ring = [number, number][];
 const SIMPLIFY_TOLERANCE = 1.5; // px del mundo
 const MIN_RING_AREA = 4; // px^2
 
-function ringArea(ring: Ring): number {
+export function ringArea(ring: Ring): number {
   let a = 0;
   for (let i = 0; i < ring.length - 1; i++) {
     a += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
@@ -72,10 +72,20 @@ export function simplifyMulti(multi: ExploredMultiPolygon): ExploredMultiPolygon
   return out;
 }
 
-function toRing(points: Point2D[]): Ring {
-  const ring: Ring = points.map((p) => [Math.round(p.x * 100) / 100, Math.round(p.y * 100) / 100]);
-  ring.push([ring[0][0], ring[0][1]]);
-  return ring;
+export function toRing(points: Point2D[]): Ring {
+  // Redondear a números enteros (resolución de 1px) para evitar micro-astillas flotantes (0.01px)
+  // que provocan errores de anillos abiertos en las operaciones booleanas de polygon-clipping.
+  const ring: Ring = points.map((p) => [Math.round(p.x), Math.round(p.y)]);
+  const dedup: Ring = [ring[0]];
+  for (let i = 1; i < ring.length; i++) {
+    if (ring[i][0] !== dedup[dedup.length - 1][0] || ring[i][1] !== dedup[dedup.length - 1][1]) {
+      dedup.push(ring[i]);
+    }
+  }
+  if (dedup.length >= 3 && (dedup[0][0] !== dedup[dedup.length - 1][0] || dedup[0][1] !== dedup[dedup.length - 1][1])) {
+    dedup.push([dedup[0][0], dedup[0][1]]);
+  }
+  return dedup;
 }
 
 /** Convierte polígonos de visión (listas de puntos) en un multipolígono simplificado. */

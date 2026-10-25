@@ -175,36 +175,6 @@ export const PropertiesTab: React.FC = () => {
                 />
                 <span className="text-[10px] text-slate-500">0 = Alcance ilimitado hasta paredes</span>
               </div>
-
-              <div>
-                <div className="flex justify-between text-slate-400 mb-1">
-                  <span>Dureza del borde</span>
-                  <span className="text-white font-mono">
-                    {(selectedEntity.vision?.hardness ?? 0.5) <= 0.2
-                      ? 'Suave'
-                      : (selectedEntity.vision?.hardness ?? 0.5) >= 0.8
-                      ? 'Nítido'
-                      : 'Medio'}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={selectedEntity.vision?.hardness ?? 0.5}
-                  onChange={(e) =>
-                    handleUpdate({
-                      vision: {
-                        active: selectedEntity.vision?.active ?? true,
-                        rangeInSquares: selectedEntity.vision?.rangeInSquares ?? 12,
-                        hardness: parseFloat(e.target.value)
-                      }
-                    })
-                  }
-                  className="w-full accent-emerald-500 cursor-pointer"
-                />
-              </div>
             </div>
           )}
         </div>

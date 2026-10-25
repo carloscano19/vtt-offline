@@ -1,21 +1,16 @@
 import { Container, Graphics, Renderer } from 'pixi.js';
-import { Point2D } from '../../types/entity';
 import { ExploredMultiPolygon } from '../../types/game';
 import { TokenVisibility } from '../../modules/vision/visibilityPolygon';
 import { exploredSignature } from '../../modules/vision/fogMemory';
+import { computeFogRegions } from '../../modules/vision/fogRegions';
 
 const FOG_COLOR = 0x020617;
 const EXPLORED_ALPHA = 0.65;
 
-const flat = (pts: Point2D[]) => {
-  const out: number[] = [];
-  for (const p of pts) out.push(p.x, p.y);
-  return out;
-};
-
 /**
- * Capa de niebla de guerra. Utiliza recorte geométrico con Graphics.cut()
- * sin blend modes ('erase') ni RenderTextures que fallen en WebGL/Metal.
+ * Capa de niebla de guerra. Utiliza regiones calculadas mediante álgebra booleana de polígonos
+ * (polygon-clipping), de forma que visible, exploradoNoVisible y noExplorado son completamente
+ * disjuntas. Cada polígono resultante se dibuja con fill normal y sus propios huecos con cut().
  * La fuente única de exploración es el estado de la partida (game.fog.explored).
  */
 export class FogLayer extends Container {
@@ -32,6 +27,25 @@ export class FogLayer extends Container {
 
     this.addChild(this.unexploredGfx);
     this.addChild(this.exploredDarkGfx);
+  }
+
+  private renderMultiPolygon(graphics: Graphics, multi: ExploredMultiPolygon, color: number, alpha: number) {
+    for (const poly of multi) {
+      const outer = poly[0];
+      if (!outer || outer.length < 3) continue;
+
+      // Rellenar contorno exterior
+      graphics.poly(outer.flat());
+      graphics.fill({ color, alpha });
+
+      // Cortar únicamente los huecos propios de este polígono resultante
+      for (let i = 1; i < poly.length; i++) {
+        const hole = poly[i];
+        if (!hole || hole.length < 3) continue;
+        graphics.poly(hole.flat());
+        graphics.cut();
+      }
+    }
   }
 
   public update(
@@ -63,46 +77,15 @@ export class FogLayer extends Container {
     if (key === this.lastKey) return;
     this.lastKey = key;
 
-    // 1. Niebla inexplorada (negro 100% opaco):
-    // Cubre todo el área de los límites del mundo, pero perfora lo explorado y lo visible en tiempo real.
+    const visionPolygons = visibilities.map((v) => v.polygon).filter((p) => p.length >= 3);
+    const regions = computeFogRegions(explored, visionPolygons, { x: bx, y: by, width: bw, height: bh });
+
+    // 1. Dibuja noExplorado con negro opaco
     this.unexploredGfx.clear();
-    this.unexploredGfx.rect(bx, by, bw, bh);
-    this.unexploredGfx.fill({ color: FOG_COLOR, alpha: 1.0 });
+    this.renderMultiPolygon(this.unexploredGfx, regions.noExplorado, FOG_COLOR, 1.0);
 
-    for (const poly of explored) {
-      const outer = poly[0];
-      if (!outer || outer.length < 3) continue;
-      this.unexploredGfx.poly(outer.flat());
-      this.unexploredGfx.cut();
-    }
-
-    for (const vis of visibilities) {
-      if (vis.polygon.length < 3) continue;
-      this.unexploredGfx.poly(flat(vis.polygon));
-      this.unexploredGfx.cut();
-    }
-
-    // 2. Niebla explorada (semi-transparente 65% opaco):
-    // Pinta las zonas exploradas pero perfora la visión visible en tiempo real.
+    // 2. Dibuja exploradoNoVisible con negro al 65%
     this.exploredDarkGfx.clear();
-    for (const poly of explored) {
-      const outer = poly[0];
-      if (!outer || outer.length < 3) continue;
-
-      this.exploredDarkGfx.poly(outer.flat());
-      this.exploredDarkGfx.fill({ color: FOG_COLOR, alpha: EXPLORED_ALPHA });
-
-      for (let i = 1; i < poly.length; i++) {
-        if (poly[i].length < 3) continue;
-        this.exploredDarkGfx.poly(poly[i].flat());
-        this.exploredDarkGfx.cut();
-      }
-
-      for (const vis of visibilities) {
-        if (vis.polygon.length < 3) continue;
-        this.exploredDarkGfx.poly(flat(vis.polygon));
-        this.exploredDarkGfx.cut();
-      }
-    }
+    this.renderMultiPolygon(this.exploredDarkGfx, regions.exploradoNoVisible, FOG_COLOR, EXPLORED_ALPHA);
   }
 }
