@@ -1,4 +1,4 @@
-import { Entity, Point2D } from './entity';
+import { Entity, Point2D, MapData } from './entity';
 
 export interface GridConfig {
   size: number; // Pixeles por casilla (ancho y alto de celda cuadrada)
@@ -46,6 +46,16 @@ export interface MusicState {
   volume: number;
 }
 
+export interface FogConfig {
+  enabled: boolean; // Niebla activa o desactivada para jugadores
+  fogExplorationData?: Record<string, string>; // mapaId -> dataURL/PNG en memoria
+}
+
+export interface PlayerViewport {
+  width: number;
+  height: number;
+}
+
 export interface GameState {
   id: string;
   name: string;
@@ -55,6 +65,8 @@ export interface GameState {
   playerCamera: CameraState;
   masterCamera: CameraState;
   followMasterCamera: boolean;
+  fog: FogConfig;
+  playerViewport?: PlayerViewport;
   combat: CombatState;
   music: MusicState;
   createdAt: number;
@@ -73,4 +85,5 @@ export interface AssetItem {
   createdAt: number;
   width?: number;
   height?: number;
+  mapData?: MapData;
 }

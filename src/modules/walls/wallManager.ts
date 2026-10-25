@@ -5,13 +5,13 @@ export interface WallSegment {
   p1: Point2D;
   p2: Point2D;
   entityId: string;
-  source: 'uvtt' | 'drawn';
+  source: 'uvtt' | 'drawn' | 'door';
 }
 
 /**
  * Devuelve en coordenadas globales del mundo todos los segmentos de paredes
- * existentes en la partida (tanto paredes embebidas en mapas UVTT como paredes invisibles dibujadas).
- * Función lista para ser consumida directamente por los algoritmos de visión y FoW en la Fase 2.
+ * existentes en la partida (paredes UVTT + paredes invisibles dibujadas + puertas cerradas).
+ * Función consumida directamente por los algoritmos de visión y FoW en la Fase 2.
  */
 export function getAllWallSegments(entities: Entity[]): WallSegment[] {
   const segments: WallSegment[] = [];
@@ -39,12 +39,27 @@ export function getAllWallSegments(entities: Entity[]): WallSegment[] {
       }
     }
 
-    // 2. Paredes invisibles dibujadas (tipo 'wall')
+    // 2. Portales cerrados de mapas UVTT (que no hayan sido convertidos a entidades independientes)
+    if (ent.type === 'map' && ent.mapData?.portals) {
+      const mapPos = { x: ent.x, y: ent.y };
+      for (const portal of ent.mapData.portals) {
+        if (portal.closed && portal.bounds && portal.bounds.length >= 2) {
+          const p1 = localToWorld(portal.bounds[0], mapPos, ent.rotation, ent.scaleX, ent.scaleY);
+          const p2 = localToWorld(portal.bounds[1], mapPos, ent.rotation, ent.scaleX, ent.scaleY);
+          segments.push({
+            p1,
+            p2,
+            entityId: ent.id,
+            source: 'door'
+          });
+        }
+      }
+    }
+
+    // 3. Paredes invisibles dibujadas (tipo 'wall')
     if (ent.type === 'wall' && ent.points && ent.points.length >= 2) {
       const pts = ent.points;
       const count = ent.closed ? pts.length : pts.length - 1;
-
-      // Si está anclada a un mapa, transformar desde coordenadas locales de ese mapa
       const parentMap = ent.mapId ? mapEntitiesById.get(ent.mapId) : undefined;
 
       const transformPoint = (p: Point2D): Point2D => {
@@ -65,6 +80,27 @@ export function getAllWallSegments(entities: Entity[]): WallSegment[] {
           source: 'drawn'
         });
       }
+    }
+
+    // 4. Puertas (tipo 'door') - si están CERRADAS, bloquean visión como pared
+    if (ent.type === 'door' && ent.door && !ent.door.isOpen) {
+      const parentMap = ent.mapId ? mapEntitiesById.get(ent.mapId) : undefined;
+      const transformPoint = (p: Point2D): Point2D => {
+        if (parentMap) {
+          const mapPos = { x: parentMap.x, y: parentMap.y };
+          return localToWorld(p, mapPos, parentMap.rotation, parentMap.scaleX, parentMap.scaleY);
+        }
+        return p;
+      };
+
+      const p1 = transformPoint(ent.door.p1);
+      const p2 = transformPoint(ent.door.p2);
+      segments.push({
+        p1,
+        p2,
+        entityId: ent.id,
+        source: 'door'
+      });
     }
   }
 

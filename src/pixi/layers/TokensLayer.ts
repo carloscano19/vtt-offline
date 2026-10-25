@@ -1,6 +1,22 @@
 import { Container, Sprite, Graphics, Text, TextStyle, Texture } from 'pixi.js';
-import { Entity, TokenSide } from '../../types/entity';
+import { Entity, TokenSide, Point2D } from '../../types/entity';
 import { getTextureForAsset } from '../utils/textureCache';
+import { TokenVisibility } from '../../modules/vision/visibilityPolygon';
+
+/**
+ * Comprueba si un punto (x, y) está dentro de un polígono 2D (Ray-casting point in polygon)
+ */
+function isPointInPolygon(point: Point2D, vs: Point2D[]): boolean {
+  const x = point.x, y = point.y;
+  let inside = false;
+  for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+    const xi = vs[i].x, yi = vs[i].y;
+    const xj = vs[j].x, yj = vs[j].y;
+    const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
 
 export class TokensLayer extends Container {
   private isMaster: boolean;
@@ -11,14 +27,35 @@ export class TokensLayer extends Container {
     this.isMaster = isMaster;
   }
 
-  public async syncEntities(entities: Entity[], selectedIds: string[] = []) {
+  public async syncEntities(
+    entities: Entity[],
+    selectedIds: string[] = [],
+    visibilities: TokenVisibility[] = [],
+    isPlayerPreview = false,
+    fogEnabled = true
+  ) {
     const tokenEntities = entities.filter((e) => e.type === 'token' || e.type === 'object');
     const currentIds = new Set<string>();
 
+    const evaluatePlayerVisibility = !this.isMaster || (this.isMaster && isPlayerPreview);
+
     for (const entity of tokenEntities) {
-      // En la ventana de jugadores, si visibleToPlayers es false, NO se renderiza en absoluto
-      if (!this.isMaster && !entity.visibleToPlayers) {
-        continue;
+      if (evaluatePlayerVisibility) {
+        // En la ventana de jugadores (o en vista previa de jugadores):
+        // 1. Debe tener el ojo abierto (visibleToPlayers = true)
+        if (!entity.visibleToPlayers) {
+          continue;
+        }
+
+        // 2. Si es token de jugador (side === 'jugador'), se ve siempre que tenga el ojo abierto
+        // Si es enemigo, neutral u objeto, solo se ve si está dentro de la visión actual
+        if (fogEnabled && (entity.side === 'enemigo' || entity.side === 'neutral' || entity.type === 'object')) {
+          const pt = { x: entity.x, y: entity.y };
+          const isInsideAnyVision = visibilities.some((v) => isPointInPolygon(pt, v.polygon));
+          if (!isInsideAnyVision) {
+            continue; // No está dentro de la visión actual
+          }
+        }
       }
 
       currentIds.add(entity.id);
@@ -55,7 +92,6 @@ export class TokensLayer extends Container {
         nameText.label = 'name';
         nameText.anchor.set(0.5, 0);
         entityContainer.addChild(nameText);
-
       }
 
       // Carga asíncrona de textura si aún no se ha cargado o si cambió el assetId
@@ -74,7 +110,7 @@ export class TokensLayer extends Container {
         });
       }
 
-      // Actualizar posición y transformaciones
+      // Actualizar transformaciones espaciales en el mundo
       entityContainer.x = entity.x;
       entityContainer.y = entity.y;
       entityContainer.rotation = entity.rotation;
@@ -82,7 +118,7 @@ export class TokensLayer extends Container {
       entityContainer.zIndex = entity.zIndex ?? 10;
 
       // Opacidad según visibilidad para jugadores
-      if (this.isMaster) {
+      if (this.isMaster && !isPlayerPreview) {
         entityContainer.alpha = entity.visibleToPlayers ? 1.0 : 0.45;
       } else {
         entityContainer.alpha = 1.0;
@@ -132,16 +168,19 @@ export class TokensLayer extends Container {
     // Indicador visual de candado (bloqueado) o de oculto en máster
     if (this.isMaster) {
       if (entity.locked) {
-        // Pequeño punto rojo indicador de candado
         ring.circle(radius - 5, -radius + 5, 5);
         ring.fill({ color: 0xff4444, alpha: 1.0 });
         ring.stroke({ width: 1, color: 0x000000 });
       }
       if (!entity.visibleToPlayers) {
-        // Pequeño punto azul/gris indicador de oculto para jugadores
-        ring.circle(-radius + 5, -radius + 5, 5);
-        ring.fill({ color: 0x64748b, alpha: 1.0 });
-        ring.stroke({ width: 1, color: 0x000000 });
+        ring.circle(0, 0, radius + 1);
+        ring.stroke({ width: 1.5, color: 0x94a3b8, alpha: 0.7 });
+      }
+      if (entity.side === 'jugador' && entity.vision?.active) {
+        // Indicador de visión activa (pequeño halo/ojo cyan)
+        ring.circle(-radius + 5, -radius + 5, 4);
+        ring.fill({ color: 0x38bdf8 });
+        ring.stroke({ width: 1, color: 0x0284c7 });
       }
     }
 
@@ -153,35 +192,28 @@ export class TokensLayer extends Container {
 
   private getSideColor(side?: TokenSide): number {
     switch (side) {
-      case 'jugador':
-        return 0x22c55e; // Verde
       case 'enemigo':
         return 0xef4444; // Rojo
       case 'neutral':
-      default:
         return 0xeab308; // Amarillo
+      case 'jugador':
+      default:
+        return 0x10b981; // Verde esmeralda
     }
   }
 
-  public getEntityContainer(id: string): Container | undefined {
-    return this.containerMap.get(id);
-  }
-
-  public getEntityBounds(id: string): { width: number; height: number; radius: number } {
-    const container = this.containerMap.get(id);
-    if (!container) return { width: 70, height: 70, radius: 35 };
-
+  public getEntityBounds(entityId: string): { width: number; height: number; radius: number } | null {
+    const container = this.containerMap.get(entityId);
+    if (!container) return null;
     const sprite = container.getChildByLabel('sprite') as Sprite;
-    if (sprite && sprite.texture && sprite.texture !== Texture.EMPTY) {
-      const w = sprite.texture.width || 70;
-      const h = sprite.texture.height || 70;
-      return {
-        width: w,
-        height: h,
-        radius: Math.max(w, h) / 2
-      };
-    }
+    if (!sprite) return null;
 
-    return { width: 70, height: 70, radius: 35 };
+    const w = sprite.width || 70;
+    const h = sprite.height || 70;
+    return {
+      width: w,
+      height: h,
+      radius: Math.max(w, h) / 2
+    };
   }
 }

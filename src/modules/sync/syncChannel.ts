@@ -4,6 +4,7 @@ export type SyncMessage =
   | { type: 'STATE_SYNC'; state: GameState }
   | { type: 'RULER_SYNC'; ruler: RulerState }
   | { type: 'CAMERA_SYNC'; camera: CameraState }
+  | { type: 'VIEWPORT_SYNC'; width: number; height: number }
   | { type: 'REQUEST_CURRENT_STATE' };
 
 const CHANNEL_NAME = 'vtt_offline_sync_channel';
@@ -13,6 +14,7 @@ class SyncManager {
   private stateListeners: Set<(state: GameState) => void> = new Set();
   private rulerListeners: Set<(ruler: RulerState) => void> = new Set();
   private cameraListeners: Set<(camera: CameraState) => void> = new Set();
+  private viewportListeners: Set<(vp: { width: number; height: number }) => void> = new Set();
   private requestStateListeners: Set<() => void> = new Set();
 
   constructor() {
@@ -31,6 +33,9 @@ class SyncManager {
             break;
           case 'CAMERA_SYNC':
             this.cameraListeners.forEach((listener) => listener(msg.camera));
+            break;
+          case 'VIEWPORT_SYNC':
+            this.viewportListeners.forEach((listener) => listener({ width: msg.width, height: msg.height }));
             break;
           case 'REQUEST_CURRENT_STATE':
             this.requestStateListeners.forEach((listener) => listener());
@@ -95,9 +100,24 @@ class SyncManager {
     return () => this.cameraListeners.delete(callback);
   }
 
+  public sendViewport(width: number, height: number) {
+    if (this.channel) {
+      try {
+        this.channel.postMessage({ type: 'VIEWPORT_SYNC', width, height });
+      } catch (err) {
+        console.error('[SyncManager] Error al enviar VIEWPORT_SYNC:', err);
+      }
+    }
+  }
+
   public onRequestState(callback: () => void): () => void {
     this.requestStateListeners.add(callback);
     return () => this.requestStateListeners.delete(callback);
+  }
+
+  public onViewport(callback: (vp: { width: number; height: number }) => void): () => void {
+    this.viewportListeners.add(callback);
+    return () => this.viewportListeners.delete(callback);
   }
 }
 

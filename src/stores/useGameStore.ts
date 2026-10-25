@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { GameState, GridConfig, CameraState, CombatState, MusicState } from '../types/game';
+import { GameState, GridConfig, CameraState, CombatState, MusicState, FogConfig, PlayerViewport } from '../types/game';
 import { Entity } from '../types/entity';
 
 function createDefaultGame(): GameState {
@@ -19,6 +19,11 @@ function createDefaultGame(): GameState {
     masterCamera: { x: 0, y: 0, zoom: 1 },
     playerCamera: { x: 0, y: 0, zoom: 1 },
     followMasterCamera: false,
+    fog: {
+      enabled: true,
+      fogExplorationData: {}
+    },
+    playerViewport: { width: 1920, height: 1080 },
     combat: {
       active: false,
       order: [],
@@ -68,6 +73,15 @@ interface GameStoreState {
 
   // Música
   setMusicState: (partial: Partial<MusicState>) => void;
+
+  // Niebla y Marco
+  setFogConfig: (partial: Partial<FogConfig>) => void;
+  resetFogExploration: () => void;
+  setPlayerViewport: (viewport: PlayerViewport) => void;
+
+  // Puertas
+  toggleDoor: (doorEntityId: string) => void;
+  setDoorLocked: (doorEntityId: string, locked: boolean) => void;
 
   // Historial (Deshacer/Rehacer)
   undo: () => void;
@@ -313,6 +327,92 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
         updatedAt: Date.now()
       }
     }));
+  },
+
+  setFogConfig: (partial) => {
+    set((state) => ({
+      game: {
+        ...state.game,
+        fog: { ...state.game.fog, ...partial },
+        updatedAt: Date.now()
+      }
+    }));
+  },
+
+  resetFogExploration: () => {
+    set((state) => ({
+      game: {
+        ...state.game,
+        fog: { ...state.game.fog, fogExplorationData: {} },
+        updatedAt: Date.now()
+      }
+    }));
+  },
+
+  setPlayerViewport: (viewport) => {
+    set((state) => ({
+      game: {
+        ...state.game,
+        playerViewport: viewport
+      }
+    }));
+  },
+
+  toggleDoor: (doorEntityId) => {
+    set((state) => {
+      const past = [...state.past, state.game.entities];
+      const entities = state.game.entities.map((e) => {
+        if (e.id === doorEntityId && e.door) {
+          if (e.door.isLocked) return e; // Puerta bloqueada con candado no se abre
+          return {
+            ...e,
+            door: {
+              ...e.door,
+              isOpen: !e.door.isOpen
+            }
+          };
+        }
+        return e;
+      });
+
+      return {
+        game: {
+          ...state.game,
+          entities,
+          updatedAt: Date.now()
+        },
+        past,
+        future: []
+      };
+    });
+  },
+
+  setDoorLocked: (doorEntityId, locked) => {
+    set((state) => {
+      const past = [...state.past, state.game.entities];
+      const entities = state.game.entities.map((e) => {
+        if (e.id === doorEntityId && e.door) {
+          return {
+            ...e,
+            door: {
+              ...e.door,
+              isLocked: locked
+            }
+          };
+        }
+        return e;
+      });
+
+      return {
+        game: {
+          ...state.game,
+          entities,
+          updatedAt: Date.now()
+        },
+        past,
+        future: []
+      };
+    });
   },
 
   undo: () => {

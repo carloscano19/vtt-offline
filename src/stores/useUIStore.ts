@@ -2,13 +2,17 @@ import { create } from 'zustand';
 import { Point2D } from '../types/entity';
 import { DiagonalRule, RulerMode, RulerState } from '../types/game';
 
-export type ActiveTool = 'select' | 'pan' | 'ruler' | 'wall';
+export type ActiveTool = 'select' | 'pan' | 'ruler' | 'wall' | 'door' | 'fogReveal' | 'fogHide';
 export type SidebarTab = 'properties' | 'layers' | 'library';
 
 interface UIStoreState {
   activeTool: ActiveTool;
   selectedEntityIds: string[];
   activeSidebarTab: SidebarTab | null;
+
+  // Modos de visualización
+  isPlayerPreviewMode: boolean; // Vista jugadores en la pantalla del máster
+  showPlayerFrame: boolean; // Marco TV verde discontinuo
 
   // Regla
   ruler: RulerState & { measuring: boolean };
@@ -17,6 +21,7 @@ interface UIStoreState {
   showDebugVttOverlay: boolean;
   showSaveLoadModal: boolean;
   showDisplaysModal: boolean;
+  showResetFogConfirm: boolean;
 
   // Acciones
   setActiveTool: (tool: ActiveTool) => void;
@@ -24,6 +29,9 @@ interface UIStoreState {
   selectEntity: (id: string, multiple?: boolean) => void;
   clearSelection: () => void;
   setActiveSidebarTab: (tab: SidebarTab | null) => void;
+  setIsPlayerPreviewMode: (preview: boolean) => void;
+  setShowPlayerFrame: (show: boolean) => void;
+  setShowResetFogConfirm: (show: boolean) => void;
 
   setRulerMode: (mode: RulerMode) => void;
   setRulerDiagonalRule: (rule: DiagonalRule) => void;
@@ -42,6 +50,10 @@ export const useUIStore = create<UIStoreState>((set) => ({
   activeTool: 'select',
   selectedEntityIds: [],
   activeSidebarTab: 'properties',
+
+  isPlayerPreviewMode: false,
+  showPlayerFrame: true,
+  showResetFogConfirm: false,
 
   ruler: {
     active: false,
@@ -147,5 +159,8 @@ export const useUIStore = create<UIStoreState>((set) => ({
 
   setShowDebugVttOverlay: (show) => set({ showDebugVttOverlay: show }),
   setShowSaveLoadModal: (show) => set({ showSaveLoadModal: show }),
-  setShowDisplaysModal: (show) => set({ showDisplaysModal: show })
+  setShowDisplaysModal: (show) => set({ showDisplaysModal: show }),
+  setShowResetFogConfirm: (show) => set({ showResetFogConfirm: show }),
+  setIsPlayerPreviewMode: (isPlayerPreviewMode) => set({ isPlayerPreviewMode }),
+  setShowPlayerFrame: (showPlayerFrame) => set({ showPlayerFrame })
 }));

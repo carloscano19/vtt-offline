@@ -105,12 +105,44 @@ export const LibraryTab: React.FC = () => {
       zIndex: isMap ? 0 : 10,
       visibleToPlayers: isMap, // Mapas visibles, tokens ocultos por defecto
       locked: false,
-      mapData: (asset as any).mapData,
+      mapData: asset.mapData,
       side: isMap ? undefined : 'jugador',
+      vision: isMap ? undefined : { active: true, rangeInSquares: 12, hardness: 0.5 },
       statuses: []
     };
 
     addEntity(newEntity);
+
+    // Convertir portales UVTT en puertas interactivas
+    if (isMap && asset.mapData?.portals && asset.mapData.portals.length > 0) {
+      for (let pIdx = 0; pIdx < asset.mapData.portals.length; pIdx++) {
+        const portal = asset.mapData.portals[pIdx];
+        if (portal.bounds && portal.bounds.length >= 2) {
+          const doorEntity: Entity = {
+            id: `door_${Date.now()}_${pIdx}_${Math.random().toString(36).substring(2, 6)}`,
+            type: 'door',
+            name: `Puerta ${pIdx + 1}`,
+            x: posX,
+            y: posY,
+            rotation: 0,
+            scaleX: 1,
+            scaleY: 1,
+            zIndex: 40,
+            visibleToPlayers: true,
+            locked: false,
+            mapId: newEntity.id,
+            door: {
+              isOpen: !portal.closed,
+              isLocked: !!portal.locked,
+              p1: portal.bounds[0],
+              p2: portal.bounds[1],
+              openAngle: Math.PI / 2
+            }
+          };
+          addEntity(doorEntity);
+        }
+      }
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -134,7 +166,8 @@ export const LibraryTab: React.FC = () => {
             blob: parsed.imageBlob,
             createdAt: Date.now(),
             width: parsed.widthPx,
-            height: parsed.heightPx
+            height: parsed.heightPx,
+            mapData: parsed.mapData
           };
           await saveAsset(asset);
         } else {

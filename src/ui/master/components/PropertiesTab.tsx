@@ -1,13 +1,15 @@
 import React from 'react';
 import { useGameStore } from '../../../stores/useGameStore';
 import { useUIStore } from '../../../stores/useUIStore';
-import { Lock, Unlock, Eye, EyeOff, Trash2, Shield, Users, Crosshair, BrickWall } from 'lucide-react';
+import { Lock, Unlock, Eye, EyeOff, Trash2, Shield, Users, Crosshair, BrickWall, DoorClosed, DoorOpen } from 'lucide-react';
 import { TokenSide } from '../../../types/entity';
 
 export const PropertiesTab: React.FC = () => {
   const game = useGameStore((s) => s.game);
   const updateEntity = useGameStore((s) => s.updateEntity);
   const removeEntities = useGameStore((s) => s.removeEntities);
+  const toggleDoor = useGameStore((s) => s.toggleDoor);
+  const setDoorLocked = useGameStore((s) => s.setDoorLocked);
 
   const selectedEntityIds = useUIStore((s) => s.selectedEntityIds);
   const clearSelection = useUIStore((s) => s.clearSelection);
@@ -43,7 +45,15 @@ export const PropertiesTab: React.FC = () => {
       <div>
         <div className="flex items-center justify-between mb-1.5">
           <span className="uppercase text-[10px] tracking-wider text-slate-400 font-bold">
-            {selectedEntity.type === 'map' ? 'Mapa' : selectedEntity.type === 'token' ? 'Token' : selectedEntity.type === 'wall' ? 'Pared Invisible' : 'Objeto'}
+            {selectedEntity.type === 'map'
+              ? 'Mapa'
+              : selectedEntity.type === 'token'
+              ? 'Token'
+              : selectedEntity.type === 'wall'
+              ? 'Pared Invisible'
+              : selectedEntity.type === 'door'
+              ? 'Puerta'
+              : 'Objeto'}
           </span>
           <div className="flex items-center gap-1">
             <button
@@ -106,6 +116,97 @@ export const PropertiesTab: React.FC = () => {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Panel de Visión para tokens con bando 'jugador' */}
+      {selectedEntity.type === 'token' && (selectedEntity.side || 'jugador') === 'jugador' && (
+        <div className="bg-slate-800/60 p-3 rounded border border-slate-700 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-emerald-400 flex items-center gap-1.5">
+              <Eye className="w-4 h-4" />
+              Visión del Token
+            </span>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedEntity.vision?.active ?? true}
+                onChange={(e) =>
+                  handleUpdate({
+                    vision: {
+                      active: e.target.checked,
+                      rangeInSquares: selectedEntity.vision?.rangeInSquares ?? 12,
+                      hardness: selectedEntity.vision?.hardness ?? 0.5
+                    }
+                  })
+                }
+                className="sr-only peer"
+              />
+              <div className="w-8 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-600"></div>
+            </label>
+          </div>
+
+          {(selectedEntity.vision?.active ?? true) && (
+            <div className="space-y-2 pt-1 border-t border-slate-700/60">
+              <div>
+                <div className="flex justify-between text-slate-400 mb-1">
+                  <span>Alcance (casillas)</span>
+                  <span className="text-white font-mono">
+                    {(selectedEntity.vision?.rangeInSquares ?? 12) === 0
+                      ? 'Ilimitado'
+                      : `${selectedEntity.vision?.rangeInSquares ?? 12} cas.`}
+                  </span>
+                </div>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={selectedEntity.vision?.rangeInSquares ?? 12}
+                  onChange={(e) =>
+                    handleUpdate({
+                      vision: {
+                        active: selectedEntity.vision?.active ?? true,
+                        rangeInSquares: Math.max(0, parseInt(e.target.value) || 0),
+                        hardness: selectedEntity.vision?.hardness ?? 0.5
+                      }
+                    })
+                  }
+                  className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200"
+                />
+                <span className="text-[10px] text-slate-500">0 = Alcance ilimitado hasta paredes</span>
+              </div>
+
+              <div>
+                <div className="flex justify-between text-slate-400 mb-1">
+                  <span>Dureza del borde</span>
+                  <span className="text-white font-mono">
+                    {(selectedEntity.vision?.hardness ?? 0.5) <= 0.2
+                      ? 'Suave'
+                      : (selectedEntity.vision?.hardness ?? 0.5) >= 0.8
+                      ? 'Nítido'
+                      : 'Medio'}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={selectedEntity.vision?.hardness ?? 0.5}
+                  onChange={(e) =>
+                    handleUpdate({
+                      vision: {
+                        active: selectedEntity.vision?.active ?? true,
+                        rangeInSquares: selectedEntity.vision?.rangeInSquares ?? 12,
+                        hardness: parseFloat(e.target.value)
+                      }
+                    })
+                  }
+                  className="w-full accent-emerald-500 cursor-pointer"
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -211,6 +312,67 @@ export const PropertiesTab: React.FC = () => {
           <p className="text-slate-400">Paredes: {selectedEntity.mapData.walls?.length || 0}</p>
           <p className="text-slate-400">Portales: {selectedEntity.mapData.portals?.length || 0}</p>
           <p className="text-slate-400">Luces: {selectedEntity.mapData.lights?.length || 0}</p>
+        </div>
+      )}
+
+      {/* Propiedades de Puerta si corresponde */}
+      {selectedEntity.type === 'door' && selectedEntity.door && (
+        <div className="bg-slate-800/60 p-3 rounded border border-slate-700 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-amber-400 flex items-center gap-1.5">
+              {selectedEntity.door.isOpen ? <DoorOpen className="w-4 h-4" /> : <DoorClosed className="w-4 h-4" />}
+              Propiedades de Puerta
+            </span>
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded font-medium border uppercase"
+              style={{
+                borderColor: selectedEntity.door.isOpen ? '#10b981' : '#f59e0b',
+                color: selectedEntity.door.isOpen ? '#10b981' : '#f59e0b'
+              }}
+            >
+              {selectedEntity.door.isOpen ? 'Abierta' : 'Cerrada'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => {
+                if (selectedEntity.door?.isLocked) return;
+                toggleDoor(selectedEntity.id);
+              }}
+              disabled={selectedEntity.door.isLocked}
+              className={`py-2 px-2.5 rounded font-medium text-xs flex items-center justify-center gap-1.5 border transition-all ${
+                selectedEntity.door.isLocked
+                  ? 'opacity-40 cursor-not-allowed bg-slate-800 border-slate-700 text-slate-400'
+                  : selectedEntity.door.isOpen
+                  ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 hover:bg-emerald-900'
+                  : 'bg-amber-950/80 border-amber-500 text-amber-300 hover:bg-amber-900'
+              }`}
+            >
+              {selectedEntity.door.isOpen ? <DoorOpen className="w-3.5 h-3.5" /> : <DoorClosed className="w-3.5 h-3.5" />}
+              <span>{selectedEntity.door.isOpen ? 'Cerrar' : 'Abrir'}</span>
+            </button>
+
+            <button
+              onClick={() => setDoorLocked(selectedEntity.id, !selectedEntity.door?.isLocked)}
+              className={`py-2 px-2.5 rounded font-medium text-xs flex items-center justify-center gap-1.5 border transition-all ${
+                selectedEntity.door.isLocked
+                  ? 'bg-red-950/80 border-red-500 text-red-300 hover:bg-red-900'
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+              }`}
+            >
+              {selectedEntity.door.isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+              <span>{selectedEntity.door.isLocked ? 'Candado ON' : 'Candado OFF'}</span>
+            </button>
+          </div>
+
+          <p className="text-[11px] text-slate-400">
+            {selectedEntity.door.isLocked
+              ? 'La puerta está bloqueada con candado: no se puede abrir/cerrar accidentalmente.'
+              : selectedEntity.door.isOpen
+              ? 'La puerta está abierta: la visión de los jugadores atraviesa este umbral.'
+              : 'La puerta está cerrada: bloquea la visión como una pared.'}
+          </p>
         </div>
       )}
 

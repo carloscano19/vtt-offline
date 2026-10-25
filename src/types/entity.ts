@@ -43,12 +43,21 @@ export interface MapWall {
   closed?: boolean;
 }
 
+export interface DoorState {
+  isOpen: boolean;
+  isLocked: boolean;
+  p1: Point2D; // Bisagra o inicio del segmento de la puerta
+  p2: Point2D; // Fin del segmento de la puerta
+  openAngle?: number; // Ángulo de apertura en radianes (default Math.PI / 2)
+}
+
 export interface MapPortal {
   position: Point2D;
   bounds: [Point2D, Point2D];
   rotation: number;
   closed: boolean;
   freestanding?: boolean;
+  locked?: boolean;
 }
 
 export interface MapLight {
@@ -134,6 +143,9 @@ export interface Entity {
   points?: Point2D[];
   closed?: boolean;
   mapId?: string; // ID del mapa al que está anclada (si se dibujó sobre él)
+
+  // Datos específicos de puerta dibujada ('door')
+  door?: DoorState;
 
   // Fase 2: Visión
   vision?: TokenVision;

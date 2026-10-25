@@ -27,13 +27,26 @@ export const PlayersApp: React.FC = () => {
     return () => clearTimeout(t);
   }, []);
 
-  // Escuchar cambios de fullscreen
+  // Escuchar cambios de fullscreen y reportar tamaño de ventana
   useEffect(() => {
     const handleFsChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
+      syncChannel.sendViewport(window.innerWidth, window.innerHeight);
     };
+
+    const handleResize = () => {
+      syncChannel.sendViewport(window.innerWidth, window.innerHeight);
+    };
+
+    // Reportar inmediatamente al montar
+    syncChannel.sendViewport(window.innerWidth, window.innerHeight);
+
     document.addEventListener('fullscreenchange', handleFsChange);
-    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+    window.addEventListener('resize', handleResize);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFsChange);
+      window.removeEventListener('resize', handleResize);
+    };
   }, []);
 
   const toggleFullscreen = async () => {

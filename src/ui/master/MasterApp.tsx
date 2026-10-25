@@ -63,6 +63,14 @@ export const MasterApp: React.FC = () => {
     syncChannel.sendRuler(ruler);
   }, [ruler]);
 
+  // Recibir tamaño real de la pantalla de jugadores
+  useEffect(() => {
+    const cleanup = syncChannel.onViewport((vp) => {
+      useGameStore.getState().setPlayerViewport(vp);
+    });
+    return cleanup;
+  }, []);
+
   // Responder a peticiones de sincronización de la ventana de jugadores cuando acaba de abrirse
   useEffect(() => {
     const cleanup = syncChannel.onRequestState(() => {

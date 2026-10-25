@@ -15,7 +15,14 @@ import {
   Redo2,
   Layers,
   Settings2,
-  BrickWall
+  BrickWall,
+  DoorClosed,
+  Cloud,
+  CloudOff,
+  RotateCcw,
+  Scan,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { useUIStore, ActiveTool } from '../../../stores/useUIStore';
 import { useGameStore } from '../../../stores/useGameStore';
@@ -40,11 +47,19 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
   const setShowDebugVttOverlay = useUIStore((s) => s.setShowDebugVttOverlay);
   const setShowSaveLoadModal = useUIStore((s) => s.setShowSaveLoadModal);
   const setShowDisplaysModal = useUIStore((s) => s.setShowDisplaysModal);
+  const isPlayerPreviewMode = useUIStore((s) => s.isPlayerPreviewMode);
+  const setIsPlayerPreviewMode = useUIStore((s) => s.setIsPlayerPreviewMode);
+  const showPlayerFrame = useUIStore((s) => s.showPlayerFrame);
+  const setShowPlayerFrame = useUIStore((s) => s.setShowPlayerFrame);
+  const showResetFogConfirm = useUIStore((s) => s.showResetFogConfirm);
+  const setShowResetFogConfirm = useUIStore((s) => s.setShowResetFogConfirm);
 
   const game = useGameStore((s) => s.game);
   const addEntity = useGameStore((s) => s.addEntity);
   const sendMasterCameraToPlayers = useGameStore((s) => s.sendMasterCameraToPlayers);
   const setFollowMasterCamera = useGameStore((s) => s.setFollowMasterCamera);
+  const setFogConfig = useGameStore((s) => s.setFogConfig);
+  const resetFogExploration = useGameStore((s) => s.resetFogExploration);
   const undo = useGameStore((s) => s.undo);
   const redo = useGameStore((s) => s.redo);
   const canUndo = useGameStore((s) => s.canUndo());
@@ -140,6 +155,38 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           };
 
           addEntity(entity);
+
+          // Convertir portales UVTT en entidades de puerta interactivas vinculadas al mapa
+          if (parsed.mapData.portals && parsed.mapData.portals.length > 0) {
+            for (let pIdx = 0; pIdx < parsed.mapData.portals.length; pIdx++) {
+              const portal = parsed.mapData.portals[pIdx];
+              if (portal.bounds && portal.bounds.length >= 2) {
+                const doorEntity: Entity = {
+                  id: `door_${Date.now()}_${pIdx}_${Math.random().toString(36).substring(2, 6)}`,
+                  type: 'door',
+                  name: `Puerta ${pIdx + 1}`,
+                  x: mapX,
+                  y: mapY,
+                  rotation: 0,
+                  scaleX: 1,
+                  scaleY: 1,
+                  zIndex: 40,
+                  visibleToPlayers: true,
+                  locked: false,
+                  mapId: entity.id,
+                  door: {
+                    isOpen: !portal.closed,
+                    isLocked: !!portal.locked,
+                    p1: portal.bounds[0],
+                    p2: portal.bounds[1],
+                    openAngle: Math.PI / 2
+                  }
+                };
+                addEntity(doorEntity);
+              }
+            }
+            parsed.mapData.portals = [];
+          }
         } else {
           // Imagen, GIF o Video (Token/Objeto)
           let type: 'image' | 'gif' | 'video' = 'image';
@@ -209,6 +256,11 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
             visibleToPlayers: false, // Tokens ocultos para jugadores por defecto
             locked: false,
             side: 'jugador',
+            vision: {
+              active: true,
+              rangeInSquares: 12,
+              hardness: 0.5
+            },
             statuses: []
           };
 
@@ -271,6 +323,32 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           <BrickWall className="w-5 h-5" />
         </button>
 
+        <button
+          onClick={() => handleToolChange('door')}
+          className={`btn-icon ${activeTool === 'door' ? 'active' : ''}`}
+          title="Puerta (D) - Clic punto inicial y clic punto final"
+        >
+          <DoorClosed className="w-5 h-5" />
+        </button>
+
+        <div className="w-[1px] h-6 bg-slate-700 mx-1" />
+
+        <button
+          onClick={() => handleToolChange('fogReveal')}
+          className={`btn-icon ${activeTool === 'fogReveal' ? 'active text-amber-400' : 'text-slate-400 hover:text-white'}`}
+          title="Revelar zona de niebla (arrastrar rectángulo)"
+        >
+          <Sun className="w-4 h-4" />
+        </button>
+
+        <button
+          onClick={() => handleToolChange('fogHide')}
+          className={`btn-icon ${activeTool === 'fogHide' ? 'active text-indigo-400' : 'text-slate-400 hover:text-white'}`}
+          title="Ocultar zona de niebla (arrastrar rectángulo)"
+        >
+          <Moon className="w-4 h-4" />
+        </button>
+
         <div className="w-[1px] h-6 bg-slate-700 mx-1.5" />
 
         <button
@@ -326,15 +404,69 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
         </button>
       </div>
 
-      {/* Controles centrales: sincronización de cámara y pantalla de jugadores */}
+      {/* Controles centrales: Niebla de guerra, cámaras y pantalla de jugadores */}
       <div className="flex items-center gap-2">
+        {/* Controles de Niebla de guerra */}
+        <div className="flex items-center bg-slate-800 p-0.5 rounded border border-slate-700">
+          <button
+            onClick={() => setFogConfig({ enabled: !game.fog.enabled })}
+            className={`px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1.5 transition-colors ${
+              game.fog.enabled
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+            title="Activar o desactivar la niebla de guerra para la ventana de jugadores"
+          >
+            {game.fog.enabled ? <Cloud className="w-3.5 h-3.5" /> : <CloudOff className="w-3.5 h-3.5" />}
+            <span>Niebla</span>
+          </button>
+
+          <button
+            onClick={() => setShowResetFogConfirm(true)}
+            className="p-1 text-slate-400 hover:text-amber-400 transition-colors ml-0.5"
+            title="Reiniciar exploración de niebla (vuelve a oscurecer todo el mapa)"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Vista previa de jugadores en la pantalla máster */}
+        <button
+          onClick={() => setIsPlayerPreviewMode(!isPlayerPreviewMode)}
+          className={`px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1.5 border transition-all ${
+            isPlayerPreviewMode
+              ? 'bg-purple-600 text-white border-purple-400 shadow-sm'
+              : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-600'
+          }`}
+          title="Previsualiza exactamente lo que ven los jugadores en su pantalla (con niebla de guerra activa)"
+        >
+          <Eye className="w-4 h-4 text-purple-300" />
+          <span>Vista jugadores</span>
+        </button>
+
+        {/* Marco TV de jugadores */}
+        <button
+          onClick={() => setShowPlayerFrame(!showPlayerFrame)}
+          className={`px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1.5 border transition-all ${
+            showPlayerFrame
+              ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/80 shadow-sm'
+              : 'bg-slate-800 hover:bg-slate-700 text-slate-400 border-slate-600'
+          }`}
+          title="Mostrar u ocultar en el tablero el marco verde discontinuo que representa la pantalla de los jugadores (TV)"
+        >
+          <Scan className="w-4 h-4 text-emerald-400" />
+          <span>Marco TV</span>
+        </button>
+
+        <div className="w-[1px] h-6 bg-slate-700 mx-0.5" />
+
         <button
           onClick={sendMasterCameraToPlayers}
           className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-xs font-medium flex items-center gap-1.5 text-sky-400"
           title="Alinea la posición y zoom de la pantalla de jugadores con la tuya"
         >
           <Tv className="w-4 h-4" />
-          <span>Enviar vista a jugadores</span>
+          <span>Enviar vista</span>
         </button>
 
         <button
@@ -355,7 +487,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           title="Abrir o gestionar la pantalla de jugadores para monitor o TV"
         >
           <Monitor className="w-4 h-4 text-emerald-400" />
-          <span>Abrir pantalla de jugadores</span>
+          <span>Abrir pantalla</span>
         </button>
       </div>
 
@@ -399,6 +531,38 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           </button>
         </div>
       </div>
+
+      {/* Modal de confirmación para reiniciar niebla (sin window.confirm) */}
+      {showResetFogConfirm && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-lg p-5 max-w-sm w-full shadow-2xl text-slate-200 space-y-4">
+            <div className="flex items-center gap-2.5 text-amber-400 font-bold text-sm">
+              <RotateCcw className="w-5 h-5" />
+              <span>Reiniciar Niebla de Guerra</span>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              ¿Estás seguro de que deseas reiniciar la exploración de la niebla? Todas las zonas previamente descubiertas volverán a quedar en completa oscuridad para los jugadores.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                onClick={() => setShowResetFogConfirm(false)}
+                className="px-3 py-1.5 rounded text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  resetFogExploration();
+                  setShowResetFogConfirm(false);
+                }}
+                className="px-3 py-1.5 rounded text-xs font-medium text-white bg-red-600 hover:bg-red-500 shadow transition-colors"
+              >
+                Sí, reiniciar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };
