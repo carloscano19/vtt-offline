@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '../../stores/useGameStore';
 import { useUIStore } from '../../stores/useUIStore';
 import { TopToolbar } from './components/TopToolbar';
@@ -12,6 +12,9 @@ import { DisplaysModal } from './components/DisplaysModal';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { saveAutoSaveToDb, loadAutoSaveFromDb } from '../../modules/persistence/saveManager';
 import { syncChannel } from '../../modules/sync/syncChannel';
+import { visionManager } from '../../modules/vision/visionManager';
+import { unionExplored } from '../../modules/vision/fogMemory';
+import { TokenVisibility } from '../../modules/vision/visibilityPolygon';
 
 export const MasterApp: React.FC = () => {
   useKeyboardShortcuts();
@@ -58,6 +61,20 @@ export const MasterApp: React.FC = () => {
   useEffect(() => {
     syncChannel.sendState(game);
   }, [game]);
+
+  // 4b. Memoria de exploración (fuente única: el máster). Solo se actualiza cuando visionManager
+  // recalcula (nueva referencia de visibilidades), no en cada render.
+  const lastVisRef = useRef<TokenVisibility[] | null>(null);
+  const exploredEmpty = (game.fog.explored?.length ?? 0) === 0;
+  useEffect(() => {
+    const vis = visionManager.getTokensVisibility(game.entities, game.grid.size || 70);
+    if (vis.length === 0) return;
+    if (vis === lastVisRef.current && !exploredEmpty) return;
+    lastVisRef.current = vis;
+    const store = useGameStore.getState();
+    const next = unionExplored(store.game.fog.explored ?? [], vis.map((v) => v.polygon));
+    store.setFogExplored(next);
+  }, [game.entities, game.grid.size, exploredEmpty]);
 
   useEffect(() => {
     syncChannel.sendRuler(ruler);

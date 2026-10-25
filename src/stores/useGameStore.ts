@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { GameState, GridConfig, CameraState, CombatState, MusicState, FogConfig, PlayerViewport } from '../types/game';
+import { GameState, GridConfig, CameraState, CombatState, MusicState, FogConfig, PlayerViewport, ExploredMultiPolygon } from '../types/game';
 import { Entity } from '../types/entity';
+import { revealRect, hideRect } from '../modules/vision/fogMemory';
 
 function createDefaultGame(): GameState {
   const now = Date.now();
@@ -21,7 +22,7 @@ function createDefaultGame(): GameState {
     followMasterCamera: false,
     fog: {
       enabled: true,
-      fogExplorationData: {}
+      explored: []
     },
     playerViewport: { width: 1920, height: 1080 },
     combat: {
@@ -77,6 +78,9 @@ interface GameStoreState {
   // Niebla y Marco
   setFogConfig: (partial: Partial<FogConfig>) => void;
   resetFogExploration: () => void;
+  setFogExplored: (explored: ExploredMultiPolygon) => void;
+  revealFogRect: (rect: { x: number; y: number; width: number; height: number }) => void;
+  hideFogRect: (rect: { x: number; y: number; width: number; height: number }) => void;
   setPlayerViewport: (viewport: PlayerViewport) => void;
 
   // Puertas
@@ -96,8 +100,16 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
   future: [],
 
   setGame: (game) => {
+    // Normalizar partidas antiguas sin memoria de exploración
+    const normalized: GameState = {
+      ...game,
+      fog: {
+        enabled: game.fog?.enabled ?? true,
+        explored: game.fog?.explored ?? []
+      }
+    };
     set({
-      game,
+      game: normalized,
       past: [],
       future: []
     });
@@ -343,7 +355,37 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
     set((state) => ({
       game: {
         ...state.game,
-        fog: { ...state.game.fog, fogExplorationData: {} },
+        fog: { ...state.game.fog, explored: [] },
+        updatedAt: Date.now()
+      }
+    }));
+  },
+
+  setFogExplored: (explored) => {
+    set((state) => ({
+      game: {
+        ...state.game,
+        fog: { ...state.game.fog, explored },
+        updatedAt: Date.now()
+      }
+    }));
+  },
+
+  revealFogRect: (rect) => {
+    set((state) => ({
+      game: {
+        ...state.game,
+        fog: { ...state.game.fog, explored: revealRect(state.game.fog.explored, rect) },
+        updatedAt: Date.now()
+      }
+    }));
+  },
+
+  hideFogRect: (rect) => {
+    set((state) => ({
+      game: {
+        ...state.game,
+        fog: { ...state.game.fog, explored: hideRect(state.game.fog.explored, rect) },
         updatedAt: Date.now()
       }
     }));

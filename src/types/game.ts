@@ -46,9 +46,12 @@ export interface MusicState {
   volume: number;
 }
 
+/** Multipolígono en coordenadas del mundo: lista de polígonos, cada uno con anillo exterior + huecos (formato polygon-clipping). */
+export type ExploredMultiPolygon = [number, number][][][];
+
 export interface FogConfig {
   enabled: boolean; // Niebla activa o desactivada para jugadores
-  fogExplorationData?: Record<string, string>; // mapaId -> dataURL/PNG en memoria
+  explored: ExploredMultiPolygon; // Memoria de exploración (fuente única: ventana máster)
 }
 
 export interface PlayerViewport {

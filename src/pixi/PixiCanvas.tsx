@@ -146,12 +146,8 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     }
   }, [game, ruler, selectedEntityIds, showDebugVttOverlay, draftWallPoints, isPlayerPreviewMode, showPlayerFrame]);
 
-  // Reiniciar exploración de niebla en Pixi cuando se vacíe en el store
-  useEffect(() => {
-    if (rendererRef.current?.fogLayer && Object.keys(game.fog.fogExplorationData || {}).length === 0) {
-      rendererRef.current.fogLayer.resetExploration();
-    }
-  }, [game.fog.fogExplorationData]);
+  const revealFogRect = useGameStore((s) => s.revealFogRect);
+  const hideFogRect = useGameStore((s) => s.hideFogRect);
 
   // Finalizar o cancelar pared con teclado
   const finishDraftWall = useCallback(() => {
@@ -948,11 +944,10 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       const w = Math.abs(worldPos.x - fogDragRect.start.x);
       const h = Math.abs(worldPos.y - fogDragRect.start.y);
 
-      if (w > 5 && h > 5 && rendererRef.current?.fogLayer) {
-        rendererRef.current.fogLayer.addManualArea(
-          { x: x1, y: y1, width: w, height: h },
-          activeTool === 'fogReveal'
-        );
+      if (w > 5 && h > 5) {
+        const rect = { x: x1, y: y1, width: w, height: h };
+        if (activeTool === 'fogReveal') revealFogRect(rect);
+        else hideFogRect(rect);
       }
       setFogDragRect(null);
     }

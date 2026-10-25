@@ -1,113 +1,157 @@
-import { Container, Graphics } from 'pixi.js';
-import { Entity, Point2D } from '../../types/entity';
+import { BlurFilter, Container, Graphics, RenderTexture, Renderer, Sprite } from 'pixi.js';
+import { Point2D } from '../../types/entity';
+import { ExploredMultiPolygon } from '../../types/game';
 import { TokenVisibility } from '../../modules/vision/visibilityPolygon';
+import { exploredSignature } from '../../modules/vision/fogMemory';
 
+const MAX_TEXTURE_SIDE = 3072;
+const FOG_COLOR = 0x020617;
+const EXPLORED_ALPHA = 0.65;
+
+const flat = (pts: Point2D[]) => {
+  const out: number[] = [];
+  for (const p of pts) out.push(p.x, p.y);
+  return out;
+};
+
+/**
+ * Capa de niebla de guerra. Se dibuja en una RenderTexture que solo se regenera
+ * cuando cambia la visión actual o la memoria de exploración (game.fog.explored).
+ * No guarda estado de exploración: la fuente única es el estado de la partida.
+ */
 export class FogLayer extends Container {
-  private unexploredGfx: Graphics;
-  private exploredGfx: Graphics;
   private isMaster: boolean;
 
-  // Memoria de exploración de polígonos vistos por el máster / sincronizados
-  private exploredPolygons: Point2D[][] = [];
+  private fogRT: RenderTexture | null = null;
+  private visRT: RenderTexture | null = null;
+  private fogSprite: Sprite;
+
+  // Escena offscreen de la niebla
+  private scene = new Container();
+  private baseGfx = new Graphics();
+  private exploredEraseGfx = new Graphics();
+  private exploredDarkGfx = new Graphics();
+  private visMaskSprite: Sprite;
+
+  // Escena offscreen de la máscara de visión actual (con desenfoque en el borde)
+  private visScene = new Container();
+  private visGroups: Container[] = [];
+
+  private lastKey = '';
 
   constructor(isMaster: boolean) {
     super();
     this.isMaster = isMaster;
 
-    this.exploredGfx = new Graphics();
-    this.unexploredGfx = new Graphics();
+    this.fogSprite = new Sprite();
+    this.addChild(this.fogSprite);
 
-    this.addChild(this.exploredGfx);
-    this.addChild(this.unexploredGfx);
+    this.exploredEraseGfx.blendMode = 'erase';
+    this.visMaskSprite = new Sprite();
+    this.visMaskSprite.blendMode = 'erase';
+
+    this.scene.addChild(this.baseGfx, this.exploredEraseGfx, this.exploredDarkGfx, this.visMaskSprite);
   }
 
-  public resetExploration() {
-    this.exploredPolygons = [];
-    this.exploredGfx.clear();
-    this.unexploredGfx.clear();
+  private ensureTextures(w: number, h: number) {
+    if (!this.fogRT) {
+      this.fogRT = RenderTexture.create({ width: w, height: h });
+      this.visRT = RenderTexture.create({ width: w, height: h });
+    } else if (this.fogRT.width !== w || this.fogRT.height !== h) {
+      this.fogRT.resize(w, h);
+      this.visRT!.resize(w, h);
+    }
+    this.fogSprite.texture = this.fogRT;
+    this.visMaskSprite.texture = this.visRT!;
   }
 
-  public addManualArea(rect: { x: number; y: number; width: number; height: number }, reveal: boolean) {
-    if (reveal) {
-      // Añadir rectángulo a la memoria de exploración
-      this.exploredPolygons.push([
-        { x: rect.x, y: rect.y },
-        { x: rect.x + rect.width, y: rect.y },
-        { x: rect.x + rect.width, y: rect.y + rect.height },
-        { x: rect.x, y: rect.y + rect.height }
-      ]);
-    } else {
-      // Ocultar zona: reiniciar memoria y volver a acumular (o recortar)
-      // Simplificado: si oculta una zona, se filtra memoria que caiga completamente dentro
-      this.exploredPolygons = this.exploredPolygons.filter((poly) => {
-        const cx = poly.reduce((acc, p) => acc + p.x, 0) / poly.length;
-        const cy = poly.reduce((acc, p) => acc + p.y, 0) / poly.length;
-        const inside = cx >= rect.x && cx <= rect.x + rect.width && cy >= rect.y && cy <= rect.y + rect.height;
-        return !inside;
-      });
+  private drawMulti(g: Graphics, multi: ExploredMultiPolygon) {
+    for (const poly of multi) {
+      const outer = poly[0];
+      if (!outer || outer.length < 3) continue;
+      g.poly(outer.flat());
+      g.fill({ color: FOG_COLOR });
+      for (let i = 1; i < poly.length; i++) {
+        g.poly(poly[i].flat());
+        g.cut();
+      }
     }
   }
 
-  /**
-   * Actualiza el renderizado de la niebla de guerra.
-   * @param fogEnabled si la niebla está activa
-   * @param isPlayerPreview si el máster ha activado la previsualización de jugadores
-   * @param visibilities polígonos de visión de tokens de jugador activos
-   * @param bounds caja envolvente del mundo/mapas para pintar niebla
-   */
   public update(
+    renderer: Renderer,
     fogEnabled: boolean,
     isPlayerPreview: boolean,
     visibilities: TokenVisibility[],
-    bounds: { x: number; y: number; width: number; height: number }
+    explored: ExploredMultiPolygon,
+    bounds: { x: number; y: number; width: number; height: number },
+    gridSize: number
   ) {
-    this.exploredGfx.clear();
-    this.unexploredGfx.clear();
-
-    const shouldRenderFog = (!this.isMaster && fogEnabled) || (this.isMaster && isPlayerPreview && fogEnabled);
-
+    const shouldRenderFog = fogEnabled && (!this.isMaster || isPlayerPreview);
     if (!shouldRenderFog) {
       this.visible = false;
       return;
     }
-
     this.visible = true;
 
-    // 1. Acumular visión actual en la memoria de exploración
-    for (const v of visibilities) {
-      if (v.polygon.length > 2) {
-        this.exploredPolygons.push(v.polygon);
-      }
+    const visKey = visibilities
+      .map((v) => `${v.tokenId}:${Math.round(v.center.x)}:${Math.round(v.center.y)}:${v.polygon.length}:${v.hardness}:${Math.round(v.rangePx)}`)
+      .join('|');
+    const key = `${exploredSignature(explored)}#${visKey}#${Math.round(bounds.x)},${Math.round(bounds.y)},${Math.round(bounds.width)},${Math.round(bounds.height)}#${gridSize}`;
+    if (key === this.lastKey) return; // nada cambió: no se regenera la textura
+    this.lastKey = key;
+
+    // Resolución de la textura: limitada para no exceder memoria GPU
+    const s = Math.min(1, MAX_TEXTURE_SIDE / Math.max(bounds.width, bounds.height));
+    const w = Math.max(1, Math.ceil(bounds.width * s));
+    const h = Math.max(1, Math.ceil(bounds.height * s));
+    this.ensureTextures(w, h);
+
+    this.fogSprite.position.set(bounds.x, bounds.y);
+    this.fogSprite.scale.set(1 / s);
+
+    // 1. Máscara de visión actual (blur proporcional a (1 - dureza), solo en el borde de lo visible ahora)
+    for (const g of this.visGroups) {
+      this.visScene.removeChild(g);
+      g.destroy({ children: true });
     }
-
-    // Limitar tamaño de memoria para evitar saturar memoria en sesiones largas
-    if (this.exploredPolygons.length > 150) {
-      this.exploredPolygons = this.exploredPolygons.slice(-100);
-    }
-
-    // 2. Capa oscura general para zonas exploradas (mapa oscurecido / desaturado con negro semi-transparente 70%)
-    this.exploredGfx.rect(bounds.x, bounds.y, bounds.width, bounds.height);
-    this.exploredGfx.fill({ color: 0x020617, alpha: 0.65 });
-
-    // Perforar / iluminar zonas visibles ahora mismo (alpha 0)
-    // En Pixi v8, Graphics soporta path cutting o dibujar polígonos de visión como máscaras
+    this.visGroups = [];
     for (const v of visibilities) {
       if (v.polygon.length < 3) continue;
-      // Iluminar la zona visible actualmente
-      this.exploredGfx.poly(v.polygon);
-      this.exploredGfx.cut();
-    }
-
-    // 3. Capa negra opaca para zonas NUNCA exploradas (100% negro)
-    this.unexploredGfx.rect(bounds.x, bounds.y, bounds.width, bounds.height);
-    this.unexploredGfx.fill({ color: 0x020617, alpha: 1.0 });
-
-    // Perforar todas las zonas exploradas (memoria)
-    for (const poly of this.exploredPolygons) {
-      if (poly.length >= 3) {
-        this.unexploredGfx.poly(poly);
-        this.unexploredGfx.cut();
+      const group = new Container();
+      const gfx = new Graphics();
+      gfx.poly(flat(v.polygon));
+      gfx.fill({ color: 0xffffff });
+      group.addChild(gfx);
+      const blur = (1 - v.hardness) * gridSize * 0.5 * s;
+      if (blur > 0.5) {
+        group.filters = [new BlurFilter({ strength: blur, quality: 3 })];
       }
+      this.visScene.addChild(group);
+      this.visGroups.push(group);
     }
+    this.visScene.scale.set(s);
+    this.visScene.position.set(-bounds.x * s, -bounds.y * s);
+    renderer.render({ container: this.visScene, target: this.visRT!, clear: true, clearColor: [0, 0, 0, 0] });
+
+    // 2. Niebla: negro total, se perfora lo explorado, se pinta lo explorado oscurecido y se perfora lo visible
+    this.baseGfx.clear();
+    this.baseGfx.rect(bounds.x, bounds.y, bounds.width, bounds.height);
+    this.baseGfx.fill({ color: FOG_COLOR, alpha: 1 });
+
+    this.exploredEraseGfx.clear();
+    this.drawMulti(this.exploredEraseGfx, explored);
+
+    this.exploredDarkGfx.clear();
+    this.drawMulti(this.exploredDarkGfx, explored);
+    this.exploredDarkGfx.alpha = EXPLORED_ALPHA;
+
+    // La máscara visRT ya está en coordenadas de textura: se coloca sin la transformación de la escena
+    this.visMaskSprite.scale.set(1 / s);
+    this.visMaskSprite.position.set(bounds.x, bounds.y);
+
+    this.scene.scale.set(s);
+    this.scene.position.set(-bounds.x * s, -bounds.y * s);
+    renderer.render({ container: this.scene, target: this.fogRT!, clear: true, clearColor: [0, 0, 0, 0] });
   }
 }

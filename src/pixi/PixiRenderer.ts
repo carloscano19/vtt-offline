@@ -1,4 +1,4 @@
-import { Application, Container } from 'pixi.js';
+import { Application, Container, Renderer } from 'pixi.js';
 import { GameState, RulerState } from '../types/game';
 import { Point2D } from '../types/entity';
 import { MapsLayer } from './layers/MapsLayer';
@@ -169,7 +169,15 @@ export class PixiRenderer {
     this.gridLayer.update(game.grid, camera, width, height);
     this.doorsLayer.update(game.entities, selectedIds);
     this.tokensLayer.syncEntities(game.entities, selectedIds, visibilities, isPlayerPreview, game.fog.enabled);
-    this.fogLayer.update(game.fog.enabled, isPlayerPreview, visibilities, worldBounds);
+    this.fogLayer.update(
+      this.app.renderer as Renderer,
+      game.fog.enabled,
+      isPlayerPreview,
+      visibilities,
+      game.fog.explored ?? [],
+      worldBounds,
+      gridSize
+    );
     this.wallsLayer.update(game.entities, selectedIds, activeDraftWallPoints);
     this.rulerLayer.update(ruler, game.grid.size);
 
