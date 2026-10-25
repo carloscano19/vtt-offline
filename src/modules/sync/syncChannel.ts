@@ -68,10 +68,8 @@ class SyncManager {
             break;
 
           case 'MASTER_CLOSED':
-            // La pestaña que tenía el control se ha cerrado; si estábamos bloqueados, tomamos el control
-            if (this.isMasterWindow && this.hasConflictState && msg.id !== this.tabId) {
-              this.takeControl();
-            }
+            // La pestaña activa se cerró. Mantenemos el aviso sin tomar el control automáticamente;
+            // el usuario tomará el control explícitamente pulsando "Usar esta".
             break;
 
           case 'STATE_SYNC':

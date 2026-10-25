@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useGameStore } from '../../../stores/useGameStore';
 import { useUIStore } from '../../../stores/useUIStore';
 import { saveAutoSaveToDb } from '../../../modules/persistence/saveManager';
+import { syncChannel } from '../../../modules/sync/syncChannel';
 
 export function useKeyboardShortcuts() {
   const game = useGameStore((s) => s.game);
@@ -39,9 +40,13 @@ export function useKeyboardShortcuts() {
       // 3. Guardado rápido Ctrl+S / Cmd+S
       if (isCtrlOrCmd && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        saveAutoSaveToDb(game).then(() => {
+        if (syncChannel.hasControl()) {
+          saveAutoSaveToDb(game).then(() => {
+            setShowSaveLoadModal(true);
+          });
+        } else {
           setShowSaveLoadModal(true);
-        });
+        }
         return;
       }
 

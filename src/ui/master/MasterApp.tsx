@@ -40,6 +40,9 @@ export const MasterApp: React.FC = () => {
     };
   }, []);
 
+  const hasControlRef = useRef(hasControl);
+  hasControlRef.current = hasControl;
+
   // 1. Restaurar último autoguardado al arrancar si existe
   useEffect(() => {
     loadAutoSaveFromDb().then((auto) => {
@@ -49,18 +52,23 @@ export const MasterApp: React.FC = () => {
     });
   }, [setGame]);
 
-  // 2. Autoguardado periódico cada 60 segundos
+  // 2. Autoguardado periódico cada 60 segundos (solo si esta pestaña tiene el control)
   useEffect(() => {
+    if (!hasControl) return;
     const timer = setInterval(() => {
-      saveAutoSaveToDb(game);
+      if (hasControlRef.current) {
+        saveAutoSaveToDb(useGameStore.getState().game);
+      }
     }, 60000);
     return () => clearInterval(timer);
-  }, [game]);
+  }, [hasControl]);
 
-  // 3. Autoguardado web en beforeunload y pagehide
+  // 3. Autoguardado web en beforeunload y pagehide (solo si esta pestaña tiene el control)
   useEffect(() => {
     const handleBeforeUnload = () => {
-      saveAutoSaveToDb(game);
+      if (hasControlRef.current) {
+        saveAutoSaveToDb(useGameStore.getState().game);
+      }
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -69,12 +77,13 @@ export const MasterApp: React.FC = () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('pagehide', handleBeforeUnload);
     };
-  }, [game]);
+  }, []);
 
   // 4. Sincronización ligera por BroadcastChannel hacia la ventana de jugadores (sin blobs)
   useEffect(() => {
+    if (!hasControl) return;
     syncChannel.sendState(game);
-  }, [game]);
+  }, [game, hasControl]);
 
   // 4b. Memoria de exploración (fuente única: el máster). Solo se actualiza cuando visionManager
   // recalcula (nueva referencia de visibilidades), no en cada render.
@@ -164,7 +173,22 @@ export const MasterApp: React.FC = () => {
                 Cerrar pestaña
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
+                  try {
+                    const latestAuto = await loadAutoSaveFromDb();
+                    if (latestAuto && latestAuto.grid) {
+                      setGame(latestAuto);
+                      syncChannel.takeControl();
+                      setHasConflict(false);
+                      setHasControl(true);
+                      syncChannel.sendState(latestAuto);
+                      syncChannel.sendRuler(ruler);
+                      return;
+                    }
+                  } catch (err) {
+                    console.warn('Error al recargar último autoguardado al tomar el control:', err);
+                  }
+
                   syncChannel.takeControl();
                   setHasConflict(false);
                   setHasControl(true);
