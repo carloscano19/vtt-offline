@@ -20,9 +20,7 @@ import {
   Cloud,
   CloudOff,
   RotateCcw,
-  Scan,
-  Sun,
-  Moon
+  Scan
 } from 'lucide-react';
 import { useUIStore, ActiveTool } from '../../../stores/useUIStore';
 import { useGameStore } from '../../../stores/useGameStore';
@@ -294,7 +292,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
         <button
           onClick={() => handleToolChange('select')}
           className={`btn-icon ${activeTool === 'select' ? 'active' : ''}`}
-          title="Seleccionar y mover entidades (V)"
+          title="Seleccionar y transformar tokens, mapas u objetos (V)"
         >
           <MousePointer className="w-5 h-5" />
         </button>
@@ -302,7 +300,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
         <button
           onClick={() => handleToolChange('pan')}
           className={`btn-icon ${activeTool === 'pan' ? 'active' : ''}`}
-          title="Mover cámara / Paneo (H o Espacio + arrastrar)"
+          title="Mover vista / Paneo (H o mantener Espacio y arrastrar)"
         >
           <Hand className="w-5 h-5" />
         </button>
@@ -310,7 +308,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
         <button
           onClick={() => handleToolChange('ruler')}
           className={`btn-icon ${activeTool === 'ruler' ? 'active' : ''}`}
-          title="Regla de distancia (M)"
+          title="Regla de distancia (M): medir distancias entre puntos"
         >
           <Ruler className="w-5 h-5" />
         </button>
@@ -318,7 +316,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
         <button
           onClick={() => handleToolChange('wall')}
           className={`btn-icon ${activeTool === 'wall' ? 'active' : ''}`}
-          title="Pared invisible (W) - Clic para añadir nodos, Doble clic o Enter para terminar, Esc para cancelar"
+          title="Pared invisible (W): clic para añadir nodos, doble clic o Enter para terminar, Esc para cancelar"
         >
           <BrickWall className="w-5 h-5" />
         </button>
@@ -326,7 +324,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
         <button
           onClick={() => handleToolChange('door')}
           className={`btn-icon ${activeTool === 'door' ? 'active' : ''}`}
-          title="Puerta (D) - Clic punto inicial y clic punto final"
+          title="Puerta interactiva (D): haz clic en punto inicial y clic en punto final"
         >
           <DoorClosed className="w-5 h-5" />
         </button>
@@ -335,18 +333,28 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
 
         <button
           onClick={() => handleToolChange('fogReveal')}
-          className={`btn-icon ${activeTool === 'fogReveal' ? 'active text-amber-400' : 'text-slate-400 hover:text-white'}`}
-          title="Revelar zona de niebla (arrastrar rectángulo)"
+          className={`px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1.5 border transition-all ${
+            activeTool === 'fogReveal'
+              ? 'bg-amber-600/30 text-amber-300 border-amber-500/80 shadow-sm'
+              : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+          }`}
+          title="Revelar zona de niebla: arrastra un rectángulo en el tablero para descubrir esa área"
         >
-          <Sun className="w-4 h-4" />
+          <Eye className="w-3.5 h-3.5 text-amber-400" />
+          <span>Revelar zona</span>
         </button>
 
         <button
           onClick={() => handleToolChange('fogHide')}
-          className={`btn-icon ${activeTool === 'fogHide' ? 'active text-indigo-400' : 'text-slate-400 hover:text-white'}`}
-          title="Ocultar zona de niebla (arrastrar rectángulo)"
+          className={`px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1.5 border transition-all ${
+            activeTool === 'fogHide'
+              ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/80 shadow-sm'
+              : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+          }`}
+          title="Ocultar zona de niebla: arrastra un rectángulo en el tablero para volver a tapar esa área con niebla"
         >
-          <Moon className="w-4 h-4" />
+          <EyeOff className="w-3.5 h-3.5 text-indigo-400" />
+          <span>Ocultar zona</span>
         </button>
 
         <div className="w-[1px] h-6 bg-slate-700 mx-1.5" />
@@ -354,7 +362,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
         <button
           onClick={onOpenGridModal}
           className="btn-icon text-slate-300 hover:text-white"
-          title="Ajustes de Cuadrícula (Tamaño, Color, Snap)"
+          title="Ajustes de cuadrícula (G): tamaño de casilla, color, opacidad, snap y sensibilidad del zoom"
         >
           <GridIcon className="w-5 h-5" />
         </button>
@@ -362,7 +370,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
         <button
           onClick={handleImportClick}
           className="btn-icon text-slate-300 hover:text-white"
-          title="Importar mapas (.uvtt) o imágenes/vídeos"
+          title="Importar mapas (.uvtt, .dd2vtt, .df2vtt), tokens, imágenes, GIFs o vídeos"
         >
           <Upload className="w-5 h-5" />
         </button>
@@ -378,7 +386,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
         <button
           onClick={() => setShowSaveLoadModal(true)}
           className="btn-icon text-slate-300 hover:text-white"
-          title="Guardar / Cargar Partida (Cmd/Ctrl+S)"
+          title="Guardar / Cargar Partida (Cmd/Ctrl+S): guardar en navegador o descargar archivo .vttsave"
         >
           <Save className="w-5 h-5" />
         </button>
@@ -389,7 +397,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           onClick={undo}
           disabled={!canUndo}
           className={`btn-icon ${!canUndo ? 'opacity-30 cursor-not-allowed' : 'text-slate-300 hover:text-white'}`}
-          title="Deshacer (Cmd/Ctrl+Z)"
+          title="Deshacer la última acción (Cmd/Ctrl+Z)"
         >
           <Undo2 className="w-4 h-4" />
         </button>
@@ -398,7 +406,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           onClick={redo}
           disabled={!canRedo}
           className={`btn-icon ${!canRedo ? 'opacity-30 cursor-not-allowed' : 'text-slate-300 hover:text-white'}`}
-          title="Rehacer (Cmd/Ctrl+Y o Cmd+Shift+Z)"
+          title="Rehacer la última acción deshecha (Cmd/Ctrl+Y o Cmd+Shift+Z)"
         >
           <Redo2 className="w-4 h-4" />
         </button>
@@ -423,10 +431,11 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
 
           <button
             onClick={() => setShowResetFogConfirm(true)}
-            className="p-1 text-slate-400 hover:text-amber-400 transition-colors ml-0.5"
-            title="Reiniciar exploración de niebla (vuelve a oscurecer todo el mapa)"
+            className="px-2 py-1 text-slate-400 hover:text-amber-400 hover:bg-slate-700/60 rounded text-xs font-medium flex items-center gap-1 transition-colors ml-0.5"
+            title="Reiniciar niebla: vuelve a oscurecer todo el mapa salvo la visión actual de los tokens"
           >
             <RotateCcw className="w-3.5 h-3.5" />
+            <span>Reiniciar niebla</span>
           </button>
         </div>
 
@@ -510,6 +519,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
             className={`px-3 py-1 rounded text-xs font-medium ${
               activeSidebarTab === 'properties' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
+            title="Panel de propiedades: editar dimensiones, capas, visión de tokens y estado de puertas"
           >
             Propiedades
           </button>
@@ -518,6 +528,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
             className={`px-3 py-1 rounded text-xs font-medium ${
               activeSidebarTab === 'layers' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
+            title="Panel de capas: ordenar la profundidad (zIndex) y visibilidad de las entidades"
           >
             Capas
           </button>
@@ -526,6 +537,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
             className={`px-3 py-1 rounded text-xs font-medium ${
               activeSidebarTab === 'library' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
+            title="Panel de biblioteca: explorar y colocar mapas o imágenes en el tablero"
           >
             Biblioteca
           </button>

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useGameStore } from '../../../stores/useGameStore';
 import { X, Grid } from 'lucide-react';
+import { getZoomSensitivity, setZoomSensitivity } from '../../../modules/settings/zoomSensitivity';
 
 interface GridModalProps {
   isOpen: boolean;
@@ -10,6 +11,12 @@ interface GridModalProps {
 export const GridModal: React.FC<GridModalProps> = ({ isOpen, onClose }) => {
   const grid = useGameStore((s) => s.game.grid);
   const setGridConfig = useGameStore((s) => s.setGridConfig);
+  const [zoomSensitivity, setZoomSensState] = useState(() => getZoomSensitivity());
+
+  const handleSensitivityChange = (val: number) => {
+    setZoomSensState(val);
+    setZoomSensitivity(val);
+  };
 
   if (!isOpen) return null;
 
@@ -99,6 +106,28 @@ export const GridModal: React.FC<GridModalProps> = ({ isOpen, onClose }) => {
               className="w-4 h-4 accent-sky-500 cursor-pointer"
             />
           </label>
+        </div>
+
+        {/* Sensibilidad del zoom */}
+        <div className="space-y-1.5 pt-2 border-t border-slate-700/80">
+          <div className="flex justify-between text-xs">
+            <span className="text-slate-300">Sensibilidad del zoom</span>
+            <span className="font-mono text-sky-400 font-medium">{zoomSensitivity.toFixed(2)}×</span>
+          </div>
+          <input
+            type="range"
+            min="0.25"
+            max="2"
+            step="0.05"
+            value={zoomSensitivity}
+            onChange={(e) => handleSensitivityChange(parseFloat(e.target.value) || 1)}
+            className="w-full accent-sky-500 cursor-pointer"
+          />
+          <div className="flex justify-between text-[10px] text-slate-500">
+            <span>0.25× (Suave)</span>
+            <span>1.00× (Por defecto)</span>
+            <span>2.00× (Rápido)</span>
+          </div>
         </div>
 
         {/* Botón cerrar */}

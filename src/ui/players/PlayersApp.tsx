@@ -20,6 +20,8 @@ export const PlayersApp: React.FC = () => {
 
   const [isFullscreen, setIsFullscreen] = useState(!!document.fullscreenElement);
   const [showHint, setShowHint] = useState(true);
+  const [showConnected, setShowConnected] = useState(false);
+  const hasConnectedRef = React.useRef(false);
 
   // Ocultar hint tras 6 segundos
   useEffect(() => {
@@ -65,6 +67,11 @@ export const PlayersApp: React.FC = () => {
     // 1. Recibir estado completo ligero desde la ventana máster por BroadcastChannel
     const cleanupState = syncChannel.onState((state) => {
       setGame(state);
+      if (!hasConnectedRef.current) {
+        hasConnectedRef.current = true;
+        setShowConnected(true);
+        setTimeout(() => setShowConnected(false), 3000);
+      }
     });
 
     // 2. Recibir sincronización de regla desde el máster
@@ -111,6 +118,14 @@ export const PlayersApp: React.FC = () => {
         {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
         <span className="hidden sm:inline">{isFullscreen ? 'Salir' : 'Pantalla Completa'}</span>
       </button>
+
+      {/* Indicador discreto al conectarse al máster (3 segundos) */}
+      {showConnected && (
+        <div className="absolute top-3 left-3 bg-slate-900/85 border border-emerald-500/40 text-emerald-300 px-3 py-1.5 rounded-lg shadow-lg text-xs flex items-center gap-2 pointer-events-none backdrop-blur-xs z-50 animate-fade-in transition-opacity">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span>Conectado al máster</span>
+        </div>
+      )}
 
       {/* Indicación discreta inicial */}
       {showHint && !isFullscreen && (

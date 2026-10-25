@@ -6,6 +6,7 @@ import { screenToWorld, snapPointToGrid, localToWorld, worldToLocal } from './ut
 import { Entity, Point2D } from '../types/entity';
 import { CameraState } from '../types/game';
 import { syncChannel } from '../modules/sync/syncChannel';
+import { getZoomSensitivity } from '../modules/settings/zoomSensitivity';
 
 interface PixiCanvasProps {
   isMaster: boolean;
@@ -280,12 +281,29 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
       const { width, height } = getCanvasDimensions();
       const camera = getCamera();
-      const mousePos = getLocalPointer(e);
 
+      // Normalizar deltas a píxeles (deltaMode 1 = líneas, 2 = páginas)
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? height : 1;
+      const dX = e.deltaX * unit;
+      const dY = e.deltaY * unit;
+
+      // Desplazamiento con dos dedos en trackpad (sin ctrlKey): mover la cámara
+      const isTrackpadScroll =
+        !e.ctrlKey &&
+        e.deltaMode === 0 &&
+        (e.deltaX !== 0 || !Number.isInteger(e.deltaY) || Math.abs(e.deltaY) < 50);
+      if (isTrackpadScroll) {
+        setCamera({ x: camera.x + dX / camera.zoom, y: camera.y + dY / camera.zoom });
+        return;
+      }
+
+      const mousePos = getLocalPointer(e);
       const worldBefore = screenToWorld(mousePos, camera, width, height);
 
-      const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
-      const newZoom = Math.min(Math.max(camera.zoom * zoomFactor, 0.05), 8.0);
+      // Pellizco (ctrlKey) k=0.01; rueda del ratón k=0.0015; multiplicado por la sensibilidad del usuario
+      const k = (e.ctrlKey ? 0.01 : 0.0015) * getZoomSensitivity();
+      const clampedDelta = Math.max(-200, Math.min(200, dY));
+      const newZoom = Math.min(Math.max(camera.zoom * Math.exp(-clampedDelta * k), 0.05), 8.0);
 
       // Ajustar posición de la cámara para que el punto bajo el ratón quede fijo
       const newCamX = worldBefore.x - (mousePos.x - width / 2) / newZoom;
