@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { GameState, GridConfig, CameraState, CombatState, MusicState, FogConfig, PlayerViewport, ExploredMultiPolygon } from '../types/game';
 import { Entity } from '../types/entity';
 import { revealRect, hideRect } from '../modules/vision/fogMemory';
+import { normalizeEntity, normalizeGameState } from '../modules/persistence/normalizer';
 
 function createDefaultGame(): GameState {
   const now = Date.now();
@@ -100,14 +101,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
   future: [],
 
   setGame: (game) => {
-    // Normalizar partidas antiguas sin memoria de exploración
-    const normalized: GameState = {
-      ...game,
-      fog: {
-        enabled: game.fog?.enabled ?? true,
-        explored: game.fog?.explored ?? []
-      }
-    };
+    const normalized = normalizeGameState(game);
     set({
       game: normalized,
       past: [],
@@ -165,17 +159,18 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
   },
 
   addEntity: (entity) => {
+    const normalizedEntity = normalizeEntity(entity);
     set((state) => {
       const past = [...state.past, state.game.entities];
-      const entities = [...state.game.entities, entity];
+      const entities = [...state.game.entities, normalizedEntity];
 
       // Si es el primer mapa y el tablero estaba vacío, ajustar grid.size al pixelsPerGrid del mapa
       let grid = state.game.grid;
-      if (entity.type === 'map' && state.game.entities.filter((e) => e.type === 'map').length === 0) {
-        if (entity.mapData?.pixelsPerGrid) {
+      if (normalizedEntity.type === 'map' && state.game.entities.filter((e) => e.type === 'map').length === 0) {
+        if (normalizedEntity.mapData?.pixelsPerGrid) {
           grid = {
             ...grid,
-            size: entity.mapData.pixelsPerGrid
+            size: normalizedEntity.mapData.pixelsPerGrid
           };
         }
       }
@@ -196,7 +191,18 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
   updateEntity: (id, partial, recordHistory = true) => {
     set((state) => {
       const past = recordHistory ? [...state.past, state.game.entities] : state.past;
-      const entities = state.game.entities.map((ent) => (ent.id === id ? { ...ent, ...partial } : ent));
+      const entities = state.game.entities.map((ent) => {
+        if (ent.id !== id) return ent;
+        const updated = { ...ent, ...partial };
+        if (updated.type === 'token' && updated.side === 'jugador' && !updated.vision) {
+          updated.vision = {
+            active: true,
+            rangeInSquares: 12,
+            hardness: 0.5
+          };
+        }
+        return updated;
+      });
 
       return {
         game: {

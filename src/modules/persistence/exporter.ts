@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
 import { db, saveAsset } from '../../db/dexie';
 import { GameState, AssetItem } from '../../types/game';
+import { normalizeGameState } from './normalizer';
 
 export async function exportVttSave(state: GameState): Promise<Blob> {
   const zip = new JSZip();
@@ -94,5 +95,5 @@ export async function importVttSave(buffer: ArrayBuffer): Promise<GameState> {
     }
   }
 
-  return state;
+  return normalizeGameState(state);
 }

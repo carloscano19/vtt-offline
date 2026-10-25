@@ -100,7 +100,20 @@ export const PropertiesTab: React.FC = () => {
               return (
                 <button
                   key={side}
-                  onClick={() => handleUpdate({ side })}
+                  onClick={() => {
+                    if (side === 'jugador' && !selectedEntity.vision) {
+                      handleUpdate({
+                        side,
+                        vision: {
+                          active: true,
+                          rangeInSquares: 12,
+                          hardness: 0.5
+                        }
+                      });
+                    } else {
+                      handleUpdate({ side });
+                    }
+                  }}
                   className={`py-1.5 px-2 rounded font-medium capitalize text-center border transition-all ${
                     isSelected
                       ? side === 'jugador'
@@ -130,7 +143,7 @@ export const PropertiesTab: React.FC = () => {
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
-                checked={selectedEntity.vision?.active ?? true}
+                checked={Boolean(selectedEntity.vision?.active)}
                 onChange={(e) =>
                   handleUpdate({
                     vision: {
@@ -146,7 +159,7 @@ export const PropertiesTab: React.FC = () => {
             </label>
           </div>
 
-          {(selectedEntity.vision?.active ?? true) && (
+          {Boolean(selectedEntity.vision?.active) && (
             <div className="space-y-2 pt-1 border-t border-slate-700/60">
               <div>
                 <div className="flex justify-between text-slate-400 mb-1">
@@ -165,7 +178,7 @@ export const PropertiesTab: React.FC = () => {
                   onChange={(e) =>
                     handleUpdate({
                       vision: {
-                        active: selectedEntity.vision?.active ?? true,
+                        active: Boolean(selectedEntity.vision?.active),
                         rangeInSquares: Math.max(0, parseInt(e.target.value) || 0),
                         hardness: selectedEntity.vision?.hardness ?? 0.5
                       }
