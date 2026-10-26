@@ -19,6 +19,7 @@
     "jszip": "^3.10.1",
     "lucide-react": "^0.475.0",
     "pixi.js": "^8.7.3",
+    "polyclip-ts": "^0.16.8",
     "polygon-clipping": "^0.15.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

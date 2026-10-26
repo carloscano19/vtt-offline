@@ -1,9 +1,8 @@
 import { Container, Graphics } from 'pixi.js';
-import polygonClipping from 'polygon-clipping';
 import { AmbientConfig, ExploredMultiPolygon } from '../../types/game';
 import { LightVisibility } from '../../modules/lights/lightManager';
 import { visionToMulti, simplifyMulti } from '../../modules/vision/fogMemory';
-import { snapMulti } from '../../modules/vision/fogRegions';
+import { safeClip } from '../../modules/vision/safeClip';
 
 export const AMBIENT_PRESET_CONFIGS: Record<string, { color: string; intensity: number }> = {
   dawn: { color: '#ff9d55', intensity: 0.80 },
@@ -151,25 +150,21 @@ export class AmbientLayer extends Container {
       let dimMulti: ExploredMultiPolygon = [];
       let outsideMulti: ExploredMultiPolygon = worldBoxMulti;
 
-      try {
-        if (brightPolys.length > 0) {
-          brightMulti = simplifyMulti(snapMulti(polygonClipping.union(visionToMulti(brightPolys)) as ExploredMultiPolygon));
-        }
-        if (totalPolys.length > 0) {
-          totalMulti = simplifyMulti(snapMulti(polygonClipping.union(visionToMulti(totalPolys)) as ExploredMultiPolygon));
-        }
+      if (brightPolys.length > 0) {
+        brightMulti = simplifyMulti(safeClip.union(visionToMulti(brightPolys)));
+      }
+      if (totalPolys.length > 0) {
+        totalMulti = simplifyMulti(safeClip.union(visionToMulti(totalPolys)));
+      }
 
-        if (totalMulti.length > 0 && brightMulti.length > 0) {
-          dimMulti = simplifyMulti(snapMulti(polygonClipping.difference(totalMulti, brightMulti) as ExploredMultiPolygon));
-        } else if (totalMulti.length > 0) {
-          dimMulti = totalMulti;
-        }
+      if (totalMulti.length > 0 && brightMulti.length > 0) {
+        dimMulti = simplifyMulti(safeClip.difference(totalMulti, brightMulti));
+      } else if (totalMulti.length > 0) {
+        dimMulti = totalMulti;
+      }
 
-        if (totalMulti.length > 0) {
-          outsideMulti = simplifyMulti(snapMulti(polygonClipping.difference(worldBoxMulti, totalMulti) as ExploredMultiPolygon));
-        }
-      } catch (e) {
-        console.warn('[AmbientLayer] Error en álgebra booleana de ambiente:', e);
+      if (totalMulti.length > 0) {
+        outsideMulti = simplifyMulti(safeClip.difference(worldBoxMulti, totalMulti));
       }
 
       this.cachedRegions = { outsideMulti, dimMulti, brightMulti };

@@ -1,19 +1,13 @@
-import polygonClipping from 'polygon-clipping';
 import { Point2D } from '../../types/entity';
 import { ExploredMultiPolygon } from '../../types/game';
+import { safeClip, sanitizeRing, ringArea } from './safeClip';
 
 type Ring = [number, number][];
 
 const SIMPLIFY_TOLERANCE = 1.5; // px del mundo
 const MIN_RING_AREA = 4; // px^2
 
-export function ringArea(ring: Ring): number {
-  let a = 0;
-  for (let i = 0; i < ring.length - 1; i++) {
-    a += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
-  }
-  return Math.abs(a) / 2;
-}
+export { ringArea };
 
 function perpDist(p: [number, number], a: [number, number], b: [number, number]): number {
   const dx = b[0] - a[0];
@@ -99,14 +93,14 @@ export function visionToMulti(polygons: Point2D[][]): ExploredMultiPolygon {
   return multi;
 }
 
-/** Une la visión actual con lo explorado y simplifica. */
+/** Une la visión actual con lo explorado de forma segura y simplifica. */
 export function unionExplored(explored: ExploredMultiPolygon, visionPolygons: Point2D[][]): ExploredMultiPolygon {
   const vision = visionToMulti(visionPolygons);
   if (vision.length === 0) return explored;
   const result = explored.length === 0
-    ? polygonClipping.union(vision[0], ...vision.slice(1))
-    : polygonClipping.union(explored, ...vision);
-  return simplifyMulti(result as ExploredMultiPolygon);
+    ? safeClip.union(vision)
+    : safeClip.union(explored, ...vision);
+  return simplifyMulti(result);
 }
 
 function rectToMulti(r: { x: number; y: number; width: number; height: number }): ExploredMultiPolygon {
@@ -121,14 +115,14 @@ function rectToMulti(r: { x: number; y: number; width: number; height: number })
 
 export function revealRect(explored: ExploredMultiPolygon, rect: { x: number; y: number; width: number; height: number }): ExploredMultiPolygon {
   const r = rectToMulti(rect);
-  const result = explored.length === 0 ? r : polygonClipping.union(explored, r);
-  return simplifyMulti(result as ExploredMultiPolygon);
+  const result = explored.length === 0 ? r : safeClip.union(explored, r);
+  return simplifyMulti(result);
 }
 
 export function hideRect(explored: ExploredMultiPolygon, rect: { x: number; y: number; width: number; height: number }): ExploredMultiPolygon {
   if (explored.length === 0) return explored;
-  const result = polygonClipping.difference(explored, rectToMulti(rect));
-  return simplifyMulti(result as ExploredMultiPolygon);
+  const result = safeClip.difference(explored, rectToMulti(rect));
+  return simplifyMulti(result);
 }
 
 export function countVertices(multi: ExploredMultiPolygon): number {

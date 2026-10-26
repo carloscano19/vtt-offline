@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { App } from './App';
+import { ErrorBoundary } from './ui/common/ErrorBoundary';
 import { useGameStore } from './stores/useGameStore';
 import { useUIStore } from './stores/useUIStore';
 import './ui/styles/theme.css';
@@ -12,6 +13,8 @@ if (import.meta.env.DEV) {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </React.StrictMode>
 );

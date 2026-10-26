@@ -1,5 +1,6 @@
 import { Entity } from '../../types/entity';
 import { GameState } from '../../types/game';
+import { safeClip } from '../vision/safeClip';
 
 /**
  * Normaliza una entidad individual.
@@ -95,8 +96,34 @@ export function normalizeGameState(game: GameState): GameState {
     fog: {
       enabled: game.fog?.enabled ?? true,
       rememberExplored: game.fog?.rememberExplored ?? false,
-      explored: game.fog?.explored ?? [],
-      revealed: game.fog?.revealed ?? []
+      explored: (() => {
+        const exp = game.fog?.explored;
+        if (!exp || !Array.isArray(exp)) return [];
+        if (!safeClip.validate(exp)) {
+          const sanitized = safeClip.sanitize(exp);
+          if (safeClip.validate(sanitized)) {
+            console.warn('[normalizer] game.fog.explored corrupto fue reparado.');
+            return sanitized;
+          }
+          console.warn('[normalizer] game.fog.explored corrupto e irrecuperable. Se reinicia a vacío.');
+          return [];
+        }
+        return exp;
+      })(),
+      revealed: (() => {
+        const rev = game.fog?.revealed;
+        if (!rev || !Array.isArray(rev)) return [];
+        if (!safeClip.validate(rev)) {
+          const sanitized = safeClip.sanitize(rev);
+          if (safeClip.validate(sanitized)) {
+            console.warn('[normalizer] game.fog.revealed corrupto fue reparado.');
+            return sanitized;
+          }
+          console.warn('[normalizer] game.fog.revealed corrupto e irrecuperable. Se reinicia a vacío.');
+          return [];
+        }
+        return rev;
+      })()
     },
     ambient: game.ambient ?? {
       preset: 'noon',
