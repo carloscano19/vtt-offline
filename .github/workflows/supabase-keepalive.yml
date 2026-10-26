@@ -1,0 +1,40 @@
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    # Ejecutar todos los días a las 04:00 UTC
+    - cron: '0 4 * * *'
+  workflow_dispatch: # Permite ejecución manual desde GitHub Actions
+
+jobs:
+  ping:
+    name: Ping vtt.ping() to prevent project pause
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send keep-alive RPC ping
+        run: |
+          if [ -z "${{ secrets.SUPABASE_URL }}" ] || [ -z "${{ secrets.SUPABASE_ANON_KEY }}" ]; then
+            echo "ERROR: SUPABASE_URL or SUPABASE_ANON_KEY secret is not set in this repository."
+            exit 1
+          fi
+
+          echo "Pinging vtt.ping() at ${{ secrets.SUPABASE_URL }}..."
+          RESPONSE=$(curl -f -s -X POST "${{ secrets.SUPABASE_URL }}/rest/v1/rpc/ping" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Content-Profile: vtt" \
+            -H "Accept-Profile: vtt" \
+            -H "Content-Type: application/json" \
+            -d '{}')
+
+          echo "Response received: $RESPONSE"
+
+          # Limpiar espacios en blanco o saltos de línea
+          CLEAN_RESPONSE=$(echo "$RESPONSE" | tr -d '[:space:]')
+
+          if [ "$CLEAN_RESPONSE" != "1" ]; then
+            echo "ERROR: Expected response '1', but received '$CLEAN_RESPONSE'"
+            exit 1
+          fi
+
+          echo "Supabase keep-alive ping successful! vtt.ping() returned 1."

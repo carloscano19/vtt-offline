@@ -1,10 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { getAllAssets, searchAssets, deleteAsset, updateAssetName, saveAsset } from '../../../db/dexie';
+import { getAllAssets, searchAssets, updateAssetName, saveAsset } from '../../../db/dexie';
 import { AssetItem } from '../../../types/game';
 import { useGameStore } from '../../../stores/useGameStore';
-import { Search, Upload, Trash2, Edit2, Check, Plus, Image as ImageIcon, Film } from 'lucide-react';
+import { Search, Upload, Trash2, Edit2, Check, Plus, Image as ImageIcon, Film, Cloud, CloudOff, RefreshCw, AlertTriangle } from 'lucide-react';
 import { parseUVTT } from '../../../modules/import/uvttParser';
 import { Entity } from '../../../types/entity';
+import { cloudSync, SyncStatus } from '../../../modules/sync/cloudSync';
+import { authManager } from '../../../modules/auth/authManager';
+import { AuthModal } from './AuthModal';
 
 export const LibraryTab: React.FC = () => {
   const [assets, setAssets] = useState<AssetItem[]>([]);
@@ -12,6 +15,12 @@ export const LibraryTab: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(cloudSync.getStatus());
+  const [currentUser, setCurrentUser] = useState(authManager.getUser());
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [assetToDelete, setAssetToDelete] = useState<AssetItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const game = useGameStore((s) => s.game);
   const addEntity = useGameStore((s) => s.addEntity);
@@ -24,6 +33,20 @@ export const LibraryTab: React.FC = () => {
   useEffect(() => {
     loadAssets(searchQuery);
   }, [searchQuery]);
+
+  useEffect(() => {
+    const unbindSync = cloudSync.onStatusChange((status) => {
+      setSyncStatus(status);
+    });
+    const unbindAuth = authManager.onAuthStateChange((user) => {
+      setCurrentUser(user);
+      loadAssets();
+    });
+    return () => {
+      unbindSync();
+      unbindAuth();
+    };
+  }, []);
 
   const handleStartEdit = (asset: AssetItem) => {
     setEditingId(asset.id);
@@ -38,10 +61,17 @@ export const LibraryTab: React.FC = () => {
     setEditingId(null);
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('¿Eliminar este asset de la biblioteca?')) {
-      await deleteAsset(id);
+  const handleConfirmDelete = async () => {
+    if (!assetToDelete) return;
+    setIsDeleting(true);
+    try {
+      await cloudSync.deleteAssetComplete(assetToDelete.id);
       await loadAssets();
+      setAssetToDelete(null);
+    } catch (err) {
+      console.error('Error al borrar asset:', err);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -242,6 +272,9 @@ export const LibraryTab: React.FC = () => {
             height
           };
           await saveAsset(asset);
+          if (cloudSync.isCloudEligible(type)) {
+            cloudSync.enqueueUpload(asset.id);
+          }
         }
       } catch (err) {
         console.error('Error al subir asset:', err);
@@ -263,6 +296,52 @@ export const LibraryTab: React.FC = () => {
         onChange={handleFileUpload}
       />
 
+      {/* Estado de sincronización en la nube y botón de Auth */}
+      <div className="p-2 bg-slate-800/90 border border-slate-700 rounded-lg flex items-center justify-between text-xs shadow-sm">
+        <div className="flex items-center gap-1.5 min-w-0">
+          {!currentUser ? (
+            <span className="text-slate-400 text-[11px] flex items-center gap-1">
+              <CloudOff className="w-3.5 h-3.5 text-slate-500" />
+              <span>Biblioteca local</span>
+            </span>
+          ) : syncStatus.state === 'synced' ? (
+            <span className="flex items-center gap-1 text-emerald-400 font-medium text-[11px]">
+              <Cloud className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Sincronizada</span>
+            </span>
+          ) : syncStatus.state === 'syncing' ? (
+            <span className="flex items-center gap-1 text-amber-300 font-medium text-[11px] animate-pulse">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400" />
+              <span>Subiendo ({syncStatus.pendingCount})...</span>
+            </span>
+          ) : syncStatus.state === 'offline' ? (
+            <span className="flex items-center gap-1 text-slate-400 font-medium text-[11px]">
+              <CloudOff className="w-3.5 h-3.5" />
+              <span>Sin conexión</span>
+            </span>
+          ) : (
+            <span className="text-rose-400 text-[11px] truncate max-w-[140px]" title={syncStatus.message}>
+              {syncStatus.message || 'Error sync'}
+            </span>
+          )}
+        </div>
+
+        <button
+          onClick={() => setIsAuthModalOpen(true)}
+          className={`px-2 py-1 rounded text-[11px] font-medium flex items-center gap-1 transition-all ${
+            currentUser
+              ? 'bg-slate-750 hover:bg-slate-700 text-sky-300 border border-slate-600 truncate max-w-[150px]'
+              : 'bg-sky-600/30 hover:bg-sky-600/50 text-sky-200 border border-sky-500/50 shadow-sm'
+          }`}
+          title={currentUser ? `Conectado como ${currentUser.email}` : 'Inicia sesión para guardar tu biblioteca en la nube'}
+        >
+          <Cloud className="w-3.5 h-3.5" />
+          <span className="truncate">
+            {currentUser ? currentUser.email?.split('@')[0] : 'Conectar nube'}
+          </span>
+        </button>
+      </div>
+
       {/* Buscador en tiempo real y botón de subir */}
       <div className="flex items-center gap-1.5">
         <div className="relative flex-1">
@@ -277,7 +356,7 @@ export const LibraryTab: React.FC = () => {
         </div>
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="p-1.5 bg-sky-700 hover:bg-sky-600 text-white rounded border border-sky-500"
+          className="p-1.5 bg-sky-700 hover:bg-sky-600 text-white rounded border border-sky-500 shadow-sm"
           title="Añadir archivos a la biblioteca"
         >
           <Upload className="w-4 h-4" />
@@ -381,7 +460,7 @@ export const LibraryTab: React.FC = () => {
                           <Edit2 className="w-2.5 h-2.5" />
                         </button>
                         <button
-                          onClick={() => handleDelete(asset.id)}
+                          onClick={() => setAssetToDelete(asset)}
                           className="p-1 text-slate-400 hover:text-red-400"
                           title="Eliminar de biblioteca"
                         >
@@ -394,6 +473,47 @@ export const LibraryTab: React.FC = () => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Modal de autenticación */}
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+
+      {/* Modal de confirmación para eliminar asset (sin window.confirm) */}
+      {assetToDelete && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4 select-none animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 max-w-sm w-full shadow-2xl text-slate-200 space-y-4">
+            <div className="flex items-center gap-2.5 text-rose-400 font-bold text-sm">
+              <Trash2 className="w-4 h-4 text-rose-400" />
+              <span>Eliminar de la biblioteca</span>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              ¿Estás seguro de que deseas eliminar <strong className="text-white">"{assetToDelete.name}"</strong>?
+              {currentUser && assetToDelete.type !== 'map' && (
+                <span className="block mt-1 text-slate-400 text-[11px]">
+                  Se eliminará tanto de este navegador como de tu almacenamiento en la nube.
+                </span>
+              )}
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setAssetToDelete(null)}
+                disabled={isDeleting}
+                className="px-3 py-1.5 rounded text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-750 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="px-3 py-1.5 rounded text-xs font-semibold text-white bg-red-600 hover:bg-red-500 shadow transition-colors"
+              >
+                {isDeleting ? 'Eliminando...' : 'Sí, eliminar'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

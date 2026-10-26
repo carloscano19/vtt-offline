@@ -9,8 +9,9 @@ import {
   loadAutoSaveFromDb
 } from '../../../modules/persistence/saveManager';
 import { exportVttSave, importVttSave } from '../../../modules/persistence/exporter';
+import { clearAdventure } from '../../../modules/persistence/adventureManager';
 import { StoredGame } from '../../../db/dexie';
-import { X, Save, FilePlus, Download, Upload, Trash2, RotateCcw, Clock, Check, Copy, AlertCircle } from 'lucide-react';
+import { X, Save, FilePlus, Download, Upload, Trash2, RotateCcw, Clock, Check, Copy, AlertCircle, AlertTriangle } from 'lucide-react';
 
 export const SaveLoadModal: React.FC = () => {
   const showSaveLoadModal = useUIStore((s) => s.showSaveLoadModal);
@@ -28,6 +29,9 @@ export const SaveLoadModal: React.FC = () => {
   const [isDuplicating, setIsDuplicating] = useState(false);
   const [duplicateName, setDuplicateName] = useState('');
   const duplicateInputRef = useRef<HTMLInputElement>(null);
+
+  const [showWipeConfirm, setShowWipeConfirm] = useState(false);
+  const [isWiping, setIsWiping] = useState(false);
 
   const refreshList = async () => {
     const list = await listSavedGames();
@@ -434,6 +438,24 @@ export const SaveLoadModal: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* Zona de peligro: Borrar aventura */}
+          <div className="pt-2 border-t border-slate-700/80 flex items-center justify-between gap-3 bg-rose-950/20 p-2.5 rounded border border-rose-900/40">
+            <div className="min-w-0">
+              <span className="text-xs font-semibold text-rose-300 block">Zona de peligro: Borrar aventura</span>
+              <span className="text-[11px] text-slate-400">
+                Borra todos los mapas y partidas del navegador. Conserva tus tokens, objetos y música.
+              </span>
+            </div>
+            <button
+              onClick={() => setShowWipeConfirm(true)}
+              className="px-3 py-1.5 rounded text-xs font-semibold text-rose-300 hover:text-white bg-rose-950/70 hover:bg-rose-900 border border-rose-800 transition-colors flex items-center gap-1.5 shrink-0 shadow-sm"
+              title="Borrar todos los mapas, partidas y niebla de esta aventura"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Borrar aventura...</span>
+            </button>
+          </div>
         </div>
 
         {/* Pie con recordatorio de autoguardado */}
@@ -441,6 +463,90 @@ export const SaveLoadModal: React.FC = () => {
           Autoguardado activo cada 60 segundos y automáticamente al cerrar o recargar la pestaña.
         </div>
       </div>
+
+      {/* Modal de confirmación para Borrar Aventura (sin window.confirm) */}
+      {showWipeConfirm && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-60 p-4 select-none animate-fade-in">
+          <div className="bg-slate-900 border border-rose-600/80 rounded-xl p-6 max-w-md w-full shadow-2xl text-slate-200 space-y-4">
+            <div className="flex items-center gap-3 text-rose-400 font-bold text-base border-b border-slate-800 pb-3">
+              <div className="w-9 h-9 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-white">¿Borrar aventura por completo?</h3>
+                <p className="text-[11px] font-normal text-rose-300/80">Esta acción no se puede deshacer</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 text-xs text-slate-300 leading-relaxed">
+              <p>
+                Se eliminarán permanentemente de este navegador:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 text-slate-400">
+                <li>Todos los <strong className="text-white">mapas</strong> importados en el tablero.</li>
+                <li>La <strong className="text-white">partida actual</strong> y todas las <strong className="text-white">partidas guardadas</strong>.</li>
+                <li>Toda la <strong className="text-white">niebla de guerra</strong> explorada y revelada.</li>
+                <li>La copia de <strong className="text-white">autoguardado</strong>.</li>
+              </ul>
+
+              <div className="p-2.5 bg-emerald-950/30 border border-emerald-500/40 rounded text-emerald-300 text-[11px] flex items-start gap-2">
+                <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Tu biblioteca está a salvo:</strong> Los tokens, objetos, efectos y pistas de música (tanto en local como en la nube) permanecerán intactos.
+                </span>
+              </div>
+            </div>
+
+            {/* Ofrecer antes una copia de seguridad */}
+            <div className="p-2.5 bg-slate-800/80 border border-slate-700 rounded flex items-center justify-between gap-2">
+              <span className="text-[11px] text-slate-300">¿Deseas guardar una copia antes?</span>
+              <button
+                type="button"
+                onClick={handleExport}
+                className="px-2.5 py-1 bg-sky-950/80 hover:bg-sky-900 border border-sky-600 text-sky-200 rounded text-xs font-medium flex items-center gap-1.5 transition-colors"
+                title="Descargar archivo .vttsave de respaldo"
+              >
+                <Download className="w-3.5 h-3.5 text-sky-400" />
+                <span>Guardar copia</span>
+              </button>
+            </div>
+
+            {/* Botones de acción */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowWipeConfirm(false)}
+                disabled={isWiping}
+                className="px-3.5 py-2 rounded text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsWiping(true);
+                  try {
+                    await clearAdventure();
+                    await refreshList();
+                    setShowWipeConfirm(false);
+                    showStatus('Aventura borrada. La biblioteca de tokens y música se mantiene intacta.');
+                  } catch (err) {
+                    console.error('Error al borrar aventura:', err);
+                    showStatus('Error al borrar aventura: ' + String(err));
+                  } finally {
+                    setIsWiping(false);
+                  }
+                }}
+                disabled={isWiping}
+                className="px-4 py-2 rounded text-xs font-bold text-white bg-red-600 hover:bg-red-500 shadow-md transition-colors flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isWiping ? 'Borrando...' : 'Sí, borrar aventura'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -41,6 +41,7 @@ import { saveAsset } from '../../../db/dexie';
 import { AssetItem, AmbientPreset } from '../../../types/game';
 import { Entity } from '../../../types/entity';
 import { videoManager } from '../../../modules/media/videoManager';
+import { cloudSync } from '../../../modules/sync/cloudSync';
 
 interface TopToolbarProps {
   onOpenGridModal: () => void;
@@ -284,6 +285,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
             createdAt: Date.now()
           };
           await saveAsset(asset);
+          cloudSync.enqueueUpload(asset.id);
           useGameStore.getState().addMusicTrack({
             id: `track_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
             name: asset.name,
@@ -333,6 +335,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           };
 
           await saveAsset(asset);
+          cloudSync.enqueueUpload(asset.id);
 
           // Escalar automáticamente para que su lado mayor ocupe exactamente 1 casilla (grid.size)
           const currentGridSize = game.grid.size || 70;
