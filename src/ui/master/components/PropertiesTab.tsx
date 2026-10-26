@@ -68,7 +68,7 @@ export const PropertiesTab: React.FC = () => {
             chromaKey: {
               enabled: true,
               color: result.sRGBHex,
-              tolerance: selectedEntity.chromaKey?.tolerance ?? 0.15
+              tolerance: selectedEntity.chromaKey?.tolerance ?? 15
             }
           });
         }
@@ -900,7 +900,7 @@ export const PropertiesTab: React.FC = () => {
                   chromaKey: {
                     enabled: e.target.checked,
                     color: selectedEntity.chromaKey?.color ?? '#00ff00',
-                    tolerance: selectedEntity.chromaKey?.tolerance ?? 0.15
+                    tolerance: selectedEntity.chromaKey?.tolerance ?? 15
                   }
                 })
               }
@@ -942,20 +942,20 @@ export const PropertiesTab: React.FC = () => {
                 <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
                   <span>Tolerancia</span>
                   <span className="text-white font-mono">
-                    {Math.round((selectedEntity.chromaKey?.tolerance ?? 0.15) * 100)}%
+                    {Math.round(selectedEntity.chromaKey?.tolerance ?? 15)}%
                   </span>
                 </div>
                 <input
                   type="range"
-                  min="0.01"
-                  max="0.8"
-                  step="0.01"
-                  value={selectedEntity.chromaKey?.tolerance ?? 0.15}
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={selectedEntity.chromaKey?.tolerance ?? 15}
                   onChange={(e) =>
                     handleUpdate({
                       chromaKey: {
                         ...selectedEntity.chromaKey!,
-                        tolerance: parseFloat(e.target.value) || 0.15
+                        tolerance: parseInt(e.target.value) || 0
                       }
                     })
                   }

@@ -55,6 +55,7 @@ export function isColorChromaKeyed(
 
 /**
  * Aplica chroma key a un ImageData de Canvas eliminando los píxeles coincidentes.
+ * Incluye borde suave (feathering) para evitar bordes duros/dentados.
  */
 export function applyChromaKeyToImageData(
   imageData: ImageData,
@@ -63,11 +64,18 @@ export function applyChromaKeyToImageData(
 ): void {
   if (tolerance <= 0) return;
   const target = parseHexColor(keyColorHex);
+  // Tolerancia 0-100 mapeada a distancia RGB
   const maxDistance = (tolerance / 100) * 1.732;
+  // Borde suave: margen de feathering proporcional (al menos 0.08 o el 15% del umbral)
+  const featherRange = Math.max(0.08, maxDistance * 0.15);
+
   const data = imageData.data;
   const len = data.length;
 
   for (let i = 0; i < len; i += 4) {
+    const a = data[i + 3];
+    if (a === 0) continue; // Ya transparente
+
     const r = data[i];
     const g = data[i + 1];
     const b = data[i + 2];
@@ -77,11 +85,12 @@ export function applyChromaKeyToImageData(
     const dist = Math.sqrt(dr * dr + dg * dg + db * db);
 
     if (dist <= maxDistance) {
-      data[i + 3] = 0; // Transparente
-    } else if (dist < maxDistance + 0.1) {
-      // Suavizado de bordes (feathering)
-      const alphaFactor = (dist - maxDistance) / 0.1;
-      data[i + 3] = Math.round(data[i + 3] * alphaFactor);
+      // Coincidencia dentro de la tolerancia: 100% transparente
+      data[i + 3] = 0;
+    } else if (dist < maxDistance + featherRange) {
+      // Borde suave (feathering gradual entre maxDistance y maxDistance + featherRange)
+      const factor = (dist - maxDistance) / featherRange;
+      data[i + 3] = Math.round(a * Math.min(1, Math.max(0, factor)));
     }
   }
 }

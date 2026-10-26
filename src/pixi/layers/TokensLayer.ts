@@ -100,14 +100,26 @@ export class TokensLayer extends Container {
       (entityContainer as any)._baseRotation = entity.rotation;
       (entityContainer as any)._animations = entity.animations;
 
-      // Carga asíncrona de textura si aún no se ha cargado o si cambió el assetId
+      // Carga asíncrona de textura si aún no se ha cargado o si cambió el assetId o chromaKey
       const currentLoadedAssetId = (entityContainer as any)._loadedAssetId;
+      const ck = entity.chromaKey;
+      const currentCkKey = ck && ck.enabled ? `ck_${ck.color}_${ck.tolerance}` : 'no_ck';
+      const prevCkKey = (entityContainer as any)._loadedCkKey;
+
       const sp = entityContainer.getChildByLabel('sprite') as Sprite;
-      if (entity.assetId && sp && (sp.texture === Texture.EMPTY || currentLoadedAssetId !== entity.assetId)) {
+      const needsReload =
+        entity.assetId &&
+        sp &&
+        (sp.texture === Texture.EMPTY ||
+          currentLoadedAssetId !== entity.assetId ||
+          prevCkKey !== currentCkKey);
+
+      if (needsReload) {
         (entityContainer as any)._loadedAssetId = entity.assetId;
+        (entityContainer as any)._loadedCkKey = currentCkKey;
 
         // Comprobar si es un GIF animado
-        getGifDataForAsset(entity.assetId).then((gifData) => {
+        getGifDataForAsset(entity.assetId!, ck).then((gifData) => {
           if (gifData && entityContainer && !entityContainer.destroyed) {
             (entityContainer as any)._gifData = gifData;
           }
@@ -116,7 +128,7 @@ export class TokensLayer extends Container {
         // Registrar vídeo si aplica
         videoManager.registerActiveEntityVideo(entity.id);
 
-        getTextureForAsset(entity.assetId).then((tex) => {
+        getTextureForAsset(entity.assetId!, ck).then((tex) => {
           if (tex && entityContainer && !entityContainer.destroyed) {
             const innerSp = entityContainer.getChildByLabel('sprite') as Sprite;
             if (innerSp) {

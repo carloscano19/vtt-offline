@@ -190,4 +190,32 @@ describe('Phase 3: Luces, Visión a Distancia y Chroma Key', () => {
     // Blue color (0, 0, 255) with target green should NOT be chroma keyed
     expect(isColorChromaKeyed(0, 0, 255, '#00ff00', 15)).toBe(false);
   });
+
+  it('applies chroma key to ImageData with soft edge feathering', async () => {
+    // 3 pixels:
+    // Pixel 0: pure green (0, 255, 0, 255) -> should be 0 alpha
+    // Pixel 1: near threshold green -> should have partial alpha (feathering)
+    // Pixel 2: red (255, 0, 0, 255) -> should retain full 255 alpha
+    const width = 3;
+    const height = 1;
+    const rawData = new Uint8ClampedArray([
+      0, 255, 0, 255,
+      35, 230, 35, 255,
+      255, 0, 0, 255
+    ]);
+    const imgData = {
+      data: rawData,
+      width,
+      height
+    } as ImageData;
+
+    const { applyChromaKeyToImageData } = await import('../src/modules/filters/chromaKey');
+    applyChromaKeyToImageData(imgData, '#00ff00', 15);
+
+    // Pixel 0 is fully transparent
+    expect(imgData.data[3]).toBe(0);
+
+    // Pixel 2 is completely unchanged (solid red)
+    expect(imgData.data[11]).toBe(255);
+  });
 });

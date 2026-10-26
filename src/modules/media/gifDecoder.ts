@@ -2,6 +2,9 @@ import { Texture } from 'pixi.js';
 // @ts-ignore gifuct-js types
 import { parseGIF, decompressFrames } from 'gifuct-js';
 
+import { EntityChromaKey } from '../../types/entity';
+import { applyChromaKeyToImageData } from '../filters/chromaKey';
+
 export interface AnimatedGifData {
   textures: Texture[];
   delays: number[];
@@ -12,12 +15,25 @@ export interface AnimatedGifData {
 
 const gifCache = new Map<string, AnimatedGifData>();
 
+function getGifCacheKey(assetId: string, chromaKey?: EntityChromaKey): string {
+  if (chromaKey && chromaKey.enabled) {
+    return `${assetId}_ck_${chromaKey.color}_${chromaKey.tolerance}`;
+  }
+  return assetId;
+}
+
 /**
  * Decodifica un GIF animado en un conjunto de texturas de Pixi sincronizadas con sus retardos.
+ * Si chromaKey está activado, procesa cada frame con applyChromaKeyToImageData.
  */
-export async function decodeGifBlob(assetId: string, blob: Blob): Promise<AnimatedGifData | null> {
-  if (gifCache.has(assetId)) {
-    return gifCache.get(assetId)!;
+export async function decodeGifBlob(
+  assetId: string,
+  blob: Blob,
+  chromaKey?: EntityChromaKey
+): Promise<AnimatedGifData | null> {
+  const cacheKey = getGifCacheKey(assetId, chromaKey);
+  if (gifCache.has(cacheKey)) {
+    return gifCache.get(cacheKey)!;
   }
 
   try {
@@ -71,6 +87,14 @@ export async function decodeGifBlob(assetId: string, blob: Blob): Promise<Animat
         const fCtx = frameCanvas.getContext('2d');
         if (fCtx) {
           fCtx.drawImage(canvas, 0, 0);
+
+          // Aplicar Chroma Key en el frame si está activado
+          if (chromaKey && chromaKey.enabled) {
+            const frameImgData = fCtx.getImageData(0, 0, width, height);
+            applyChromaKeyToImageData(frameImgData, chromaKey.color, chromaKey.tolerance);
+            fCtx.putImageData(frameImgData, 0, 0);
+          }
+
           textures.push(Texture.from(frameCanvas));
         }
       }
@@ -92,7 +116,7 @@ export async function decodeGifBlob(assetId: string, blob: Blob): Promise<Animat
       height
     };
 
-    gifCache.set(assetId, gifData);
+    gifCache.set(cacheKey, gifData);
     return gifData;
   } catch (err) {
     console.error(`[gifDecoder] Error al decodificar GIF ID="${assetId}":`, err);

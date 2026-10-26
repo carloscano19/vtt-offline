@@ -1,6 +1,7 @@
 import { Texture } from 'pixi.js';
 import { getAsset } from '../../db/dexie';
 import { applyChromaKeyToImageData } from '../filters/chromaKey';
+import { EntityChromaKey } from '../../types/entity';
 
 interface VideoInstance {
   video: HTMLVideoElement;
@@ -9,6 +10,11 @@ interface VideoInstance {
   blobUrl: string;
   canvas?: HTMLCanvasElement;
   ctx?: CanvasRenderingContext2D | null;
+  chromaKey?: EntityChromaKey;
+  targetScale: number; // 1.0 down to 0.25 si el frame excede 8ms
+  rvfcHandle?: number;
+  isProcessing: boolean;
+  destroyed: boolean;
 }
 
 class VideoManager {
@@ -47,12 +53,29 @@ class VideoManager {
     return this.activeEntityVideos.size;
   }
 
+  private getInstanceKey(assetId: string, chromaKey?: EntityChromaKey): string {
+    if (chromaKey && chromaKey.enabled) {
+      return `${assetId}_ck_${chromaKey.color}_${chromaKey.tolerance}`;
+    }
+    return assetId;
+  }
+
   /**
    * Obtiene o inicializa un elemento de vídeo HTML5 y su textura Pixi en bucle.
+   * Si chromaKey está habilitado:
+   *  - Dibuja cada frame a un canvas reducido (máximo 1024 px de lado).
+   *  - Aplica applyChromaKeyToImageData con suavizado de bordes.
+   *  - Actualiza la textura Pixi desde el canvas.
+   *  - Usa requestVideoFrameCallback si está disponible (o fallback a requestAnimationFrame).
+   *  - Si el coste por frame supera los 8 ms, reduce targetScale automáticamente.
    */
-  public async getVideoTexture(assetId: string): Promise<{ texture: Texture; video: HTMLVideoElement } | null> {
-    if (this.instances.has(assetId)) {
-      const inst = this.instances.get(assetId)!;
+  public async getVideoTexture(
+    assetId: string,
+    chromaKey?: EntityChromaKey
+  ): Promise<{ texture: Texture; video: HTMLVideoElement } | null> {
+    const key = this.getInstanceKey(assetId, chromaKey);
+    if (this.instances.has(key)) {
+      const inst = this.instances.get(key)!;
       if (inst.video.paused) {
         inst.video.play().catch(() => {});
       }
@@ -84,15 +107,96 @@ class VideoManager {
       // Ignorar si el navegador bloquea autoplay hasta interacción
     }
 
-    const texture = Texture.from(video);
+    // Caso 1: Vídeo normal sin Chroma Key
+    if (!chromaKey || !chromaKey.enabled) {
+      const texture = Texture.from(video);
+      const inst: VideoInstance = {
+        video,
+        texture,
+        assetId,
+        blobUrl,
+        targetScale: 1.0,
+        isProcessing: false,
+        destroyed: false
+      };
+      this.instances.set(key, inst);
+      return { texture, video };
+    }
+
+    // Caso 2: Vídeo con Chroma Key mediante Canvas
+    const vidW = video.videoWidth || 640;
+    const vidH = video.videoHeight || 360;
+    const maxSide = Math.max(vidW, vidH);
+    const initialScale = maxSide > 1024 ? 1024 / maxSide : 1.0;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(vidW * initialScale));
+    canvas.height = Math.max(1, Math.round(vidH * initialScale));
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return null;
+
+    const texture = Texture.from(canvas);
+
     const inst: VideoInstance = {
       video,
       texture,
       assetId,
-      blobUrl
+      blobUrl,
+      canvas,
+      ctx,
+      chromaKey,
+      targetScale: initialScale,
+      isProcessing: false,
+      destroyed: false
     };
 
-    this.instances.set(assetId, inst);
+    this.instances.set(key, inst);
+
+    // Bucle de procesamiento de frames con requestVideoFrameCallback o rAF
+    const processFrame = () => {
+      if (inst.destroyed) return;
+
+      if (!video.paused && !video.ended && video.readyState >= 2) {
+        const start = performance.now();
+        const curW = inst.canvas!.width;
+        const curH = inst.canvas!.height;
+
+        // Dibujar frame actual
+        inst.ctx!.drawImage(video, 0, 0, curW, curH);
+        const imgData = inst.ctx!.getImageData(0, 0, curW, curH);
+
+        // Procesar chroma key con suavizado de bordes
+        applyChromaKeyToImageData(imgData, inst.chromaKey!.color, inst.chromaKey!.tolerance);
+        inst.ctx!.putImageData(imgData, 0, 0);
+
+        // Actualizar textura en Pixi
+        inst.texture.source.update();
+
+        const duration = performance.now() - start;
+
+        // Si tarda más de 8ms, reducir resolución automáticamente para mantener 60 fps
+        if (duration > 8 && inst.targetScale > 0.25) {
+          inst.targetScale = Math.max(0.25, inst.targetScale * 0.85);
+          const newW = Math.max(1, Math.round(vidW * inst.targetScale));
+          const newH = Math.max(1, Math.round(vidH * inst.targetScale));
+          inst.canvas!.width = newW;
+          inst.canvas!.height = newH;
+        }
+      }
+
+      if ('requestVideoFrameCallback' in video) {
+        (video as any).requestVideoFrameCallback(processFrame);
+      } else {
+        requestAnimationFrame(processFrame);
+      }
+    };
+
+    if ('requestVideoFrameCallback' in video) {
+      (video as any).requestVideoFrameCallback(processFrame);
+    } else {
+      requestAnimationFrame(processFrame);
+    }
+
     return { texture, video };
   }
 }

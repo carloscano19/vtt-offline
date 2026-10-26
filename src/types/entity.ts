@@ -117,10 +117,10 @@ export interface LightConfig {
 }
 
 export interface EntityChromaKey {
-  active?: boolean;
-  enabled?: boolean;
+  enabled: boolean;
   color: string;
-  tolerance: number;
+  tolerance: number; // 0 a 100 (%)
+  active?: boolean;  // Alias retrocompatible
 }
 
 export interface TokenVision {

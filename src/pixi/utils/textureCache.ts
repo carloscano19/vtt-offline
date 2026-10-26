@@ -2,35 +2,53 @@ import { Texture } from 'pixi.js';
 import { getAsset } from '../../db/dexie';
 import { videoManager } from '../../modules/media/videoManager';
 import { decodeGifBlob, AnimatedGifData, getFrameTextureForTime } from '../../modules/media/gifDecoder';
+import { EntityChromaKey } from '../../types/entity';
+import { applyChromaKeyToImageData } from '../../modules/filters/chromaKey';
 
 const cache = new Map<string, Texture>();
 const objectUrlMap = new Map<string, string>();
 const gifDataMap = new Map<string, AnimatedGifData>();
 
-export async function getGifDataForAsset(assetId: string): Promise<AnimatedGifData | null> {
-  if (gifDataMap.has(assetId)) {
-    return gifDataMap.get(assetId)!;
+function getTextureCacheKey(assetId: string, chromaKey?: EntityChromaKey): string {
+  if (chromaKey && chromaKey.enabled) {
+    return `${assetId}_ck_${chromaKey.color}_${chromaKey.tolerance}`;
+  }
+  return assetId;
+}
+
+export async function getGifDataForAsset(
+  assetId: string,
+  chromaKey?: EntityChromaKey
+): Promise<AnimatedGifData | null> {
+  const cacheKey = getTextureCacheKey(assetId, chromaKey);
+  if (gifDataMap.has(cacheKey)) {
+    return gifDataMap.get(cacheKey)!;
   }
   const asset = await getAsset(assetId);
   if (!asset || !asset.blob) return null;
   const isGif = asset.type === 'gif' || asset.mimeType === 'image/gif';
   if (!isGif) return null;
-  const data = await decodeGifBlob(assetId, asset.blob);
+  const data = await decodeGifBlob(assetId, asset.blob, chromaKey);
   if (data) {
-    gifDataMap.set(assetId, data);
+    gifDataMap.set(cacheKey, data);
   }
   return data;
 }
 
 /**
  * Carga una textura PixiJS a partir de un assetId almacenado en Dexie.
- * Soporta imágenes normales, GIFs animados decodificados y vídeos HTML5 en bucle.
+ * Soporta imágenes normales (PNG/JPG con Chroma Key procesado en canvas), GIFs animados y vídeos HTML5.
+ * Cachea por assetId + color + tolerancia.
  */
-export async function getTextureForAsset(assetId: string): Promise<Texture | null> {
+export async function getTextureForAsset(
+  assetId: string,
+  chromaKey?: EntityChromaKey
+): Promise<Texture | null> {
   if (!assetId) return null;
 
-  if (cache.has(assetId)) {
-    return cache.get(assetId)!;
+  const cacheKey = getTextureCacheKey(assetId, chromaKey);
+  if (cache.has(cacheKey)) {
+    return cache.get(cacheKey)!;
   }
 
   const asset = await getAsset(assetId);
@@ -41,19 +59,19 @@ export async function getTextureForAsset(assetId: string): Promise<Texture | nul
 
   // 1. Soporte de Vídeo (MP4, WebM)
   if (asset.type === 'video' || asset.mimeType.startsWith('video/')) {
-    const videoResult = await videoManager.getVideoTexture(assetId);
+    const videoResult = await videoManager.getVideoTexture(assetId, chromaKey);
     if (videoResult) {
-      cache.set(assetId, videoResult.texture);
+      cache.set(cacheKey, videoResult.texture);
       return videoResult.texture;
     }
   }
 
   // 2. Soporte de GIF animado con decodificador
   if (asset.type === 'gif' || asset.mimeType === 'image/gif') {
-    const gifData = await decodeGifBlob(assetId, asset.blob);
+    const gifData = await decodeGifBlob(assetId, asset.blob, chromaKey);
     if (gifData && gifData.textures.length > 0) {
-      gifDataMap.set(assetId, gifData);
-      cache.set(assetId, gifData.textures[0]);
+      gifDataMap.set(cacheKey, gifData);
+      cache.set(cacheKey, gifData.textures[0]);
       return gifData.textures[0];
     }
   }
@@ -78,9 +96,28 @@ export async function getTextureForAsset(assetId: string): Promise<Texture | nul
       });
     }
 
-    // Crear textura a partir del elemento HTMLImage ya decodificado
+    // 3. Soporte de Chroma Key para imágenes estáticas (PNG, JPG, WebP)
+    if (chromaKey && chromaKey.enabled) {
+      const natW = img.naturalWidth || img.width;
+      const natH = img.naturalHeight || img.height;
+      const canvas = document.createElement('canvas');
+      canvas.width = natW;
+      canvas.height = natH;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        const imgData = ctx.getImageData(0, 0, natW, natH);
+        applyChromaKeyToImageData(imgData, chromaKey.color, chromaKey.tolerance);
+        ctx.putImageData(imgData, 0, 0);
+        const texture = Texture.from(canvas);
+        cache.set(cacheKey, texture);
+        return texture;
+      }
+    }
+
+    // Crear textura a partir del elemento HTMLImage normal
     const texture = Texture.from(img);
-    cache.set(assetId, texture);
+    cache.set(cacheKey, texture);
     return texture;
   } catch (err) {
     console.error(

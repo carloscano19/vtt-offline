@@ -46,6 +46,25 @@ export function normalizeEntity(entity: Entity): Entity {
       };
     }
   }
+  // Normalizar Chroma Key si existe en cualquier entidad
+  if (entity.chromaKey) {
+    const rawCk: any = entity.chromaKey;
+    const enabled = rawCk.enabled ?? rawCk.active ?? false;
+    let tol = rawCk.tolerance ?? 15;
+    // Si la tolerancia viene en rango 0.0 - 1.0 (antiguo), convertir a 0 - 100
+    if (typeof tol === 'number' && tol > 0 && tol <= 1) {
+      tol = Math.round(tol * 100);
+    }
+    entity = {
+      ...entity,
+      chromaKey: {
+        enabled,
+        color: rawCk.color || '#00ff00',
+        tolerance: Math.max(0, Math.min(100, tol))
+      }
+    };
+  }
+
   if (entity.type === 'light') {
     return {
       ...entity,

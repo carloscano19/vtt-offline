@@ -39,12 +39,23 @@ export class MapsLayer extends Container {
       (sprite as any)._baseRotation = entity.rotation;
       (sprite as any)._animations = entity.animations;
 
-      // Carga asíncrona de textura si aún no se ha cargado o si cambió el assetId
+      // Carga asíncrona de textura si aún no se ha cargado o si cambió el assetId o chromaKey
       const currentLoadedAssetId = (sprite as any)._loadedAssetId;
-      if (entity.assetId && (sprite.texture === Texture.EMPTY || currentLoadedAssetId !== entity.assetId)) {
-        (sprite as any)._loadedAssetId = entity.assetId;
+      const ck = entity.chromaKey;
+      const currentCkKey = ck && ck.enabled ? `ck_${ck.color}_${ck.tolerance}` : 'no_ck';
+      const prevCkKey = (sprite as any)._loadedCkKey;
 
-        getGifDataForAsset(entity.assetId).then((gifData) => {
+      const needsReload =
+        entity.assetId &&
+        (sprite.texture === Texture.EMPTY ||
+          currentLoadedAssetId !== entity.assetId ||
+          prevCkKey !== currentCkKey);
+
+      if (needsReload) {
+        (sprite as any)._loadedAssetId = entity.assetId;
+        (sprite as any)._loadedCkKey = currentCkKey;
+
+        getGifDataForAsset(entity.assetId!, ck).then((gifData) => {
           if (gifData && sprite && !sprite.destroyed) {
             (sprite as any)._gifData = gifData;
           }
@@ -52,7 +63,7 @@ export class MapsLayer extends Container {
 
         videoManager.registerActiveEntityVideo(entity.id);
 
-        getTextureForAsset(entity.assetId).then((tex) => {
+        getTextureForAsset(entity.assetId!, ck).then((tex) => {
           if (tex && sprite && !sprite.destroyed) {
             sprite.texture = tex;
           }
