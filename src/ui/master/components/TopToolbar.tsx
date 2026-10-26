@@ -30,8 +30,9 @@ import {
   CloudRain,
   CloudSnow,
   Wind,
-  Music,
-  AlertTriangle
+  AlertTriangle,
+  ChevronDown,
+  PanelRight
 } from 'lucide-react';
 import { useUIStore, ActiveTool } from '../../../stores/useUIStore';
 import { useGameStore } from '../../../stores/useGameStore';
@@ -77,9 +78,31 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
   const canUndo = useGameStore((s) => s.canUndo());
   const canRedo = useGameStore((s) => s.canRedo());
 
+  const [showFogMenu, setShowFogMenu] = useState(false);
   const [showAmbientMenu, setShowAmbientMenu] = useState(false);
-  const [showWeatherMenu, setShowWeatherMenu] = useState(false);
+  const [showTvMenu, setShowTvMenu] = useState(false);
   const [videoWarning, setVideoWarning] = useState(videoManager.getActiveVideoCount() > 6);
+
+  const fogMenuRef = useRef<HTMLDivElement>(null);
+  const ambientMenuRef = useRef<HTMLDivElement>(null);
+  const tvMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (fogMenuRef.current && !fogMenuRef.current.contains(target)) {
+        setShowFogMenu(false);
+      }
+      if (ambientMenuRef.current && !ambientMenuRef.current.contains(target)) {
+        setShowAmbientMenu(false);
+      }
+      if (tvMenuRef.current && !tvMenuRef.current.contains(target)) {
+        setShowTvMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     return videoManager.onWarningChange((show: boolean) => {
@@ -422,34 +445,6 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
         <div className="w-[1px] h-6 bg-slate-700 mx-1" />
 
         <button
-          onClick={() => handleToolChange('fogReveal')}
-          className={`px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1.5 border transition-all ${
-            activeTool === 'fogReveal'
-              ? 'bg-amber-600/30 text-amber-300 border-amber-500/80 shadow-sm'
-              : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-          }`}
-          title="Revelar zona de niebla: arrastra un rectángulo en el tablero para descubrir esa área"
-        >
-          <Eye className="w-3.5 h-3.5 text-amber-400" />
-          <span>Revelar zona</span>
-        </button>
-
-        <button
-          onClick={() => handleToolChange('fogHide')}
-          className={`px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1.5 border transition-all ${
-            activeTool === 'fogHide'
-              ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/80 shadow-sm'
-              : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-          }`}
-          title="Ocultar zona de niebla: arrastra un rectángulo en el tablero para volver a tapar esa área con niebla"
-        >
-          <EyeOff className="w-3.5 h-3.5 text-indigo-400" />
-          <span>Ocultar zona</span>
-        </button>
-
-        <div className="w-[1px] h-6 bg-slate-700 mx-1.5" />
-
-        <button
           onClick={onOpenGridModal}
           className="btn-icon text-slate-300 hover:text-white"
           title="Ajustes de cuadrícula (G): tamaño de casilla, color, opacidad, snap y sensibilidad del zoom"
@@ -466,14 +461,6 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
         </button>
 
         <button
-          onClick={() => setActiveSidebarTab(activeSidebarTab === 'library' ? null : 'library')}
-          className={`btn-icon ${activeSidebarTab === 'library' ? 'active' : ''}`}
-          title="Biblioteca de imágenes y mapas"
-        >
-          <FolderOpen className="w-5 h-5" />
-        </button>
-
-        <button
           onClick={() => setShowSaveLoadModal(true)}
           className="btn-icon text-slate-300 hover:text-white"
           title="Guardar / Cargar Partida (Cmd/Ctrl+S): guardar en navegador o descargar archivo .vttsave"
@@ -481,7 +468,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           <Save className="w-5 h-5" />
         </button>
 
-        <div className="w-[1px] h-6 bg-slate-700 mx-1.5" />
+        <div className="w-[1px] h-6 bg-slate-700 mx-1" />
 
         <button
           onClick={undo}
@@ -502,98 +489,172 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
         </button>
       </div>
 
-      {/* Controles centrales: Niebla de guerra, cámaras y pantalla de jugadores */}
+      {/* Controles centrales: 3 Menús desplegables (Niebla, Ambiente, Pantalla TV) */}
       <div className="flex items-center gap-2">
-        {/* Controles de Niebla de guerra */}
-        <div className="flex items-center bg-slate-800 p-0.5 rounded border border-slate-700">
+        {/* 1. Menú desplegable "Niebla" */}
+        <div className="relative" ref={fogMenuRef}>
           <button
-            onClick={() => setFogConfig({ enabled: !game.fog.enabled })}
-            className={`px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1.5 transition-colors ${
+            onClick={() => {
+              setShowFogMenu(!showFogMenu);
+              setShowAmbientMenu(false);
+              setShowTvMenu(false);
+            }}
+            className={`px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1.5 border transition-all ${
               game.fog.enabled
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-indigo-600/30 text-indigo-200 border-indigo-500/70 shadow-sm'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
             }`}
-            title="Activar o desactivar la niebla de guerra para la ventana de jugadores"
+            title="Opciones de niebla de guerra: activar, recordar explorado, revelar/ocultar zona, vista de jugadores y reiniciar"
           >
-            {game.fog.enabled ? <Cloud className="w-3.5 h-3.5" /> : <CloudOff className="w-3.5 h-3.5" />}
-            <span>Niebla</span>
+            {game.fog.enabled ? <Cloud className="w-4 h-4 text-indigo-400" /> : <CloudOff className="w-4 h-4 text-slate-400" />}
+            <span className="hidden xl:inline">Niebla</span>
+            <ChevronDown className="w-3 h-3 text-slate-400 ml-0.5" />
           </button>
 
-          <button
-            onClick={() => setFogConfig({ rememberExplored: !game.fog.rememberExplored })}
-            className={`px-2.5 py-1 rounded text-xs font-medium flex items-center gap-1.5 transition-colors ${
-              game.fog.rememberExplored
-                ? 'bg-slate-700 text-sky-300 shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-            title="Recordar zonas exploradas: si está activo, las zonas que el token deja de ver se mantienen en gris oscuro. Si está desactivado, vuelven a negro total."
-          >
-            <History className="w-3.5 h-3.5" />
-            <span>Recordar explorado</span>
-          </button>
+          {showFogMenu && (
+            <div className="absolute top-full mt-1.5 left-0 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl p-2.5 z-50 w-60 space-y-2 text-xs">
+              <div className="font-semibold text-slate-300 border-b border-slate-800 pb-1 flex items-center justify-between">
+                <span>Niebla de guerra</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${game.fog.enabled ? 'bg-indigo-900 text-indigo-300' : 'bg-slate-800 text-slate-400'}`}>
+                  {game.fog.enabled ? 'ACTIVA' : 'OFF'}
+                </span>
+              </div>
 
-          <button
-            onClick={() => setShowResetFogConfirm(true)}
-            className="px-2 py-1 text-slate-400 hover:text-amber-400 hover:bg-slate-700/60 rounded text-xs font-medium flex items-center gap-1 transition-colors ml-0.5"
-            title="Reiniciar niebla: vuelve a oscurecer todo el mapa salvo la visión actual de los tokens"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Reiniciar niebla</span>
-          </button>
+              {/* Activar / Desactivar niebla */}
+              <button
+                onClick={() => setFogConfig({ enabled: !game.fog.enabled })}
+                className={`w-full p-2 rounded flex items-center justify-between border transition-all ${
+                  game.fog.enabled
+                    ? 'bg-indigo-600/30 border-indigo-500 text-indigo-200'
+                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                }`}
+                title="Activar o desactivar niebla en la pantalla de jugadores"
+              >
+                <span className="flex items-center gap-2">
+                  {game.fog.enabled ? <Cloud className="w-4 h-4 text-indigo-400" /> : <CloudOff className="w-4 h-4 text-slate-400" />}
+                  <span>Activar niebla</span>
+                </span>
+                <span className="font-mono text-xs font-bold">{game.fog.enabled ? 'SÍ' : 'NO'}</span>
+              </button>
+
+              {/* Recordar explorado */}
+              <button
+                onClick={() => setFogConfig({ rememberExplored: !game.fog.rememberExplored })}
+                className={`w-full p-2 rounded flex items-center justify-between border transition-all ${
+                  game.fog.rememberExplored
+                    ? 'bg-sky-950/80 border-sky-500 text-sky-200'
+                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                }`}
+                title="Recordar zonas exploradas: si está activo, las zonas que el token deja de ver se mantienen en gris oscuro. Si está desactivado, vuelven a negro total."
+              >
+                <span className="flex items-center gap-2">
+                  <History className="w-4 h-4 text-sky-400" />
+                  <span>Recordar explorado</span>
+                </span>
+                <span className="font-mono text-xs font-bold">{game.fog.rememberExplored ? 'SÍ' : 'NO'}</span>
+              </button>
+
+              <div className="border-t border-slate-800 my-1" />
+
+              {/* Herramientas de Revelar y Ocultar zona */}
+              <div className="text-[11px] text-slate-400 font-medium px-0.5">Herramientas de mapa</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  onClick={() => {
+                    handleToolChange('fogReveal');
+                    setShowFogMenu(false);
+                  }}
+                  className={`p-2 rounded flex items-center justify-center gap-1.5 border transition-all text-xs ${
+                    activeTool === 'fogReveal'
+                      ? 'bg-amber-600/30 text-amber-300 border-amber-500 shadow-sm'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                  }`}
+                  title="Revelar zona: arrastra un rectángulo en el tablero para descubrir esa área"
+                >
+                  <Eye className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Revelar zona</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    handleToolChange('fogHide');
+                    setShowFogMenu(false);
+                  }}
+                  className={`p-2 rounded flex items-center justify-center gap-1.5 border transition-all text-xs ${
+                    activeTool === 'fogHide'
+                      ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500 shadow-sm'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                  }`}
+                  title="Ocultar zona: arrastra un rectángulo en el tablero para volver a tapar esa área con niebla"
+                >
+                  <EyeOff className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Ocultar zona</span>
+                </button>
+              </div>
+
+              <div className="border-t border-slate-800 my-1" />
+
+              {/* Vista previa de jugadores */}
+              <button
+                onClick={() => {
+                  setIsPlayerPreviewMode(!isPlayerPreviewMode);
+                  setShowFogMenu(false);
+                }}
+                className={`w-full p-2 rounded flex items-center justify-between border transition-all ${
+                  isPlayerPreviewMode
+                    ? 'bg-purple-600/30 border-purple-500 text-purple-200'
+                    : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                }`}
+                title="Previsualiza exactamente lo que ven los jugadores en su pantalla (con niebla de guerra activa)"
+              >
+                <span className="flex items-center gap-2">
+                  <Eye className="w-4 h-4 text-purple-400" />
+                  <span>Vista jugadores</span>
+                </span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded ${isPlayerPreviewMode ? 'bg-purple-900 text-purple-200 font-bold' : 'bg-slate-700 text-slate-400'}`}>
+                  {isPlayerPreviewMode ? 'ACTIVA' : 'NORMAL'}
+                </span>
+              </button>
+
+              {/* Reiniciar niebla */}
+              <button
+                onClick={() => {
+                  setShowResetFogConfirm(true);
+                  setShowFogMenu(false);
+                }}
+                className="w-full p-2 rounded flex items-center gap-2 text-rose-300 hover:text-rose-200 bg-rose-950/30 hover:bg-rose-900/40 border border-rose-900/60 transition-colors"
+                title="Reiniciar niebla: vuelve a oscurecer todo el mapa salvo la visión actual de los tokens"
+              >
+                <RotateCcw className="w-4 h-4 text-rose-400" />
+                <span>Reiniciar niebla...</span>
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Vista previa de jugadores en la pantalla máster */}
-        <button
-          onClick={() => setIsPlayerPreviewMode(!isPlayerPreviewMode)}
-          className={`px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1.5 border transition-all ${
-            isPlayerPreviewMode
-              ? 'bg-purple-600 text-white border-purple-400 shadow-sm'
-              : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-600'
-          }`}
-          title="Previsualiza exactamente lo que ven los jugadores en su pantalla (con niebla de guerra activa)"
-        >
-          <Eye className="w-4 h-4 text-purple-300" />
-          <span>Vista jugadores</span>
-        </button>
-
-        {/* Marco TV de jugadores */}
-        <button
-          onClick={() => setShowPlayerFrame(!showPlayerFrame)}
-          className={`px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1.5 border transition-all ${
-            showPlayerFrame
-              ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/80 shadow-sm'
-              : 'bg-slate-800 hover:bg-slate-700 text-slate-400 border-slate-600'
-          }`}
-          title="Mostrar u ocultar en el tablero el marco verde discontinuo que representa la pantalla de los jugadores (TV)"
-        >
-          <Scan className="w-4 h-4 text-emerald-400" />
-          <span>Marco TV</span>
-        </button>
-
-        <div className="w-[1px] h-6 bg-slate-700 mx-0.5" />
-
-        {/* Selector de Luz Global / Ambiente */}
-        <div className="relative">
+        {/* 2. Menú desplegable "Ambiente" (Luz global y Clima) */}
+        <div className="relative" ref={ambientMenuRef}>
           <button
             onClick={() => {
               setShowAmbientMenu(!showAmbientMenu);
-              setShowWeatherMenu(false);
+              setShowFogMenu(false);
+              setShowTvMenu(false);
             }}
             className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-xs font-medium flex items-center gap-1.5 text-amber-300"
-            title="Luz ambiental global: Amanecer, Mediodía, Atardecer, Noche o Personalizado"
+            title="Luz ambiental global y efectos de clima"
           >
             {game.ambient.preset === 'dawn' ? (
-              <Sunrise className="w-3.5 h-3.5 text-amber-400" />
+              <Sunrise className="w-4 h-4 text-amber-400" />
             ) : game.ambient.preset === 'noon' ? (
-              <Sun className="w-3.5 h-3.5 text-yellow-300" />
+              <Sun className="w-4 h-4 text-yellow-300" />
             ) : game.ambient.preset === 'dusk' ? (
-              <Sunset className="w-3.5 h-3.5 text-orange-400" />
+              <Sunset className="w-4 h-4 text-orange-400" />
             ) : game.ambient.preset === 'night' ? (
-              <Moon className="w-3.5 h-3.5 text-indigo-400" />
+              <Moon className="w-4 h-4 text-indigo-400" />
             ) : (
-              <Sun className="w-3.5 h-3.5 text-sky-300" />
+              <Sun className="w-4 h-4 text-sky-300" />
             )}
-            <span className="capitalize">
+            <span className="hidden xl:inline capitalize">
               {game.ambient.preset === 'dawn'
                 ? 'Amanecer'
                 : game.ambient.preset === 'noon'
@@ -604,11 +665,12 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
                 ? 'Noche'
                 : 'Personalizado'}
             </span>
+            <ChevronDown className="w-3 h-3 text-slate-400 ml-0.5" />
           </button>
 
           {showAmbientMenu && (
-            <div className="absolute top-full mt-1.5 left-0 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl p-2.5 z-50 w-52 space-y-2 text-xs">
-              <div className="font-semibold text-slate-300 border-b border-slate-800 pb-1">Ambiente global</div>
+            <div className="absolute top-full mt-1.5 left-0 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl p-3 z-50 w-72 space-y-3 text-xs max-h-[85vh] overflow-y-auto">
+              <div className="font-semibold text-slate-300 border-b border-slate-800 pb-1">Luz ambiental global</div>
               <div className="grid grid-cols-2 gap-1.5">
                 {[
                   { id: 'dawn', label: 'Amanecer', icon: Sunrise },
@@ -623,11 +685,10 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
                       key={p.id}
                       onClick={() => {
                         setAmbientConfig({ preset: p.id as AmbientPreset });
-                        setShowAmbientMenu(false);
                       }}
                       className={`p-1.5 rounded flex items-center gap-1.5 border transition-all ${
                         isSelected
-                          ? 'bg-sky-950/80 border-sky-500 text-sky-200'
+                          ? 'bg-sky-950/80 border-sky-500 text-sky-200 shadow-sm'
                           : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
                       }`}
                     >
@@ -639,7 +700,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
               </div>
 
               {/* Personalizado */}
-              <div className="pt-1.5 border-t border-slate-800 space-y-1.5">
+              <div className="pt-2 border-t border-slate-800 space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400">Personalizado</span>
                   <input
@@ -671,220 +732,251 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
                   />
                 </div>
               </div>
+
+              {/* Clima */}
+              <div className="pt-2 border-t border-slate-800">
+                <div className="font-semibold text-slate-300 pb-1.5">Efectos climáticos</div>
+
+                {/* Lluvia */}
+                <div className="space-y-1.5 pb-2">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-1.5 font-medium text-slate-200 cursor-pointer">
+                      <CloudRain className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Lluvia</span>
+                    </label>
+                    <input
+                      type="checkbox"
+                      checked={game.weather.rain.enabled}
+                      onChange={(e) =>
+                        setWeatherConfig({
+                          rain: { ...game.weather.rain, enabled: e.target.checked }
+                        })
+                      }
+                      className="accent-sky-500 rounded cursor-pointer"
+                    />
+                  </div>
+                  {game.weather.rain.enabled && (
+                    <div className="space-y-1 pl-4">
+                      <div className="flex justify-between text-[11px] text-slate-400">
+                        <span>Intensidad</span>
+                        <span>{Math.round(game.weather.rain.intensity * 100)}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={game.weather.rain.intensity}
+                        onChange={(e) =>
+                          setWeatherConfig({
+                            rain: { ...game.weather.rain, intensity: parseFloat(e.target.value) }
+                          })
+                        }
+                        className="w-full accent-sky-500 cursor-pointer"
+                      />
+                      <div className="flex justify-between text-[11px] text-slate-400">
+                        <span>Dirección ({game.weather.rain.direction}°)</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="360"
+                        value={game.weather.rain.direction}
+                        onChange={(e) =>
+                          setWeatherConfig({
+                            rain: { ...game.weather.rain, direction: parseInt(e.target.value) || 0 }
+                          })
+                        }
+                        className="w-full accent-sky-500 cursor-pointer"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Nieve */}
+                <div className="space-y-1.5 py-2 border-t border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-1.5 font-medium text-slate-200 cursor-pointer">
+                      <CloudSnow className="w-3.5 h-3.5 text-cyan-200" />
+                      <span>Nieve</span>
+                    </label>
+                    <input
+                      type="checkbox"
+                      checked={game.weather.snow.enabled}
+                      onChange={(e) =>
+                        setWeatherConfig({
+                          snow: { ...game.weather.snow, enabled: e.target.checked }
+                        })
+                      }
+                      className="accent-sky-500 rounded cursor-pointer"
+                    />
+                  </div>
+                  {game.weather.snow.enabled && (
+                    <div className="space-y-1 pl-4">
+                      <div className="flex justify-between text-[11px] text-slate-400">
+                        <span>Intensidad</span>
+                        <span>{Math.round(game.weather.snow.intensity * 100)}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={game.weather.snow.intensity}
+                        onChange={(e) =>
+                          setWeatherConfig({
+                            snow: { ...game.weather.snow, intensity: parseFloat(e.target.value) }
+                          })
+                        }
+                        className="w-full accent-sky-500 cursor-pointer"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Viento */}
+                <div className="space-y-1.5 pt-2 border-t border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-1.5 font-medium text-slate-200 cursor-pointer">
+                      <Wind className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Viento</span>
+                    </label>
+                    <input
+                      type="checkbox"
+                      checked={game.weather.wind.enabled}
+                      onChange={(e) =>
+                        setWeatherConfig({
+                          wind: { ...game.weather.wind, enabled: e.target.checked }
+                        })
+                      }
+                      className="accent-sky-500 rounded cursor-pointer"
+                    />
+                  </div>
+                  {game.weather.wind.enabled && (
+                    <div className="space-y-1 pl-4">
+                      <div className="flex justify-between text-[11px] text-slate-400">
+                        <span>Intensidad</span>
+                        <span>{Math.round(game.weather.wind.intensity * 100)}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={game.weather.wind.intensity}
+                        onChange={(e) =>
+                          setWeatherConfig({
+                            wind: { ...game.weather.wind, intensity: parseFloat(e.target.value) }
+                          })
+                        }
+                        className="w-full accent-sky-500 cursor-pointer"
+                      />
+                      <div className="flex justify-between text-[11px] text-slate-400">
+                        <span>Dirección ({game.weather.wind.direction}°)</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="360"
+                        value={game.weather.wind.direction}
+                        onChange={(e) =>
+                          setWeatherConfig({
+                            wind: { ...game.weather.wind, direction: parseInt(e.target.value) || 0 }
+                          })
+                        }
+                        className="w-full accent-sky-500 cursor-pointer"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>
 
-        {/* Selector de Clima */}
-        <div className="relative">
+        {/* 3. Menú desplegable "Pantalla TV" */}
+        <div className="relative" ref={tvMenuRef}>
           <button
             onClick={() => {
-              setShowWeatherMenu(!showWeatherMenu);
+              setShowTvMenu(!showTvMenu);
+              setShowFogMenu(false);
               setShowAmbientMenu(false);
             }}
-            className={`px-2.5 py-1.5 border rounded text-xs font-medium flex items-center gap-1.5 transition-colors ${
-              game.weather.rain.enabled || game.weather.snow.enabled || game.weather.wind.enabled
-                ? 'bg-sky-950/80 border-sky-500 text-sky-300'
-                : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-300'
-            }`}
-            title="Efectos de clima: Lluvia, Nieve y Viento"
+            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-xs font-medium flex items-center gap-1.5 text-emerald-400"
+            title="Opciones de pantalla de jugadores / TV"
           >
-            <CloudRain className="w-3.5 h-3.5" />
-            <span>Clima</span>
+            <Tv className="w-4 h-4 text-emerald-400" />
+            <span className="hidden xl:inline">Pantalla TV</span>
+            <ChevronDown className="w-3 h-3 text-slate-400 ml-0.5" />
           </button>
 
-          {showWeatherMenu && (
-            <div className="absolute top-full mt-1.5 left-0 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl p-3 z-50 w-64 space-y-3 text-xs">
-              <div className="font-semibold text-slate-300 border-b border-slate-800 pb-1">Efectos climáticos</div>
-
-              {/* Lluvia */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-1.5 font-medium text-slate-200 cursor-pointer">
-                    <CloudRain className="w-3.5 h-3.5 text-sky-400" />
-                    <span>Lluvia</span>
-                  </label>
-                  <input
-                    type="checkbox"
-                    checked={game.weather.rain.enabled}
-                    onChange={(e) =>
-                      setWeatherConfig({
-                        rain: { ...game.weather.rain, enabled: e.target.checked }
-                      })
-                    }
-                    className="accent-sky-500 rounded cursor-pointer"
-                  />
-                </div>
-                {game.weather.rain.enabled && (
-                  <div className="space-y-1 pl-4">
-                    <div className="flex justify-between text-[11px] text-slate-400">
-                      <span>Intensidad</span>
-                      <span>{Math.round(game.weather.rain.intensity * 100)}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={game.weather.rain.intensity}
-                      onChange={(e) =>
-                        setWeatherConfig({
-                          rain: { ...game.weather.rain, intensity: parseFloat(e.target.value) }
-                        })
-                      }
-                      className="w-full accent-sky-500 cursor-pointer"
-                    />
-                    <div className="flex justify-between text-[11px] text-slate-400">
-                      <span>Dirección ({game.weather.rain.direction}°)</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="360"
-                      value={game.weather.rain.direction}
-                      onChange={(e) =>
-                        setWeatherConfig({
-                          rain: { ...game.weather.rain, direction: parseInt(e.target.value) || 0 }
-                        })
-                      }
-                      className="w-full accent-sky-500 cursor-pointer"
-                    />
-                  </div>
-                )}
+          {showTvMenu && (
+            <div className="absolute top-full mt-1.5 left-0 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl p-2.5 z-50 w-64 space-y-2 text-xs">
+              <div className="font-semibold text-slate-300 border-b border-slate-800 pb-1">
+                Pantalla de jugadores (TV)
               </div>
 
-              {/* Nieve */}
-              <div className="space-y-1.5 pt-1.5 border-t border-slate-800">
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-1.5 font-medium text-slate-200 cursor-pointer">
-                    <CloudSnow className="w-3.5 h-3.5 text-cyan-200" />
-                    <span>Nieve</span>
-                  </label>
-                  <input
-                    type="checkbox"
-                    checked={game.weather.snow.enabled}
-                    onChange={(e) =>
-                      setWeatherConfig({
-                        snow: { ...game.weather.snow, enabled: e.target.checked }
-                      })
-                    }
-                    className="accent-sky-500 rounded cursor-pointer"
-                  />
-                </div>
-                {game.weather.snow.enabled && (
-                  <div className="space-y-1 pl-4">
-                    <div className="flex justify-between text-[11px] text-slate-400">
-                      <span>Intensidad</span>
-                      <span>{Math.round(game.weather.snow.intensity * 100)}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={game.weather.snow.intensity}
-                      onChange={(e) =>
-                        setWeatherConfig({
-                          snow: { ...game.weather.snow, intensity: parseFloat(e.target.value) }
-                        })
-                      }
-                      className="w-full accent-sky-500 cursor-pointer"
-                    />
-                  </div>
-                )}
-              </div>
+              <button
+                onClick={() => {
+                  setShowDisplaysModal(true);
+                  setShowTvMenu(false);
+                }}
+                className="w-full p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded flex items-center gap-2 text-slate-200 transition-colors"
+                title="Abrir o gestionar la pantalla de jugadores para monitor o TV"
+              >
+                <Monitor className="w-4 h-4 text-emerald-400" />
+                <span className="font-medium">Abrir pantalla TV...</span>
+              </button>
 
-              {/* Viento / Hojas / Polvo */}
-              <div className="space-y-1.5 pt-1.5 border-t border-slate-800">
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-1.5 font-medium text-slate-200 cursor-pointer">
-                    <Wind className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Viento</span>
-                  </label>
-                  <input
-                    type="checkbox"
-                    checked={game.weather.wind.enabled}
-                    onChange={(e) =>
-                      setWeatherConfig({
-                        wind: { ...game.weather.wind, enabled: e.target.checked }
-                      })
-                    }
-                    className="accent-sky-500 rounded cursor-pointer"
-                  />
-                </div>
-                {game.weather.wind.enabled && (
-                  <div className="space-y-1 pl-4">
-                    <div className="flex justify-between text-[11px] text-slate-400">
-                      <span>Intensidad</span>
-                      <span>{Math.round(game.weather.wind.intensity * 100)}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={game.weather.wind.intensity}
-                      onChange={(e) =>
-                        setWeatherConfig({
-                          wind: { ...game.weather.wind, intensity: parseFloat(e.target.value) }
-                        })
-                      }
-                      className="w-full accent-sky-500 cursor-pointer"
-                    />
-                    <div className="flex justify-between text-[11px] text-slate-400">
-                      <span>Dirección ({game.weather.wind.direction}°)</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="360"
-                      value={game.weather.wind.direction}
-                      onChange={(e) =>
-                        setWeatherConfig({
-                          wind: { ...game.weather.wind, direction: parseInt(e.target.value) || 0 }
-                        })
-                      }
-                      className="w-full accent-sky-500 cursor-pointer"
-                    />
-                  </div>
-                )}
-              </div>
+              <button
+                onClick={() => setShowPlayerFrame(!showPlayerFrame)}
+                className={`w-full p-2 rounded flex items-center justify-between border transition-all ${
+                  showPlayerFrame
+                    ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300'
+                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                }`}
+                title="Mostrar u ocultar en el tablero el marco verde discontinuo que representa la pantalla de los jugadores (TV)"
+              >
+                <span className="flex items-center gap-2">
+                  <Scan className="w-4 h-4 text-emerald-400" />
+                  <span>Marco TV en tablero</span>
+                </span>
+                <span className="font-mono text-xs font-bold">{showPlayerFrame ? 'SÍ' : 'NO'}</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  sendMasterCameraToPlayers();
+                  setShowTvMenu(false);
+                }}
+                className="w-full p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded flex items-center gap-2 text-sky-300 transition-colors"
+                title="Alinea la posición y zoom de la pantalla de jugadores con la tuya"
+              >
+                <Tv className="w-4 h-4 text-sky-400" />
+                <span>Enviar vista a jugadores</span>
+              </button>
+
+              <button
+                onClick={() => setFollowMasterCamera(!game.followMasterCamera)}
+                className={`w-full p-2 rounded flex items-center justify-between border transition-all ${
+                  game.followMasterCamera
+                    ? 'bg-sky-950/80 border-sky-500 text-sky-200'
+                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                }`}
+                title="Cuando está activo, cualquier movimiento o zoom de tu cámara se refleja instantáneamente en la pantalla de jugadores"
+              >
+                <span className="flex items-center gap-2">
+                  <Tv className="w-4 h-4 text-sky-400" />
+                  <span>Seguir mi cámara</span>
+                </span>
+                <span className="font-mono text-xs font-bold">{game.followMasterCamera ? 'SÍ' : 'NO'}</span>
+              </button>
             </div>
           )}
         </div>
-
-        <button
-          onClick={sendMasterCameraToPlayers}
-          className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-xs font-medium flex items-center gap-1.5 text-sky-400"
-          title="Alinea la posición y zoom de la pantalla de jugadores con la tuya"
-        >
-          <Tv className="w-4 h-4" />
-          <span>Enviar vista</span>
-        </button>
-
-        <button
-          onClick={() => setFollowMasterCamera(!game.followMasterCamera)}
-          className={`px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1.5 border transition-all ${
-            game.followMasterCamera
-              ? 'bg-sky-600 text-white border-sky-400 shadow-sm'
-              : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-600'
-          }`}
-          title="Cuando está activo, cualquier movimiento o zoom de tu cámara se refleja instantáneamente en la pantalla de jugadores"
-        >
-          <span>Seguir mi cámara</span>
-        </button>
-
-        <button
-          onClick={() => setShowDisplaysModal(true)}
-          className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-xs font-medium flex items-center gap-1.5 text-slate-200"
-          title="Abrir o gestionar la pantalla de jugadores para monitor o TV"
-        >
-          <Monitor className="w-4 h-4 text-emerald-400" />
-          <span>Abrir pantalla</span>
-        </button>
       </div>
 
-      {/* Controles de la derecha: depuración UVTT y paneles laterales */}
+      {/* Controles de la derecha: aviso de vídeos, depuración UVTT y botón del panel lateral */}
       <div className="flex items-center gap-2">
         {videoWarning && (
           <div
@@ -892,7 +984,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
             title="Hay más de 6 vídeos activos simultáneamente. Podría afectar al rendimiento."
           >
             <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-            <span>&gt;6 vídeos activos</span>
+            <span className="hidden xl:inline">&gt;6 vídeos</span>
           </div>
         )}
 
@@ -902,50 +994,23 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           title={showDebugVttOverlay ? 'Paredes y luces UVTT visibles en máster' : 'Paredes y luces UVTT ocultas'}
         >
           {showDebugVttOverlay ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-          <span className="text-xs ml-1 font-mono">UVTT</span>
+          <span className="hidden xl:inline text-xs ml-1 font-mono">UVTT</span>
         </button>
 
         <div className="w-[1px] h-6 bg-slate-700 mx-1" />
 
-        <div className="flex bg-slate-800 p-0.5 rounded border border-slate-700">
-          <button
-            onClick={() => setActiveSidebarTab(activeSidebarTab === 'properties' ? null : 'properties')}
-            className={`px-3 py-1 rounded text-xs font-medium ${
-              activeSidebarTab === 'properties' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'
-            }`}
-            title="Panel de propiedades: editar dimensiones, capas, visión de tokens y estado de puertas"
-          >
-            Propiedades
-          </button>
-          <button
-            onClick={() => setActiveSidebarTab(activeSidebarTab === 'layers' ? null : 'layers')}
-            className={`px-3 py-1 rounded text-xs font-medium ${
-              activeSidebarTab === 'layers' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'
-            }`}
-            title="Panel de capas: ordenar la profundidad (zIndex) y visibilidad de las entidades"
-          >
-            Capas
-          </button>
-          <button
-            onClick={() => setActiveSidebarTab(activeSidebarTab === 'library' ? null : 'library')}
-            className={`px-3 py-1 rounded text-xs font-medium ${
-              activeSidebarTab === 'library' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'
-            }`}
-            title="Panel de biblioteca: explorar y colocar mapas o imágenes en el tablero"
-          >
-            Biblioteca
-          </button>
-          <button
-            onClick={() => setActiveSidebarTab(activeSidebarTab === 'music' ? null : 'music')}
-            className={`px-3 py-1 rounded text-xs font-medium flex items-center gap-1 ${
-              activeSidebarTab === 'music' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
-            }`}
-            title="Panel de música ambiental y efectos de sonido"
-          >
-            <Music className="w-3.5 h-3.5" />
-            <span>Música</span>
-          </button>
-        </div>
+        <button
+          onClick={() => setActiveSidebarTab(activeSidebarTab ? null : 'properties')}
+          className={`px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1.5 border transition-all ${
+            activeSidebarTab
+              ? 'bg-sky-600 text-white border-sky-400 shadow-sm'
+              : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+          }`}
+          title={activeSidebarTab ? 'Ocultar panel lateral' : 'Mostrar panel lateral (Propiedades, Capas, Biblioteca, Música)'}
+        >
+          <PanelRight className="w-4 h-4" />
+          <span className="hidden xl:inline">{activeSidebarTab ? 'Ocultar panel' : 'Panel lateral'}</span>
+        </button>
       </div>
 
       {/* Modal de confirmación para reiniciar niebla (sin window.confirm) */}

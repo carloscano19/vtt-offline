@@ -119,10 +119,11 @@ export class PixiRenderer {
       this.fogLayer.label = 'FogLayer';
       this.worldContainer.addChild(this.fogLayer);
 
-      // 8. Capa de Clima (Lluvia, Nieve, Viento a 60 fps)
+      // 8. Capa de Clima (Lluvia, Nieve, Viento en coordenadas directas de pantalla a 60 fps)
+      // Se añade al stage por encima del worldContainer para cubrir siempre todo el viewport
       this.weatherLayer = new WeatherLayer();
       this.weatherLayer.label = 'WeatherLayer';
-      this.worldContainer.addChild(this.weatherLayer);
+      this.app.stage.addChild(this.weatherLayer);
 
       // 9. Capa de Iconos de Luz (Solo Máster)
       this.lightsLayer = new LightsLayer(this.isMaster);

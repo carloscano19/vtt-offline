@@ -823,7 +823,9 @@ export const PropertiesTab: React.FC = () => {
                       enabled: e.target.checked,
                       distanceInSquares: selectedEntity.animations?.sway?.distanceInSquares ?? 1,
                       speed: selectedEntity.animations?.sway?.speed ?? 1,
-                      direction: selectedEntity.animations?.sway?.direction ?? 'horizontal'
+                      direction: typeof selectedEntity.animations?.sway?.direction === 'number'
+                        ? selectedEntity.animations.sway.direction
+                        : 0
                     }
                   }
                 })

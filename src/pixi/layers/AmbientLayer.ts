@@ -188,8 +188,15 @@ export class AmbientLayer extends Container {
       // Zona clara de las luces: sin oscuridad (0% alpha)
     }
 
-    // 5. Dibujar tinte de color de cada luz dinámica (con parpadeo visual suave en ticker)
+    // 5. Dibujar tinte de color de cada luz dinámica (brillo suave y aditivo, modulado por la oscuridad del ambiente)
     this.lightsTintGfx.clear();
+    // Escalar con la oscuridad del ambiente:
+    // - Mediodía (darkness ~0.0): escala muy baja (~0.05), prácticamente imperceptible sin tapar el mapa
+    // - Atardecer (darkness ~0.35): escala notable (~0.45)
+    // - Noche (darkness ~0.85): escala fuerte (~0.90 - 1.0)
+    // Alpha máximo del centro ~0.25 (definido como 0.25 * darknessFactor)
+    const darknessFactor = 0.05 + 0.95 * Math.pow(Math.min(1.0, currentDarkness / 0.85), 1.5);
+
     for (const light of lights) {
       const rgb = hexToRgb(light.color);
       const colorNum = rgbToHex(rgb.r, rgb.g, rgb.b);
@@ -201,16 +208,18 @@ export class AmbientLayer extends Container {
         flickerMod = 0.90 + 0.10 * Math.sin(this.timeSec * 8 + seed) * Math.cos(this.timeSec * 13 + seed);
       }
 
-      const lightAlpha = light.intensity * 0.25 * flickerMod;
+      // Brillo suave y aditivo: alpha máximo en el centro de ~0.25
+      const baseAlpha = light.intensity * 0.25 * darknessFactor * flickerMod;
 
       if (light.brightPolygon && light.brightPolygon.length >= 3) {
         this.lightsTintGfx.poly(light.brightPolygon.map((p) => [p.x, p.y]).flat());
-        this.lightsTintGfx.fill({ color: colorNum, alpha: lightAlpha });
+        this.lightsTintGfx.fill({ color: colorNum, alpha: baseAlpha });
       }
 
+      // Zona tenue: degradado hacia el borde con intensidad reducida
       if (light.totalPolygon && light.totalPolygon.length >= 3) {
         this.lightsTintGfx.poly(light.totalPolygon.map((p) => [p.x, p.y]).flat());
-        this.lightsTintGfx.fill({ color: colorNum, alpha: lightAlpha * 0.5 });
+        this.lightsTintGfx.fill({ color: colorNum, alpha: baseAlpha * 0.40 });
       }
     }
   }

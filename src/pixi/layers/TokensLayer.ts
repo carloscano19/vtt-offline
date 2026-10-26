@@ -257,9 +257,9 @@ export class TokensLayer extends Container {
 
       // 2. Animaciones físicas
       const anim = (container as any)._animations as EntityAnimations | undefined;
-      const baseX = (container as any)._baseX ?? container.x;
-      const baseY = (container as any)._baseY ?? container.y;
-      const baseRot = (container as any)._baseRotation ?? container.rotation;
+      const baseX = Number.isFinite((container as any)._baseX) ? (container as any)._baseX : container.x;
+      const baseY = Number.isFinite((container as any)._baseY) ? (container as any)._baseY : container.y;
+      const baseRot = Number.isFinite((container as any)._baseRotation) ? (container as any)._baseRotation : 0;
 
       let offsetX = 0;
       let offsetY = 0;
@@ -268,7 +268,8 @@ export class TokensLayer extends Container {
       if (anim) {
         // Rotación continua
         if (anim.rotation?.enabled) {
-          const rotSpeed = (anim.rotation.speed ?? 1) * 0.05;
+          const dirMultiplier = anim.rotation.direction === 'ccw' ? -1 : 1;
+          const rotSpeed = (anim.rotation.speed ?? 1) * 0.05 * dirMultiplier;
           extraRot = this.animTime * rotSpeed;
         }
 
@@ -280,14 +281,31 @@ export class TokensLayer extends Container {
           offsetY += Math.cos(this.animTime * freq * 1.3) * intensity;
         }
 
-        // Vaivén / Sway (distancia en casillas)
+        // Vaivén / Sway (distancia en casillas en coordenadas del MUNDO)
         if (anim.sway?.enabled) {
-          const distPx = (anim.sway.distanceInSquares ?? 1) * effectiveGrid;
-          const dirRad = ((anim.sway.direction ?? 0) * Math.PI) / 180;
-          const swaySpeed = anim.sway.speed ?? 2;
+          const distSquares = typeof anim.sway.distanceInSquares === 'number' && Number.isFinite(anim.sway.distanceInSquares)
+            ? anim.sway.distanceInSquares
+            : 1;
+          const distPx = distSquares * effectiveGrid;
+
+          // Dirección: soportar número (grados) o string 'horizontal' / 'vertical'
+          let dirDeg = 0;
+          if (typeof anim.sway.direction === 'number' && Number.isFinite(anim.sway.direction)) {
+            dirDeg = anim.sway.direction;
+          } else if (typeof (anim.sway as any).direction === 'string') {
+            dirDeg = (anim.sway as any).direction.toLowerCase() === 'vertical' ? 90 : 0;
+          }
+          const dirRad = (dirDeg * Math.PI) / 180;
+
+          const swaySpeed = typeof anim.sway.speed === 'number' && Number.isFinite(anim.sway.speed)
+            ? anim.sway.speed
+            : 2;
           const swayOffset = Math.sin(this.animTime * swaySpeed) * distPx;
-          offsetX += Math.cos(dirRad) * swayOffset;
-          offsetY += Math.sin(dirRad) * swayOffset;
+
+          if (Number.isFinite(swayOffset)) {
+            offsetX += Math.cos(dirRad) * swayOffset;
+            offsetY += Math.sin(dirRad) * swayOffset;
+          }
         }
       }
 

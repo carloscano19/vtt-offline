@@ -11,7 +11,7 @@ export function normalizeEntity(entity: Entity): Entity {
   if (entity.type === 'token') {
     const side = entity.side || 'jugador';
     if (!entity.vision) {
-      return {
+      entity = {
         ...entity,
         side,
         vision: {
@@ -36,7 +36,7 @@ export function normalizeEntity(entity: Entity): Entity {
         ? 2
         : 0;
 
-      return {
+      entity = {
         ...entity,
         side,
         vision: {
@@ -47,6 +47,36 @@ export function normalizeEntity(entity: Entity): Entity {
       };
     }
   }
+  // Normalizar animaciones si existen
+  const rawAnim: any = entity.animations || (entity as any).animation;
+  if (rawAnim) {
+    let sway = rawAnim.sway;
+    if (sway) {
+      let dir = sway.direction;
+      if (typeof dir === 'string') {
+        dir = dir.toLowerCase() === 'vertical' ? 90 : 0;
+      } else if (typeof dir !== 'number' || !Number.isFinite(dir)) {
+        dir = 0;
+      }
+      sway = {
+        enabled: Boolean(sway.enabled),
+        distanceInSquares: Math.max(0, Number(sway.distanceInSquares) || 1),
+        speed: Math.max(0.1, Number(sway.speed) || 1),
+        direction: dir
+      };
+    }
+    entity = {
+      ...entity,
+      animations: {
+        ...rawAnim,
+        sway
+      }
+    };
+    if ('animation' in entity) {
+      delete (entity as any).animation;
+    }
+  }
+
   // Normalizar Chroma Key si existe en cualquier entidad
   if (entity.chromaKey) {
     const rawCk: any = entity.chromaKey;

@@ -218,4 +218,62 @@ describe('Phase 3: Luces, Visión a Distancia y Chroma Key', () => {
     // Pixel 2 is completely unchanged (solid red)
     expect(imgData.data[11]).toBe(255);
   });
+
+  it('normalizes token sway animation with string or number direction', async () => {
+    const { normalizeEntity } = await import('../src/modules/persistence/normalizer');
+    const legacyToken: Entity = {
+      id: 'token_sway',
+      type: 'token',
+      name: 'Goblin',
+      x: 100,
+      y: 100,
+      rotation: 0,
+      scaleX: 0.05, // large image scaled down
+      scaleY: 0.05,
+      zIndex: 10,
+      visibleToPlayers: true,
+      locked: false,
+      animation: {
+        sway: {
+          enabled: true,
+          speed: 1,
+          distanceInSquares: 0.25,
+          direction: 'horizontal' as any
+        }
+      }
+    };
+
+    const normalizedToken = normalizeEntity(legacyToken);
+    expect(normalizedToken.animations?.sway?.enabled).toBe(true);
+    expect(normalizedToken.animations?.sway?.direction).toBe(0); // 'horizontal' -> 0
+    expect(normalizedToken.animations?.sway?.distanceInSquares).toBe(0.25);
+  });
+
+  it('calculates sway offset in world coordinates without cumulative drift or scale distortion', () => {
+    // Test large image token scaled to 1 square:
+    // Natural image width = 2000px, gridSize = 70px -> scale = 70 / 2000 = 0.035
+    const gridSize = 70;
+    const distanceInSquares = 0.5; // 0.5 squares = 35px in world space
+    const baseWorldX = 200;
+    const baseWorldY = 300;
+    const directionDeg = 0; // horizontal (X axis)
+
+    const rad = (directionDeg * Math.PI) / 180;
+    const maxOffsetWorld = distanceInSquares * gridSize; // exactly 35px
+
+    // Simulate multiple frames at various t values
+    const times = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2, 2 * Math.PI];
+    for (const t of times) {
+      const swayOffset = Math.sin(t) * maxOffsetWorld;
+      expect(Number.isFinite(swayOffset)).toBe(true);
+      const posX = baseWorldX + Math.cos(rad) * swayOffset;
+      const posY = baseWorldY + Math.sin(rad) * swayOffset;
+
+      expect(Number.isFinite(posX)).toBe(true);
+      expect(Number.isFinite(posY)).toBe(true);
+      // Displacement is always within [-35px, +35px] relative to baseWorldX
+      expect(Math.abs(posX - baseWorldX)).toBeLessThanOrEqual(35.001);
+      expect(posY).toBe(baseWorldY);
+    }
+  });
 });

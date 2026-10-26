@@ -67,10 +67,10 @@ export class WeatherLayer extends Container {
     this.visible = true;
     this.time += deltaSeconds;
 
-    // Colocar la capa fija respecto a la pantalla
-    // Al estar dentro de worldContainer, contrarrestamos la cámara para dibujar en coordenadas fijas de pantalla
-    this.position.set(-camera.x, -camera.y);
-    this.scale.set(1 / camera.zoom);
+    // Al ser hijo directo de app.stage, las coordenadas (0,0) a (sw, sh)
+    // representan el área visible completa del viewport real en máster y tele
+    this.position.set(0, 0);
+    this.scale.set(1, 1);
 
     this.gfx.clear();
 
