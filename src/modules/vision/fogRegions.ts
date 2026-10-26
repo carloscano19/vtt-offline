@@ -59,26 +59,31 @@ export function computeFogRegions(
   visibilitiesOrPolys: any[],
   bounds: { x: number; y: number; width: number; height: number },
   revealed: ExploredMultiPolygon = [],
-  rememberExplored = false
+  rememberExplored = false,
+  lights: any[] = []
 ): FogRegions {
   const cleanExplored = snapMulti(explored || []);
   const cleanRevealed = snapMulti(revealed || []);
 
-  // Extraer polígonos claros y totales
+  // Extraer polígonos claros, totales y línea de visión ilimitada
   const brightPolysList: Point2D[][] = [];
   const totalPolysList: Point2D[][] = [];
+  const losPolysList: Point2D[][] = [];
 
   for (const item of visibilitiesOrPolys) {
     if (Array.isArray(item)) {
       if (item.length >= 3) {
         brightPolysList.push(item);
         totalPolysList.push(item);
+        losPolysList.push(item);
       }
     } else if (item && typeof item === 'object') {
       const bPoly = item.brightPolygon || item.polygon;
       const tPoly = item.totalPolygon || item.polygon;
+      const lPoly = item.losPolygon || item.totalPolygon || item.polygon;
       if (bPoly && bPoly.length >= 3) brightPolysList.push(bPoly);
       if (tPoly && tPoly.length >= 3) totalPolysList.push(tPoly);
+      if (lPoly && lPoly.length >= 3) losPolysList.push(lPoly);
     }
   }
 
@@ -102,6 +107,48 @@ export function computeFogRegions(
       tokenVisionTotal = simplifyMulti(snapMulti(united as ExploredMultiPolygon));
     } catch (e) {
       console.warn('[computeFogRegions] union(totalRings) error:', e);
+    }
+  }
+
+  // Integración de luces dinámicas con línea de visión ilimitada de tokens (estilo D&D)
+  if (lights.length > 0 && losPolysList.length > 0) {
+    const lightBrightPolys = lights.map((l) => l.brightPolygon).filter((p) => p && p.length >= 3);
+    const lightTotalPolys = lights.map((l) => l.totalPolygon).filter((p) => p && p.length >= 3);
+
+    if (lightTotalPolys.length > 0) {
+      try {
+        const lightsTotalMulti = polygonClipping.union(visionToMulti(lightTotalPolys)) as ExploredMultiPolygon;
+        const playerLoSMulti = polygonClipping.union(visionToMulti(losPolysList)) as ExploredMultiPolygon;
+
+        // Zonas iluminadas que están en línea de visión directa de algún token jugador
+        const litSeenTotal = polygonClipping.intersection(lightsTotalMulti, playerLoSMulti) as ExploredMultiPolygon;
+
+        if (litSeenTotal && litSeenTotal.length > 0) {
+          if (tokenVisionTotal.length > 0) {
+            tokenVisionTotal = simplifyMulti(
+              snapMulti(polygonClipping.union(tokenVisionTotal, litSeenTotal) as ExploredMultiPolygon)
+            );
+          } else {
+            tokenVisionTotal = simplifyMulti(snapMulti(litSeenTotal));
+          }
+
+          if (lightBrightPolys.length > 0) {
+            const lightsBrightMulti = polygonClipping.union(visionToMulti(lightBrightPolys)) as ExploredMultiPolygon;
+            const litSeenBright = polygonClipping.intersection(lightsBrightMulti, playerLoSMulti) as ExploredMultiPolygon;
+            if (litSeenBright && litSeenBright.length > 0) {
+              if (tokenVisionBright.length > 0) {
+                tokenVisionBright = simplifyMulti(
+                  snapMulti(polygonClipping.union(tokenVisionBright, litSeenBright) as ExploredMultiPolygon)
+                );
+              } else {
+                tokenVisionBright = simplifyMulti(snapMulti(litSeenBright));
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[computeFogRegions] Error al combinar luces con línea de visión:', e);
+      }
     }
   }
 

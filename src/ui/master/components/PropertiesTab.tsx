@@ -1,7 +1,26 @@
 import React from 'react';
 import { useGameStore } from '../../../stores/useGameStore';
 import { useUIStore } from '../../../stores/useUIStore';
-import { Lock, Unlock, Eye, EyeOff, Trash2, Shield, Users, Crosshair, BrickWall, DoorClosed, DoorOpen } from 'lucide-react';
+import {
+  Lock,
+  Unlock,
+  Eye,
+  EyeOff,
+  Trash2,
+  Shield,
+  Users,
+  Crosshair,
+  BrickWall,
+  DoorClosed,
+  DoorOpen,
+  Flame,
+  Sliders,
+  Play,
+  Pipette,
+  RotateCw,
+  RefreshCcw,
+  Sparkles
+} from 'lucide-react';
 import { TokenSide } from '../../../types/entity';
 
 export const PropertiesTab: React.FC = () => {
@@ -39,6 +58,26 @@ export const PropertiesTab: React.FC = () => {
 
   const degrees = Math.round((selectedEntity.rotation * 180) / Math.PI);
 
+  const handleEyeDropper = async () => {
+    if ('EyeDropper' in window) {
+      try {
+        const eyeDropper = new (window as any).EyeDropper();
+        const result = await eyeDropper.open();
+        if (result && result.sRGBHex) {
+          handleUpdate({
+            chromaKey: {
+              enabled: true,
+              color: result.sRGBHex,
+              tolerance: selectedEntity.chromaKey?.tolerance ?? 0.15
+            }
+          });
+        }
+      } catch (e) {
+        // Cancelado o no soportado
+      }
+    }
+  };
+
   return (
     <div className="p-4 space-y-4 text-xs text-slate-200 overflow-y-auto max-h-full">
       {/* Cabecera con Nombre y tipo */}
@@ -53,6 +92,8 @@ export const PropertiesTab: React.FC = () => {
               ? 'Pared Invisible'
               : selectedEntity.type === 'door'
               ? 'Puerta'
+              : selectedEntity.type === 'light'
+              ? 'Luz / Antorcha'
               : 'Objeto'}
           </span>
           <div className="flex items-center gap-1">
@@ -390,6 +431,539 @@ export const PropertiesTab: React.FC = () => {
               ? 'La puerta está abierta: la visión de los jugadores atraviesa este umbral.'
               : 'La puerta está cerrada: bloquea la visión como una pared.'}
           </p>
+        </div>
+      )}
+
+      {/* Propiedades de Luz si corresponde */}
+      {selectedEntity.type === 'light' && selectedEntity.light && (
+        <div className="bg-slate-800/60 p-3 rounded border border-slate-700 space-y-3">
+          <div className="flex items-center justify-between text-amber-400 font-semibold">
+            <span className="flex items-center gap-1.5">
+              <Flame className="w-4 h-4" />
+              <span>Propiedades de Luz</span>
+            </span>
+          </div>
+
+          {/* Color e Intensidad */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <span className="text-[10px] text-slate-400 block mb-1">Color de la luz</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={selectedEntity.light.color}
+                  onChange={(e) =>
+                    handleUpdate({
+                      light: { ...selectedEntity.light!, color: e.target.value }
+                    })
+                  }
+                  className="w-7 h-7 rounded cursor-pointer border border-slate-600 bg-transparent"
+                />
+                <span className="font-mono text-[11px] text-slate-300 uppercase">
+                  {selectedEntity.light.color}
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <span className="text-[10px] text-slate-400 block mb-1">
+                Intensidad ({selectedEntity.light.intensity}%)
+              </span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={selectedEntity.light.intensity}
+                onChange={(e) =>
+                  handleUpdate({
+                    light: { ...selectedEntity.light!, intensity: parseInt(e.target.value) || 0 }
+                  })
+                }
+                className="w-full accent-amber-500 cursor-pointer"
+              />
+            </div>
+          </div>
+
+          {/* Radios Claro y Tenue */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                <span>Radio claro</span>
+                <span className="text-white font-mono">{selectedEntity.light.brightRadiusInSquares} cas.</span>
+              </div>
+              <input
+                type="number"
+                min="0"
+                max="50"
+                value={selectedEntity.light.brightRadiusInSquares}
+                onChange={(e) =>
+                  handleUpdate({
+                    light: {
+                      ...selectedEntity.light!,
+                      brightRadiusInSquares: Math.max(0, parseInt(e.target.value) || 0)
+                    }
+                  })
+                }
+                className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                <span>Radio tenue</span>
+                <span className="text-white font-mono">+{selectedEntity.light.dimRadiusInSquares} cas.</span>
+              </div>
+              <input
+                type="number"
+                min="0"
+                max="50"
+                value={selectedEntity.light.dimRadiusInSquares}
+                onChange={(e) =>
+                  handleUpdate({
+                    light: {
+                      ...selectedEntity.light!,
+                      dimRadiusInSquares: Math.max(0, parseInt(e.target.value) || 0)
+                    }
+                  })
+                }
+                className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200"
+              />
+            </div>
+          </div>
+
+          {/* Dureza del borde y Parpadeo */}
+          <div className="space-y-2 pt-1 border-t border-slate-700/60">
+            <div>
+              <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                <span>Dureza del borde</span>
+                <span className="text-white font-mono">{Math.round(selectedEntity.light.edgeHardness * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={selectedEntity.light.edgeHardness}
+                onChange={(e) =>
+                  handleUpdate({
+                    light: {
+                      ...selectedEntity.light!,
+                      edgeHardness: parseFloat(e.target.value) || 0.5
+                    }
+                  })
+                }
+                className="w-full accent-amber-500 cursor-pointer"
+              />
+              <span className="text-[10px] text-slate-500">0 = Suave / difuso, 1 = Nítido</span>
+            </div>
+
+            <label className="flex items-center justify-between cursor-pointer pt-1">
+              <span className="text-slate-300">Parpadeo de antorcha</span>
+              <input
+                type="checkbox"
+                checked={selectedEntity.light.flicker}
+                onChange={(e) =>
+                  handleUpdate({
+                    light: {
+                      ...selectedEntity.light!,
+                      flicker: e.target.checked
+                    }
+                  })
+                }
+                className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+              />
+            </label>
+          </div>
+        </div>
+      )}
+
+      {/* Ajustes visuales (Tono, Saturación, Brillo) */}
+      <div className="bg-slate-800/60 p-3 rounded border border-slate-700 space-y-2.5">
+        <div className="flex items-center justify-between">
+          <span className="font-semibold text-sky-400 flex items-center gap-1.5">
+            <Sliders className="w-4 h-4" />
+            <span>Ajustes Visuales</span>
+          </span>
+          <button
+            onClick={() =>
+              handleUpdate({
+                filters: { hue: 0, saturation: 1, brightness: 1 }
+              })
+            }
+            className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 transition-colors"
+            title="Restablecer color original"
+          >
+            <RefreshCcw className="w-3 h-3" />
+            <span>Restablecer</span>
+          </button>
+        </div>
+
+        {/* Tono (Hue) */}
+        <div>
+          <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+            <span>Tono (Hue)</span>
+            <span className="text-white font-mono">{selectedEntity.filters?.hue ?? 0}°</span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="360"
+            value={selectedEntity.filters?.hue ?? 0}
+            onChange={(e) =>
+              handleUpdate({
+                filters: {
+                  hue: parseInt(e.target.value) || 0,
+                  saturation: selectedEntity.filters?.saturation ?? 1,
+                  brightness: selectedEntity.filters?.brightness ?? 1
+                }
+              })
+            }
+            className="w-full accent-sky-500 cursor-pointer"
+          />
+        </div>
+
+        {/* Saturación */}
+        <div>
+          <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+            <span>Saturación</span>
+            <span className="text-white font-mono">
+              {Math.round((selectedEntity.filters?.saturation ?? 1) * 100)}%
+            </span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="2"
+            step="0.05"
+            value={selectedEntity.filters?.saturation ?? 1}
+            onChange={(e) =>
+              handleUpdate({
+                filters: {
+                  hue: selectedEntity.filters?.hue ?? 0,
+                  saturation: parseFloat(e.target.value) || 1,
+                  brightness: selectedEntity.filters?.brightness ?? 1
+                }
+              })
+            }
+            className="w-full accent-sky-500 cursor-pointer"
+          />
+        </div>
+
+        {/* Brillo */}
+        <div>
+          <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+            <span>Brillo</span>
+            <span className="text-white font-mono">
+              {Math.round((selectedEntity.filters?.brightness ?? 1) * 100)}%
+            </span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="2"
+            step="0.05"
+            value={selectedEntity.filters?.brightness ?? 1}
+            onChange={(e) =>
+              handleUpdate({
+                filters: {
+                  hue: selectedEntity.filters?.hue ?? 0,
+                  saturation: selectedEntity.filters?.saturation ?? 1,
+                  brightness: parseFloat(e.target.value) || 1
+                }
+              })
+            }
+            className="w-full accent-sky-500 cursor-pointer"
+          />
+        </div>
+      </div>
+
+      {/* Animaciones (Giro, Temblor, Vaivén) */}
+      <div className="bg-slate-800/60 p-3 rounded border border-slate-700 space-y-3">
+        <div className="flex items-center gap-1.5 font-semibold text-purple-400">
+          <Sparkles className="w-4 h-4" />
+          <span>Animaciones Continuas</span>
+        </div>
+
+        {/* Giro continuo */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-slate-300">Rotación continua</span>
+            <input
+              type="checkbox"
+              checked={selectedEntity.animations?.rotation?.enabled ?? false}
+              onChange={(e) =>
+                handleUpdate({
+                  animations: {
+                    ...selectedEntity.animations,
+                    rotation: {
+                      enabled: e.target.checked,
+                      speed: selectedEntity.animations?.rotation?.speed ?? 1,
+                      direction: selectedEntity.animations?.rotation?.direction ?? 'cw'
+                    }
+                  }
+                })
+              }
+              className="accent-purple-500 rounded cursor-pointer"
+            />
+          </div>
+          {selectedEntity.animations?.rotation?.enabled && (
+            <div className="space-y-1.5 pl-2 border-l border-purple-500/40">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 text-[11px]">Sentido</span>
+                <button
+                  onClick={() =>
+                    handleUpdate({
+                      animations: {
+                        ...selectedEntity.animations,
+                        rotation: {
+                          ...selectedEntity.animations!.rotation!,
+                          direction: selectedEntity.animations?.rotation?.direction === 'cw' ? 'ccw' : 'cw'
+                        }
+                      }
+                    })
+                  }
+                  className="px-2 py-0.5 bg-slate-700 rounded text-[11px] text-white"
+                >
+                  {selectedEntity.animations?.rotation?.direction === 'cw' ? 'Horario (CW)' : 'Antihorario (CCW)'}
+                </button>
+              </div>
+              <div>
+                <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                  <span>Velocidad</span>
+                  <span className="text-white font-mono">{selectedEntity.animations?.rotation?.speed ?? 1}x</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.1"
+                  max="5"
+                  step="0.1"
+                  value={selectedEntity.animations?.rotation?.speed ?? 1}
+                  onChange={(e) =>
+                    handleUpdate({
+                      animations: {
+                        ...selectedEntity.animations,
+                        rotation: {
+                          ...selectedEntity.animations!.rotation!,
+                          speed: parseFloat(e.target.value) || 1
+                        }
+                      }
+                    })
+                  }
+                  className="w-full accent-purple-500 cursor-pointer"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Temblor */}
+        <div className="space-y-1.5 pt-1.5 border-t border-slate-700/60">
+          <div className="flex items-center justify-between">
+            <span className="text-slate-300">Temblor (Shake)</span>
+            <input
+              type="checkbox"
+              checked={selectedEntity.animations?.shake?.enabled ?? false}
+              onChange={(e) =>
+                handleUpdate({
+                  animations: {
+                    ...selectedEntity.animations,
+                    shake: {
+                      enabled: e.target.checked,
+                      intensity: selectedEntity.animations?.shake?.intensity ?? 3,
+                      speed: selectedEntity.animations?.shake?.speed ?? 15
+                    }
+                  }
+                })
+              }
+              className="accent-purple-500 rounded cursor-pointer"
+            />
+          </div>
+          {selectedEntity.animations?.shake?.enabled && (
+            <div className="space-y-1.5 pl-2 border-l border-purple-500/40">
+              <div>
+                <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                  <span>Intensidad (px)</span>
+                  <span className="text-white font-mono">{selectedEntity.animations?.shake?.intensity ?? 3} px</span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="20"
+                  value={selectedEntity.animations?.shake?.intensity ?? 3}
+                  onChange={(e) =>
+                    handleUpdate({
+                      animations: {
+                        ...selectedEntity.animations,
+                        shake: {
+                          ...selectedEntity.animations!.shake!,
+                          intensity: parseInt(e.target.value) || 1
+                        }
+                      }
+                    })
+                  }
+                  className="w-full accent-purple-500 cursor-pointer"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Vaivén / Sway */}
+        <div className="space-y-1.5 pt-1.5 border-t border-slate-700/60">
+          <div className="flex items-center justify-between">
+            <span className="text-slate-300">Vaivén (Sway)</span>
+            <input
+              type="checkbox"
+              checked={selectedEntity.animations?.sway?.enabled ?? false}
+              onChange={(e) =>
+                handleUpdate({
+                  animations: {
+                    ...selectedEntity.animations,
+                    sway: {
+                      enabled: e.target.checked,
+                      distanceInSquares: selectedEntity.animations?.sway?.distanceInSquares ?? 1,
+                      speed: selectedEntity.animations?.sway?.speed ?? 1,
+                      direction: selectedEntity.animations?.sway?.direction ?? 'horizontal'
+                    }
+                  }
+                })
+              }
+              className="accent-purple-500 rounded cursor-pointer"
+            />
+          </div>
+          {selectedEntity.animations?.sway?.enabled && (
+            <div className="space-y-1.5 pl-2 border-l border-purple-500/40">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 text-[11px]">Dirección</span>
+                <button
+                  onClick={() =>
+                    handleUpdate({
+                      animations: {
+                        ...selectedEntity.animations,
+                        sway: {
+                          ...selectedEntity.animations!.sway!,
+                          direction: (selectedEntity.animations?.sway?.direction ?? 0) === 0 ? 90 : 0
+                        }
+                      }
+                    })
+                  }
+                  className="px-2 py-0.5 bg-slate-700 rounded text-[11px] text-white capitalize"
+                >
+                  {(selectedEntity.animations?.sway?.direction ?? 0) === 0 ? 'Horizontal' : 'Vertical'}
+                </button>
+              </div>
+              <div>
+                <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                  <span>Distancia</span>
+                  <span className="text-white font-mono">
+                    {selectedEntity.animations?.sway?.distanceInSquares ?? 1} casillas
+                  </span>
+                </div>
+                <input
+                  type="number"
+                  min="0.2"
+                  max="20"
+                  step="0.5"
+                  value={selectedEntity.animations?.sway?.distanceInSquares ?? 1}
+                  onChange={(e) =>
+                    handleUpdate({
+                      animations: {
+                        ...selectedEntity.animations,
+                        sway: {
+                          ...selectedEntity.animations!.sway!,
+                          distanceInSquares: parseFloat(e.target.value) || 1
+                        }
+                      }
+                    })
+                  }
+                  className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Chroma Key para Tokens, Objetos o Mapas */}
+      {selectedEntity.type !== 'wall' && selectedEntity.type !== 'door' && selectedEntity.type !== 'light' && (
+        <div className="bg-slate-800/60 p-3 rounded border border-slate-700 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-emerald-400 flex items-center gap-1.5">
+              <Pipette className="w-4 h-4" />
+              <span>Chroma Key (Fondo transparente)</span>
+            </span>
+            <input
+              type="checkbox"
+              checked={selectedEntity.chromaKey?.enabled ?? false}
+              onChange={(e) =>
+                handleUpdate({
+                  chromaKey: {
+                    enabled: e.target.checked,
+                    color: selectedEntity.chromaKey?.color ?? '#00ff00',
+                    tolerance: selectedEntity.chromaKey?.tolerance ?? 0.15
+                  }
+                })
+              }
+              className="accent-emerald-500 rounded cursor-pointer"
+            />
+          </div>
+
+          {selectedEntity.chromaKey?.enabled && (
+            <div className="space-y-2 pt-1 border-t border-slate-700/60">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Color a transparentar</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={selectedEntity.chromaKey?.color ?? '#00ff00'}
+                    onChange={(e) =>
+                      handleUpdate({
+                        chromaKey: {
+                          ...selectedEntity.chromaKey!,
+                          color: e.target.value
+                        }
+                      })
+                    }
+                    className="w-6 h-6 rounded cursor-pointer border border-slate-600 bg-transparent"
+                  />
+                  {'EyeDropper' in window && (
+                    <button
+                      onClick={handleEyeDropper}
+                      className="p-1 bg-slate-700 hover:bg-slate-600 text-emerald-300 rounded"
+                      title="Cuentagotas: hacer clic en el color a eliminar"
+                    >
+                      <Pipette className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                  <span>Tolerancia</span>
+                  <span className="text-white font-mono">
+                    {Math.round((selectedEntity.chromaKey?.tolerance ?? 0.15) * 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0.01"
+                  max="0.8"
+                  step="0.01"
+                  value={selectedEntity.chromaKey?.tolerance ?? 0.15}
+                  onChange={(e) =>
+                    handleUpdate({
+                      chromaKey: {
+                        ...selectedEntity.chromaKey!,
+                        tolerance: parseFloat(e.target.value) || 0.15
+                      }
+                    })
+                  }
+                  className="w-full accent-emerald-500 cursor-pointer"
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -1,5 +1,17 @@
 import { create } from 'zustand';
-import { GameState, GridConfig, CameraState, CombatState, MusicState, FogConfig, PlayerViewport, ExploredMultiPolygon } from '../types/game';
+import {
+  GameState,
+  GridConfig,
+  CameraState,
+  CombatState,
+  MusicState,
+  MusicTrack,
+  FogConfig,
+  PlayerViewport,
+  ExploredMultiPolygon,
+  AmbientConfig,
+  WeatherConfig
+} from '../types/game';
 import { Entity } from '../types/entity';
 import { revealRect, hideRect } from '../modules/vision/fogMemory';
 import { normalizeEntity, normalizeGameState } from '../modules/persistence/normalizer';
@@ -28,6 +40,16 @@ function createDefaultGame(): GameState {
       revealed: []
     },
     playerViewport: { width: 1920, height: 1080 },
+    ambient: {
+      preset: 'noon',
+      color: '#ffffff',
+      intensity: 1.0
+    },
+    weather: {
+      rain: { enabled: false, intensity: 50, direction: 90 },
+      snow: { enabled: false, intensity: 50 },
+      wind: { enabled: false, intensity: 50, direction: 0 }
+    },
     combat: {
       active: false,
       order: [],
@@ -38,7 +60,8 @@ function createDefaultGame(): GameState {
       playlist: [],
       currentTrackId: null,
       isPlaying: false,
-      volume: 0.8
+      volume: 0.8,
+      loopTrack: false
     },
     createdAt: now,
     updatedAt: now
@@ -75,8 +98,15 @@ interface GameStoreState {
   setCombatState: (partial: Partial<CombatState>) => void;
   setTurnCounter: (turn: number) => void;
 
+  // Ambiente y Clima
+  setAmbientConfig: (partial: Partial<AmbientConfig>) => void;
+  setWeatherConfig: (partial: Partial<WeatherConfig>) => void;
+
   // Música
   setMusicState: (partial: Partial<MusicState>) => void;
+  addMusicTrack: (track: MusicTrack) => void;
+  removeMusicTrack: (trackId: string) => void;
+  updateMusicTrack: (trackId: string, partial: Partial<MusicTrack>) => void;
 
   // Niebla y Marco
   setFogConfig: (partial: Partial<FogConfig>) => void;
@@ -340,11 +370,71 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
     }));
   },
 
+  setAmbientConfig: (partial) => {
+    set((state) => ({
+      game: {
+        ...state.game,
+        ambient: { ...state.game.ambient, ...partial },
+        updatedAt: Date.now()
+      }
+    }));
+  },
+
+  setWeatherConfig: (partial) => {
+    set((state) => ({
+      game: {
+        ...state.game,
+        weather: { ...state.game.weather, ...partial },
+        updatedAt: Date.now()
+      }
+    }));
+  },
+
   setMusicState: (partial) => {
     set((state) => ({
       game: {
         ...state.game,
         music: { ...state.game.music, ...partial },
+        updatedAt: Date.now()
+      }
+    }));
+  },
+
+  addMusicTrack: (track) => {
+    set((state) => ({
+      game: {
+        ...state.game,
+        music: {
+          ...state.game.music,
+          playlist: [...state.game.music.playlist, track]
+        },
+        updatedAt: Date.now()
+      }
+    }));
+  },
+
+  removeMusicTrack: (trackId) => {
+    set((state) => ({
+      game: {
+        ...state.game,
+        music: {
+          ...state.game.music,
+          playlist: state.game.music.playlist.filter((t) => t.id !== trackId),
+          currentTrackId: state.game.music.currentTrackId === trackId ? null : state.game.music.currentTrackId
+        },
+        updatedAt: Date.now()
+      }
+    }));
+  },
+
+  updateMusicTrack: (trackId, partial) => {
+    set((state) => ({
+      game: {
+        ...state.game,
+        music: {
+          ...state.game.music,
+          playlist: state.game.music.playlist.map((t) => (t.id === trackId ? { ...t, ...partial } : t))
+        },
         updatedAt: Date.now()
       }
     }));

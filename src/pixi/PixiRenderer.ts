@@ -11,8 +11,13 @@ import { WallsLayer } from './layers/WallsLayer';
 import { DoorsLayer } from './layers/DoorsLayer';
 import { FogLayer } from './layers/FogLayer';
 import { FogToolLayer } from './layers/FogToolLayer';
+import { AmbientLayer } from './layers/AmbientLayer';
+import { WeatherLayer } from './layers/WeatherLayer';
+import { LightsLayer } from './layers/LightsLayer';
 import { PlayerFrameLayout } from './layers/PlayerFrameLayout';
 import { visionManager } from '../modules/vision/visionManager';
+import { lightManager, LightVisibility } from '../modules/lights/lightManager';
+import { AmbientConfig, CameraState, WeatherConfig } from '../types/game';
 
 export class PixiRenderer {
   public app!: Application;
@@ -21,19 +26,30 @@ export class PixiRenderer {
   public mapsLayer!: MapsLayer;
   public debugVttLayer!: DebugVttLayer;
   public gridLayer!: GridLayer;
-  public tokensLayer!: TokensLayer;
   public doorsLayer!: DoorsLayer;
-  public wallsLayer!: WallsLayer;
+  public tokensLayer!: TokensLayer;
+  public ambientLayer!: AmbientLayer;
   public fogLayer!: FogLayer;
-  public fogToolLayer!: FogToolLayer;
+  public weatherLayer!: WeatherLayer;
+  public lightsLayer!: LightsLayer;
+  public wallsLayer!: WallsLayer;
   public rulerLayer!: RulerLayer;
   public gizmoLayer!: GizmoLayer;
   public playerFrameLayout!: PlayerFrameLayout;
+  public fogToolLayer!: FogToolLayer;
 
   private isMaster: boolean;
   public isInitialized = false;
   public isDestroyed = false;
   private initPromise: Promise<void> | null = null;
+
+  // Cache para el ticker de animación
+  private lastGridSize = 70;
+  private lastWeather: WeatherConfig | null = null;
+  private lastCamera: CameraState | null = null;
+  private lastAmbient: AmbientConfig | null = null;
+  private lastLights: LightVisibility[] | null = null;
+  private lastWorldBounds: { x: number; y: number; width: number; height: number } | null = null;
 
   constructor(isMaster: boolean) {
     this.isMaster = isMaster;
@@ -93,36 +109,78 @@ export class PixiRenderer {
       this.tokensLayer.label = 'TokensLayer';
       this.worldContainer.addChild(this.tokensLayer);
 
-      // 6. Capa de Niebla de Guerra (Fog of War)
+      // 6. Capa de Luz Ambiental Global y Luces Dinámicas (Vectorial)
+      this.ambientLayer = new AmbientLayer(this.isMaster);
+      this.ambientLayer.label = 'AmbientLayer';
+      this.worldContainer.addChild(this.ambientLayer);
+
+      // 7. Capa de Niebla de Guerra (Fog of War)
       this.fogLayer = new FogLayer(this.isMaster);
       this.fogLayer.label = 'FogLayer';
       this.worldContainer.addChild(this.fogLayer);
 
-      // 7. Capa de Paredes Invisibles Dibujadas (Solo Máster)
+      // 8. Capa de Clima (Lluvia, Nieve, Viento a 60 fps)
+      this.weatherLayer = new WeatherLayer();
+      this.weatherLayer.label = 'WeatherLayer';
+      this.worldContainer.addChild(this.weatherLayer);
+
+      // 9. Capa de Iconos de Luz (Solo Máster)
+      this.lightsLayer = new LightsLayer(this.isMaster);
+      this.lightsLayer.label = 'LightsLayer';
+      this.worldContainer.addChild(this.lightsLayer);
+
+      // 10. Capa de Paredes Invisibles Dibujadas (Solo Máster)
       this.wallsLayer = new WallsLayer(this.isMaster);
       this.wallsLayer.label = 'WallsLayer';
       this.worldContainer.addChild(this.wallsLayer);
 
-      // 8. Capa de Regla
+      // 11. Capa de Regla
       this.rulerLayer = new RulerLayer(this.isMaster);
       this.rulerLayer.label = 'RulerLayer';
       this.worldContainer.addChild(this.rulerLayer);
 
-      // 9. Capa de Gizmos de transformación (Solo Máster)
+      // 12. Capa de Gizmos de transformación (Solo Máster)
       this.gizmoLayer = new GizmoLayer(this.isMaster);
       this.gizmoLayer.label = 'GizmoLayer';
       this.gizmoLayer.setTokensLayer(this.tokensLayer);
       this.worldContainer.addChild(this.gizmoLayer);
 
-      // 10. Marco de TV de jugadores (Solo Máster)
+      // 13. Marco de TV de jugadores (Solo Máster)
       this.playerFrameLayout = new PlayerFrameLayout(this.isMaster);
       this.playerFrameLayout.label = 'PlayerFrameLayout';
       this.worldContainer.addChild(this.playerFrameLayout);
 
-      // 11. Capa de herramientas de niebla (Solo Máster)
+      // 14. Capa de herramientas de niebla (Solo Máster)
       this.fogToolLayer = new FogToolLayer(this.isMaster);
       this.fogToolLayer.label = 'FogToolLayer';
       this.worldContainer.addChild(this.fogToolLayer);
+
+      // Bucle de animación suave en Ticker (60 fps)
+      this.app.ticker.add((ticker) => {
+        const deltaSec = ticker.deltaMS / 1000;
+        const currentGridSize = this.lastGridSize || 70;
+        this.tokensLayer?.animate(deltaSec, currentGridSize);
+        this.mapsLayer?.animate(deltaSec, currentGridSize);
+
+        if (this.lastWeather && this.lastCamera) {
+          this.weatherLayer?.update(
+            this.lastWeather,
+            this.lastCamera,
+            this.app.screen.width,
+            this.app.screen.height,
+            deltaSec
+          );
+        }
+
+        if (this.lastAmbient && this.lastLights && this.lastWorldBounds) {
+          this.ambientLayer?.update(
+            this.lastAmbient,
+            this.lastLights,
+            this.lastWorldBounds,
+            deltaSec
+          );
+        }
+      });
 
       this.isInitialized = true;
     })();
@@ -186,6 +244,15 @@ export class PixiRenderer {
       height: Math.max(100, maxY - minY)
     };
 
+    const lights = lightManager.getLightsVisibility(game.entities, gridSize);
+
+    this.lastGridSize = gridSize;
+    this.lastWeather = game.weather;
+    this.lastCamera = camera;
+    this.lastAmbient = game.ambient;
+    this.lastLights = lights;
+    this.lastWorldBounds = worldBounds;
+
     // Sincronizar capas
     this.mapsLayer.syncEntities(game.entities);
     this.debugVttLayer.update(game.entities, showDebugOverlay && !isPlayerPreview);
@@ -196,6 +263,7 @@ export class PixiRenderer {
     this.gridLayer.update(game.grid, camera, width, height, clipGrid ? worldBounds : undefined);
     this.doorsLayer.update(game.entities, selectedIds);
     this.tokensLayer.syncEntities(game.entities, selectedIds, visibilities, isPlayerPreview, game.fog.enabled);
+    this.ambientLayer.update(game.ambient, lights, worldBounds, 0.016);
     this.fogLayer.update(
       this.app.renderer as Renderer,
       game.fog.enabled,
@@ -205,8 +273,11 @@ export class PixiRenderer {
       worldBounds,
       gridSize,
       game.fog.revealed ?? [],
-      game.fog.rememberExplored ?? false
+      game.fog.rememberExplored ?? false,
+      lights
     );
+    this.weatherLayer.update(game.weather, camera, width, height, 0.016);
+    this.lightsLayer.update(game.entities, selectedIds, isPlayerPreview);
     this.wallsLayer.update(game.entities, selectedIds, activeDraftWallPoints);
     this.rulerLayer.update(ruler, game.grid.size);
 

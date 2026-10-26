@@ -11,6 +11,7 @@ export interface TokenVisibility {
   totalRangePx: number;
   rangePx: number; // alias de totalRangePx para compatibilidad
   hardness: number; // 0 = difuminado, 1 = nítido
+  losPolygon?: Point2D[]; // Línea de visión ilimitada (hasta paredes) para ver zonas iluminadas lejanas
 }
 
 /**

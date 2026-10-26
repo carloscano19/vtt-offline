@@ -15,6 +15,7 @@ import { syncChannel } from '../../modules/sync/syncChannel';
 import { visionManager } from '../../modules/vision/visionManager';
 import { unionExplored } from '../../modules/vision/fogMemory';
 import { TokenVisibility } from '../../modules/vision/visibilityPolygon';
+import { audioManager } from '../../modules/audio/audioManager';
 import { ShieldAlert } from 'lucide-react';
 
 export const MasterApp: React.FC = () => {
@@ -99,6 +100,11 @@ export const MasterApp: React.FC = () => {
     const next = unionExplored(store.game.fog.explored ?? [], vis.map((v) => v.polygon));
     store.setFogExplored(next);
   }, [game.entities, game.grid.size, exploredEmpty, hasControl]);
+
+  // 4c. Reproducción de música exclusivamente en la ventana máster (HDMI / salida del sistema)
+  useEffect(() => {
+    audioManager.sync(game.music);
+  }, [game.music]);
 
   useEffect(() => {
     syncChannel.sendRuler(ruler);

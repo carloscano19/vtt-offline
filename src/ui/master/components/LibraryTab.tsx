@@ -143,6 +143,41 @@ export const LibraryTab: React.FC = () => {
         }
       }
     }
+
+    // Convertir luces UVTT en entidades de luz interactivas
+    if (isMap && asset.mapData?.lights && asset.mapData.lights.length > 0) {
+      for (let lIdx = 0; lIdx < asset.mapData.lights.length; lIdx++) {
+        const lgt = asset.mapData.lights[lIdx];
+        const ppg = asset.mapData.pixelsPerGrid || 70;
+        const totalRangeInSquares = Math.max(1, Math.round(lgt.range / ppg));
+        const brightRadiusInSquares = Math.max(1, Math.round(totalRangeInSquares * 0.6));
+        const dimRadiusInSquares = Math.max(0, totalRangeInSquares - brightRadiusInSquares);
+
+        const lightEntity: Entity = {
+          id: `light_${Date.now()}_${lIdx}_${Math.random().toString(36).substring(2, 6)}`,
+          type: 'light',
+          name: `Luz ${lIdx + 1}`,
+          x: posX + lgt.position.x,
+          y: posY + lgt.position.y,
+          rotation: 0,
+          scaleX: 1,
+          scaleY: 1,
+          zIndex: 45,
+          visibleToPlayers: true,
+          locked: false,
+          mapId: newEntity.id,
+          light: {
+            color: lgt.color || '#ffaa44',
+            intensity: Math.min(100, Math.max(10, Math.round(lgt.intensity * 100))),
+            brightRadiusInSquares,
+            dimRadiusInSquares,
+            edgeHardness: 0.5,
+            flicker: false
+          }
+        };
+        addEntity(lightEntity);
+      }
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

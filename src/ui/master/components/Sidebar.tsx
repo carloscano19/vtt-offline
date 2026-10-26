@@ -3,7 +3,8 @@ import { useUIStore } from '../../../stores/useUIStore';
 import { PropertiesTab } from './PropertiesTab';
 import { LayersTab } from './LayersTab';
 import { LibraryTab } from './LibraryTab';
-import { X, Sliders, Layers, FolderOpen } from 'lucide-react';
+import { MusicTab } from './MusicTab';
+import { X, Sliders, Layers, FolderOpen, Music } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
   const activeSidebarTab = useUIStore((s) => s.activeSidebarTab);
@@ -19,10 +20,12 @@ export const Sidebar: React.FC = () => {
           {activeSidebarTab === 'properties' && <Sliders className="w-4 h-4 text-sky-400" />}
           {activeSidebarTab === 'layers' && <Layers className="w-4 h-4 text-sky-400" />}
           {activeSidebarTab === 'library' && <FolderOpen className="w-4 h-4 text-sky-400" />}
+          {activeSidebarTab === 'music' && <Music className="w-4 h-4 text-sky-400" />}
           <span>
             {activeSidebarTab === 'properties' && 'Propiedades'}
             {activeSidebarTab === 'layers' && 'Capas'}
             {activeSidebarTab === 'library' && 'Biblioteca'}
+            {activeSidebarTab === 'music' && 'Música'}
           </span>
         </div>
         <button
@@ -39,6 +42,7 @@ export const Sidebar: React.FC = () => {
         {activeSidebarTab === 'properties' && <PropertiesTab />}
         {activeSidebarTab === 'layers' && <LayersTab />}
         {activeSidebarTab === 'library' && <LibraryTab />}
+        {activeSidebarTab === 'music' && <MusicTab />}
       </div>
     </aside>
   );

@@ -93,12 +93,15 @@ export class VisionManager {
         }
       }
 
+      const losPolygon = brightSquares === 0 ? totalPolygon : computeVisibilityPolygon(center, 0, wallSegments);
+
       visibilities.push({
         tokenId: token.id,
         center,
         brightPolygon,
         totalPolygon,
         polygon: totalPolygon,
+        losPolygon,
         brightRangePx,
         totalRangePx,
         rangePx: totalRangePx,

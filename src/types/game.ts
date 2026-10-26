@@ -44,6 +44,21 @@ export interface MusicState {
   currentTrackId: string | null;
   isPlaying: boolean;
   volume: number;
+  loopTrack: boolean;
+}
+
+export type AmbientPreset = 'dawn' | 'noon' | 'dusk' | 'night' | 'custom';
+
+export interface AmbientConfig {
+  preset: AmbientPreset;
+  color: string; // Hex color
+  intensity: number; // 0.0 a 1.0 (1.0 = neutral/sin oscuridad)
+}
+
+export interface WeatherConfig {
+  rain: { enabled: boolean; intensity: number; direction: number }; // 0-100, dirección en grados (90 = vertical abajo)
+  snow: { enabled: boolean; intensity: number }; // 0-100
+  wind: { enabled: boolean; intensity: number; direction: number }; // 0-100, dirección en grados (0 = hacia la derecha)
 }
 
 /** Multipolígono en coordenadas del mundo: lista de polígonos, cada uno con anillo exterior + huecos (formato polygon-clipping). */
@@ -72,13 +87,15 @@ export interface GameState {
   followMasterCamera: boolean;
   fog: FogConfig;
   playerViewport?: PlayerViewport;
+  ambient: AmbientConfig;
+  weather: WeatherConfig;
   combat: CombatState;
   music: MusicState;
   createdAt: number;
   updatedAt: number;
 }
 
-export type AssetType = 'image' | 'gif' | 'video' | 'map';
+export type AssetType = 'image' | 'gif' | 'video' | 'map' | 'audio';
 
 export interface AssetItem {
   id: string;

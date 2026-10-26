@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   MousePointer,
   Hand,
@@ -21,14 +21,25 @@ import {
   CloudOff,
   RotateCcw,
   Scan,
-  History
+  History,
+  Flame,
+  Sun,
+  Sunrise,
+  Sunset,
+  Moon,
+  CloudRain,
+  CloudSnow,
+  Wind,
+  Music,
+  AlertTriangle
 } from 'lucide-react';
 import { useUIStore, ActiveTool } from '../../../stores/useUIStore';
 import { useGameStore } from '../../../stores/useGameStore';
 import { parseUVTT } from '../../../modules/import/uvttParser';
 import { saveAsset } from '../../../db/dexie';
-import { AssetItem } from '../../../types/game';
+import { AssetItem, AmbientPreset } from '../../../types/game';
 import { Entity } from '../../../types/entity';
+import { videoManager } from '../../../modules/media/videoManager';
 
 interface TopToolbarProps {
   onOpenGridModal: () => void;
@@ -59,10 +70,22 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
   const setFollowMasterCamera = useGameStore((s) => s.setFollowMasterCamera);
   const setFogConfig = useGameStore((s) => s.setFogConfig);
   const resetFogExploration = useGameStore((s) => s.resetFogExploration);
+  const setAmbientConfig = useGameStore((s) => s.setAmbientConfig);
+  const setWeatherConfig = useGameStore((s) => s.setWeatherConfig);
   const undo = useGameStore((s) => s.undo);
   const redo = useGameStore((s) => s.redo);
   const canUndo = useGameStore((s) => s.canUndo());
   const canRedo = useGameStore((s) => s.canRedo());
+
+  const [showAmbientMenu, setShowAmbientMenu] = useState(false);
+  const [showWeatherMenu, setShowWeatherMenu] = useState(false);
+  const [videoWarning, setVideoWarning] = useState(videoManager.getActiveVideoCount() > 6);
+
+  useEffect(() => {
+    return videoManager.onWarningChange((show: boolean) => {
+      setVideoWarning(show);
+    });
+  }, []);
 
   const handleToolChange = (tool: ActiveTool) => {
     setActiveTool(tool);
@@ -186,6 +209,63 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
             }
             parsed.mapData.portals = [];
           }
+
+          // Convertir luces UVTT en entidades de luz interactivas
+          if (parsed.mapData.lights && parsed.mapData.lights.length > 0) {
+            for (let lIdx = 0; lIdx < parsed.mapData.lights.length; lIdx++) {
+              const lgt = parsed.mapData.lights[lIdx];
+              const ppg = parsed.mapData.pixelsPerGrid || 70;
+              const totalRangeInSquares = Math.max(1, Math.round(lgt.range / ppg));
+              const brightRadiusInSquares = Math.max(1, Math.round(totalRangeInSquares * 0.6));
+              const dimRadiusInSquares = Math.max(0, totalRangeInSquares - brightRadiusInSquares);
+
+              const lightEntity: Entity = {
+                id: `light_${Date.now()}_${lIdx}_${Math.random().toString(36).substring(2, 6)}`,
+                type: 'light',
+                name: `Luz ${lIdx + 1}`,
+                x: mapX + lgt.position.x,
+                y: mapY + lgt.position.y,
+                rotation: 0,
+                scaleX: 1,
+                scaleY: 1,
+                zIndex: 45,
+                visibleToPlayers: true,
+                locked: false,
+                mapId: entity.id,
+                light: {
+                  color: lgt.color || '#ffaa44',
+                  intensity: Math.min(100, Math.max(10, Math.round(lgt.intensity * 100))),
+                  brightRadiusInSquares,
+                  dimRadiusInSquares,
+                  edgeHardness: 0.5,
+                  flicker: false
+                }
+              };
+              addEntity(lightEntity);
+            }
+          }
+        } else if (
+          file.type.includes('audio') ||
+          lowerName.endsWith('.mp3') ||
+          lowerName.endsWith('.ogg') ||
+          lowerName.endsWith('.wav')
+        ) {
+          // Archivo de audio para música
+          const assetId = `audio_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+          const asset: AssetItem = {
+            id: assetId,
+            name: name.replace(/\.[^/.]+$/, ''),
+            type: 'audio',
+            mimeType: file.type || 'audio/mpeg',
+            blob: file,
+            createdAt: Date.now()
+          };
+          await saveAsset(asset);
+          useGameStore.getState().addMusicTrack({
+            id: `track_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            name: asset.name,
+            assetId: asset.id
+          });
         } else {
           // Imagen, GIF o Video (Token/Objeto)
           let type: 'image' | 'gif' | 'video' = 'image';
@@ -329,6 +409,14 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           title="Puerta interactiva (D): haz clic en punto inicial y clic en punto final"
         >
           <DoorClosed className="w-5 h-5" />
+        </button>
+
+        <button
+          onClick={() => handleToolChange('light')}
+          className={`btn-icon ${activeTool === 'light' ? 'active' : ''}`}
+          title="Luz / Antorcha (L): haz clic en el tablero para colocar un punto de luz"
+        >
+          <Flame className="w-5 h-5 text-amber-400" />
         </button>
 
         <div className="w-[1px] h-6 bg-slate-700 mx-1" />
@@ -484,6 +572,287 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
 
         <div className="w-[1px] h-6 bg-slate-700 mx-0.5" />
 
+        {/* Selector de Luz Global / Ambiente */}
+        <div className="relative">
+          <button
+            onClick={() => {
+              setShowAmbientMenu(!showAmbientMenu);
+              setShowWeatherMenu(false);
+            }}
+            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-xs font-medium flex items-center gap-1.5 text-amber-300"
+            title="Luz ambiental global: Amanecer, Mediodía, Atardecer, Noche o Personalizado"
+          >
+            {game.ambient.preset === 'dawn' ? (
+              <Sunrise className="w-3.5 h-3.5 text-amber-400" />
+            ) : game.ambient.preset === 'noon' ? (
+              <Sun className="w-3.5 h-3.5 text-yellow-300" />
+            ) : game.ambient.preset === 'dusk' ? (
+              <Sunset className="w-3.5 h-3.5 text-orange-400" />
+            ) : game.ambient.preset === 'night' ? (
+              <Moon className="w-3.5 h-3.5 text-indigo-400" />
+            ) : (
+              <Sun className="w-3.5 h-3.5 text-sky-300" />
+            )}
+            <span className="capitalize">
+              {game.ambient.preset === 'dawn'
+                ? 'Amanecer'
+                : game.ambient.preset === 'noon'
+                ? 'Mediodía'
+                : game.ambient.preset === 'dusk'
+                ? 'Atardecer'
+                : game.ambient.preset === 'night'
+                ? 'Noche'
+                : 'Personalizado'}
+            </span>
+          </button>
+
+          {showAmbientMenu && (
+            <div className="absolute top-full mt-1.5 left-0 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl p-2.5 z-50 w-52 space-y-2 text-xs">
+              <div className="font-semibold text-slate-300 border-b border-slate-800 pb-1">Ambiente global</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  { id: 'dawn', label: 'Amanecer', icon: Sunrise },
+                  { id: 'noon', label: 'Mediodía', icon: Sun },
+                  { id: 'dusk', label: 'Atardecer', icon: Sunset },
+                  { id: 'night', label: 'Noche', icon: Moon }
+                ].map((p) => {
+                  const Icon = p.icon;
+                  const isSelected = game.ambient.preset === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        setAmbientConfig({ preset: p.id as AmbientPreset });
+                        setShowAmbientMenu(false);
+                      }}
+                      className={`p-1.5 rounded flex items-center gap-1.5 border transition-all ${
+                        isSelected
+                          ? 'bg-sky-950/80 border-sky-500 text-sky-200'
+                          : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      <span>{p.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Personalizado */}
+              <div className="pt-1.5 border-t border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Personalizado</span>
+                  <input
+                    type="color"
+                    value={game.ambient.color}
+                    onChange={(e) =>
+                      setAmbientConfig({
+                        preset: 'custom',
+                        color: e.target.value
+                      })
+                    }
+                    className="w-6 h-6 rounded cursor-pointer border border-slate-600 bg-transparent"
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Intensidad ({game.ambient.intensity}%)</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={game.ambient.intensity}
+                    onChange={(e) =>
+                      setAmbientConfig({
+                        preset: 'custom',
+                        intensity: parseInt(e.target.value) || 0
+                      })
+                    }
+                    className="w-24 accent-sky-500 cursor-pointer"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Selector de Clima */}
+        <div className="relative">
+          <button
+            onClick={() => {
+              setShowWeatherMenu(!showWeatherMenu);
+              setShowAmbientMenu(false);
+            }}
+            className={`px-2.5 py-1.5 border rounded text-xs font-medium flex items-center gap-1.5 transition-colors ${
+              game.weather.rain.enabled || game.weather.snow.enabled || game.weather.wind.enabled
+                ? 'bg-sky-950/80 border-sky-500 text-sky-300'
+                : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-300'
+            }`}
+            title="Efectos de clima: Lluvia, Nieve y Viento"
+          >
+            <CloudRain className="w-3.5 h-3.5" />
+            <span>Clima</span>
+          </button>
+
+          {showWeatherMenu && (
+            <div className="absolute top-full mt-1.5 left-0 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl p-3 z-50 w-64 space-y-3 text-xs">
+              <div className="font-semibold text-slate-300 border-b border-slate-800 pb-1">Efectos climáticos</div>
+
+              {/* Lluvia */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-1.5 font-medium text-slate-200 cursor-pointer">
+                    <CloudRain className="w-3.5 h-3.5 text-sky-400" />
+                    <span>Lluvia</span>
+                  </label>
+                  <input
+                    type="checkbox"
+                    checked={game.weather.rain.enabled}
+                    onChange={(e) =>
+                      setWeatherConfig({
+                        rain: { ...game.weather.rain, enabled: e.target.checked }
+                      })
+                    }
+                    className="accent-sky-500 rounded cursor-pointer"
+                  />
+                </div>
+                {game.weather.rain.enabled && (
+                  <div className="space-y-1 pl-4">
+                    <div className="flex justify-between text-[11px] text-slate-400">
+                      <span>Intensidad</span>
+                      <span>{Math.round(game.weather.rain.intensity * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={game.weather.rain.intensity}
+                      onChange={(e) =>
+                        setWeatherConfig({
+                          rain: { ...game.weather.rain, intensity: parseFloat(e.target.value) }
+                        })
+                      }
+                      className="w-full accent-sky-500 cursor-pointer"
+                    />
+                    <div className="flex justify-between text-[11px] text-slate-400">
+                      <span>Dirección ({game.weather.rain.direction}°)</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="360"
+                      value={game.weather.rain.direction}
+                      onChange={(e) =>
+                        setWeatherConfig({
+                          rain: { ...game.weather.rain, direction: parseInt(e.target.value) || 0 }
+                        })
+                      }
+                      className="w-full accent-sky-500 cursor-pointer"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Nieve */}
+              <div className="space-y-1.5 pt-1.5 border-t border-slate-800">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-1.5 font-medium text-slate-200 cursor-pointer">
+                    <CloudSnow className="w-3.5 h-3.5 text-cyan-200" />
+                    <span>Nieve</span>
+                  </label>
+                  <input
+                    type="checkbox"
+                    checked={game.weather.snow.enabled}
+                    onChange={(e) =>
+                      setWeatherConfig({
+                        snow: { ...game.weather.snow, enabled: e.target.checked }
+                      })
+                    }
+                    className="accent-sky-500 rounded cursor-pointer"
+                  />
+                </div>
+                {game.weather.snow.enabled && (
+                  <div className="space-y-1 pl-4">
+                    <div className="flex justify-between text-[11px] text-slate-400">
+                      <span>Intensidad</span>
+                      <span>{Math.round(game.weather.snow.intensity * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={game.weather.snow.intensity}
+                      onChange={(e) =>
+                        setWeatherConfig({
+                          snow: { ...game.weather.snow, intensity: parseFloat(e.target.value) }
+                        })
+                      }
+                      className="w-full accent-sky-500 cursor-pointer"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Viento / Hojas / Polvo */}
+              <div className="space-y-1.5 pt-1.5 border-t border-slate-800">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-1.5 font-medium text-slate-200 cursor-pointer">
+                    <Wind className="w-3.5 h-3.5 text-amber-300" />
+                    <span>Viento</span>
+                  </label>
+                  <input
+                    type="checkbox"
+                    checked={game.weather.wind.enabled}
+                    onChange={(e) =>
+                      setWeatherConfig({
+                        wind: { ...game.weather.wind, enabled: e.target.checked }
+                      })
+                    }
+                    className="accent-sky-500 rounded cursor-pointer"
+                  />
+                </div>
+                {game.weather.wind.enabled && (
+                  <div className="space-y-1 pl-4">
+                    <div className="flex justify-between text-[11px] text-slate-400">
+                      <span>Intensidad</span>
+                      <span>{Math.round(game.weather.wind.intensity * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={game.weather.wind.intensity}
+                      onChange={(e) =>
+                        setWeatherConfig({
+                          wind: { ...game.weather.wind, intensity: parseFloat(e.target.value) }
+                        })
+                      }
+                      className="w-full accent-sky-500 cursor-pointer"
+                    />
+                    <div className="flex justify-between text-[11px] text-slate-400">
+                      <span>Dirección ({game.weather.wind.direction}°)</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="360"
+                      value={game.weather.wind.direction}
+                      onChange={(e) =>
+                        setWeatherConfig({
+                          wind: { ...game.weather.wind, direction: parseInt(e.target.value) || 0 }
+                        })
+                      }
+                      className="w-full accent-sky-500 cursor-pointer"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
         <button
           onClick={sendMasterCameraToPlayers}
           className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-xs font-medium flex items-center gap-1.5 text-sky-400"
@@ -517,6 +886,16 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
 
       {/* Controles de la derecha: depuración UVTT y paneles laterales */}
       <div className="flex items-center gap-2">
+        {videoWarning && (
+          <div
+            className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-950/80 border border-amber-500/80 text-amber-300 rounded text-xs animate-pulse"
+            title="Hay más de 6 vídeos activos simultáneamente. Podría afectar al rendimiento."
+          >
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+            <span>&gt;6 vídeos activos</span>
+          </div>
+        )}
+
         <button
           onClick={() => setShowDebugVttOverlay(!showDebugVttOverlay)}
           className={`btn-icon ${showDebugVttOverlay ? 'text-sky-400' : 'text-slate-500'}`}
@@ -555,6 +934,16 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
             title="Panel de biblioteca: explorar y colocar mapas o imágenes en el tablero"
           >
             Biblioteca
+          </button>
+          <button
+            onClick={() => setActiveSidebarTab(activeSidebarTab === 'music' ? null : 'music')}
+            className={`px-3 py-1 rounded text-xs font-medium flex items-center gap-1 ${
+              activeSidebarTab === 'music' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
+            }`}
+            title="Panel de música ambiental y efectos de sonido"
+          >
+            <Music className="w-3.5 h-3.5" />
+            <span>Música</span>
           </button>
         </div>
       </div>

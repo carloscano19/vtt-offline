@@ -2,8 +2,8 @@ import { create } from 'zustand';
 import { Point2D } from '../types/entity';
 import { DiagonalRule, RulerMode, RulerState } from '../types/game';
 
-export type ActiveTool = 'select' | 'pan' | 'ruler' | 'wall' | 'door' | 'fogReveal' | 'fogHide';
-export type SidebarTab = 'properties' | 'layers' | 'library';
+export type ActiveTool = 'select' | 'pan' | 'ruler' | 'wall' | 'door' | 'fogReveal' | 'fogHide' | 'light';
+export type SidebarTab = 'properties' | 'layers' | 'library' | 'music';
 
 interface UIStoreState {
   activeTool: ActiveTool;

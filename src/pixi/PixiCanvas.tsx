@@ -455,6 +455,40 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       return;
     }
 
+    // Herramienta Luz: clic para colocar una nueva luz dinámica
+    if (activeTool === 'light') {
+      let pt = worldPos;
+      if (game.grid.snapToGrid && game.grid.size > 0 && !e.altKey) {
+        pt = snapPointToGrid(worldPos, game.grid.size);
+      }
+
+      const lightEntity: Entity = {
+        id: `light_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        type: 'light',
+        name: `Luz ${game.entities.filter((ent) => ent.type === 'light').length + 1}`,
+        x: pt.x,
+        y: pt.y,
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+        zIndex: 45,
+        visibleToPlayers: true,
+        locked: false,
+        light: {
+          color: '#ffaa44',
+          intensity: 100,
+          brightRadiusInSquares: 4,
+          dimRadiusInSquares: 2,
+          edgeHardness: 0.5,
+          flicker: false
+        }
+      };
+
+      addEntity(lightEntity);
+      selectEntity(lightEntity.id);
+      return;
+    }
+
     // Herramienta Revelar u Ocultar niebla manualmente
     if (activeTool === 'fogReveal' || activeTool === 'fogHide') {
       interactionState.current.startMouse = worldPos;
@@ -667,8 +701,8 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         }
       }
 
-      // 5. Buscar entidad bajo el cursor (prioridad: tokens > objetos > puertas > paredes > mapas)
-      const typePriority: Record<string, number> = { token: 300, object: 200, door: 180, wall: 150, map: 100 };
+      // 5. Buscar entidad bajo el cursor (prioridad: luces > tokens > objetos > puertas > paredes > mapas)
+      const typePriority: Record<string, number> = { light: 350, token: 300, object: 200, door: 180, wall: 150, map: 100 };
       const sortedEntities = [...game.entities].sort((a, b) => {
         const pDiff = (typePriority[b.type] ?? 0) - (typePriority[a.type] ?? 0);
         if (pDiff !== 0) return pDiff;
@@ -677,6 +711,10 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
       const hitEntity = sortedEntities.find((ent) => {
         if (ent.locked) return false;
+
+        if (ent.type === 'light') {
+          return Math.hypot(worldPos.x - ent.x, worldPos.y - ent.y) <= Math.max(20 / camera.zoom, 25);
+        }
 
         if (ent.type === 'wall' && ent.points && ent.points.length >= 2) {
           const pts = ent.points;
@@ -1145,6 +1183,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
   } else if (
     activeTool === 'wall' ||
     activeTool === 'door' ||
+    activeTool === 'light' ||
     activeTool === 'ruler' ||
     activeTool === 'fogReveal' ||
     activeTool === 'fogHide'

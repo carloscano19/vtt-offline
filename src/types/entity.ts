@@ -87,11 +87,18 @@ export interface EntityAnimations {
   rotation?: {
     enabled: boolean;
     speed: number;
+    direction?: 'cw' | 'ccw';
   };
   shake?: {
     enabled: boolean;
     intensity: number;
     speed: number;
+  };
+  sway?: {
+    enabled: boolean;
+    distanceInSquares: number; // Distancia en casillas
+    speed: number;
+    direction: number; // Dirección en grados (0 = horizontal, 90 = vertical)
   };
   bounce?: {
     enabled: boolean;
@@ -100,8 +107,18 @@ export interface EntityAnimations {
   };
 }
 
+export interface LightConfig {
+  color: string; // Hex e.g. '#ffaa44'
+  intensity: number; // 0 a 100 (%)
+  brightRadiusInSquares: number; // Radio de luz clara en casillas (default 4)
+  dimRadiusInSquares: number; // Radio de luz tenue en casillas adicionales (default 2)
+  edgeHardness: number; // 0.0 (suave) a 1.0 (nítido) (default 0.5)
+  flicker: boolean; // Parpadeo estilo antorcha
+}
+
 export interface EntityChromaKey {
-  active: boolean;
+  active?: boolean;
+  enabled?: boolean;
   color: string;
   tolerance: number;
 }
@@ -152,10 +169,11 @@ export interface Entity {
   // Fase 2: Visión
   vision?: TokenVision;
 
-  // Fase 3: Filtros, animaciones y chroma
+  // Fase 3: Filtros, animaciones, chroma y luces
   filters?: EntityFilters;
   animations?: EntityAnimations;
   chromaKey?: EntityChromaKey;
+  light?: LightConfig;
 
   // Fase 4: Tokens y combate
   side?: TokenSide;

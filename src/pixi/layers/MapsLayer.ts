@@ -1,10 +1,13 @@
-import { Container, Sprite, Texture } from 'pixi.js';
-import { Entity } from '../../types/entity';
-import { getTextureForAsset } from '../utils/textureCache';
+import { Container, Sprite, Texture, ColorMatrixFilter } from 'pixi.js';
+import { Entity, EntityAnimations } from '../../types/entity';
+import { getTextureForAsset, getGifDataForAsset } from '../utils/textureCache';
+import { getFrameTextureForTime, AnimatedGifData } from '../../modules/media/gifDecoder';
+import { videoManager } from '../../modules/media/videoManager';
 
 export class MapsLayer extends Container {
   private isMaster: boolean;
   private spriteMap: Map<string, Sprite> = new Map();
+  private animTime = 0;
 
   constructor(isMaster: boolean) {
     super();
@@ -16,7 +19,6 @@ export class MapsLayer extends Container {
     const currentIds = new Set<string>();
 
     for (const entity of mapEntities) {
-      // En la ventana de jugadores, si visibleToPlayers es false, NO se renderiza en absoluto
       if (!this.isMaster && !entity.visibleToPlayers) {
         continue;
       }
@@ -31,15 +33,51 @@ export class MapsLayer extends Container {
         this.addChild(sprite);
       }
 
+      // Guardar metadatos para animaciones y filtros
+      (sprite as any)._baseX = entity.x;
+      (sprite as any)._baseY = entity.y;
+      (sprite as any)._baseRotation = entity.rotation;
+      (sprite as any)._animations = entity.animations;
+
       // Carga asíncrona de textura si aún no se ha cargado o si cambió el assetId
       const currentLoadedAssetId = (sprite as any)._loadedAssetId;
       if (entity.assetId && (sprite.texture === Texture.EMPTY || currentLoadedAssetId !== entity.assetId)) {
         (sprite as any)._loadedAssetId = entity.assetId;
+
+        getGifDataForAsset(entity.assetId).then((gifData) => {
+          if (gifData && sprite && !sprite.destroyed) {
+            (sprite as any)._gifData = gifData;
+          }
+        });
+
+        videoManager.registerActiveEntityVideo(entity.id);
+
         getTextureForAsset(entity.assetId).then((tex) => {
           if (tex && sprite && !sprite.destroyed) {
             sprite.texture = tex;
           }
         });
+      }
+
+      // Filtros visuales (tono, saturación, brillo)
+      if (entity.filters) {
+        const { hue = 0, saturation = 1, brightness = 1 } = entity.filters;
+        if (hue !== 0 || saturation !== 1 || brightness !== 1) {
+          let cmf = (sprite as any)._cmf as ColorMatrixFilter;
+          if (!cmf) {
+            cmf = new ColorMatrixFilter();
+            (sprite as any)._cmf = cmf;
+          }
+          cmf.reset();
+          if (hue !== 0) cmf.hue(hue, false);
+          if (saturation !== 1) cmf.saturate(saturation, false);
+          if (brightness !== 1) cmf.brightness(brightness, false);
+          sprite.filters = [cmf];
+        } else {
+          sprite.filters = null;
+        }
+      } else {
+        sprite.filters = null;
       }
 
       // Actualizar transformaciones espaciales en el mundo
@@ -60,10 +98,62 @@ export class MapsLayer extends Container {
     // Eliminar sprites que ya no existan o se hayan ocultado
     for (const [id, sprite] of this.spriteMap.entries()) {
       if (!currentIds.has(id)) {
+        videoManager.unregisterActiveEntityVideo(id);
         this.removeChild(sprite);
         sprite.destroy();
         this.spriteMap.delete(id);
       }
+    }
+  }
+
+  public animate(deltaSeconds: number, gridSize: number) {
+    this.animTime += deltaSeconds;
+    const now = Date.now();
+    const effectiveGrid = gridSize > 0 ? gridSize : 70;
+
+    for (const [, sprite] of this.spriteMap.entries()) {
+      // 1. Frame sincronizado de GIF
+      const gifData = (sprite as any)._gifData as AnimatedGifData | undefined;
+      if (gifData && gifData.textures.length > 0) {
+        sprite.texture = getFrameTextureForTime(gifData, now);
+      }
+
+      // 2. Animaciones físicas
+      const anim = (sprite as any)._animations as EntityAnimations | undefined;
+      const baseX = (sprite as any)._baseX ?? sprite.x;
+      const baseY = (sprite as any)._baseY ?? sprite.y;
+      const baseRot = (sprite as any)._baseRotation ?? sprite.rotation;
+
+      let offsetX = 0;
+      let offsetY = 0;
+      let extraRot = 0;
+
+      if (anim) {
+        if (anim.rotation?.enabled) {
+          const rotSpeed = (anim.rotation.speed ?? 1) * 0.05;
+          extraRot = this.animTime * rotSpeed;
+        }
+
+        if (anim.shake?.enabled) {
+          const intensity = anim.shake.intensity ?? 4;
+          const freq = (anim.shake.speed ?? 5) * 8;
+          offsetX += Math.sin(this.animTime * freq) * intensity;
+          offsetY += Math.cos(this.animTime * freq * 1.3) * intensity;
+        }
+
+        if (anim.sway?.enabled) {
+          const distPx = (anim.sway.distanceInSquares ?? 1) * effectiveGrid;
+          const dirRad = ((anim.sway.direction ?? 0) * Math.PI) / 180;
+          const swaySpeed = anim.sway.speed ?? 2;
+          const swayOffset = Math.sin(this.animTime * swaySpeed) * distPx;
+          offsetX += Math.cos(dirRad) * swayOffset;
+          offsetY += Math.sin(dirRad) * swayOffset;
+        }
+      }
+
+      sprite.x = baseX + offsetX;
+      sprite.y = baseY + offsetY;
+      sprite.rotation = baseRot + extraRot;
     }
   }
 

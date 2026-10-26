@@ -59,7 +59,8 @@ export class FogLayer extends Container {
     bounds: { x: number; y: number; width: number; height: number },
     _gridSize: number,
     revealed: ExploredMultiPolygon = [],
-    rememberExplored = false
+    rememberExplored = false,
+    lights: any[] = []
   ) {
     const shouldRenderFog = fogEnabled && (!this.isMaster || isPlayerPreview);
     if (!shouldRenderFog) {
@@ -80,7 +81,13 @@ export class FogLayer extends Container {
           `${v.tokenId}:${Math.round(v.center.x)}:${Math.round(v.center.y)}:${v.brightPolygon?.length || 0}:${v.totalPolygon?.length || 0}`
       )
       .join('|');
-    const key = `${exploredSignature(explored)}#${exploredSignature(revealed)}#${rememberExplored}#${visKey}#${Math.round(bx)},${Math.round(by)},${Math.round(bw)},${Math.round(bh)}`;
+    const lightsKey = lights
+      .map(
+        (l) =>
+          `${l.lightId}:${Math.round(l.center?.x || 0)}:${Math.round(l.center?.y || 0)}:${l.brightPolygon?.length || 0}:${l.totalPolygon?.length || 0}`
+      )
+      .join('|');
+    const key = `${exploredSignature(explored)}#${exploredSignature(revealed)}#${rememberExplored}#${visKey}#${lightsKey}#${Math.round(bx)},${Math.round(by)},${Math.round(bw)},${Math.round(bh)}`;
     if (key === this.lastKey) return;
     this.lastKey = key;
 
@@ -89,7 +96,8 @@ export class FogLayer extends Container {
       visibilities,
       { x: bx, y: by, width: bw, height: bh },
       revealed,
-      rememberExplored
+      rememberExplored,
+      lights
     );
 
     // 1. Dibuja noExplorado con negro opaco
