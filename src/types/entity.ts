@@ -140,8 +140,9 @@ export interface EntityFilters {
 export interface EntityAnimations {
   rotation?: {
     enabled: boolean;
-    speed: number;
+    speed: number; // vueltas por segundo (v/s)
     direction?: 'cw' | 'ccw';
+    isVps?: boolean;
   };
   shake?: {
     enabled: boolean;

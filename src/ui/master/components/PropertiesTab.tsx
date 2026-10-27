@@ -68,7 +68,7 @@ export const PropertiesTab: React.FC = () => {
         } else if (asset.blob) {
           try {
             const dims = await getMediaDimensions(asset.blob);
-            if (!isCancelled && dims.width > 0 && dims.height > 0) {
+            if (!isCancelled && dims && dims.width > 0 && dims.height > 0) {
               setAssetDims(dims);
               await db.assets.update(asset.id, { width: dims.width, height: dims.height });
               if (cloudSync.isCloudEligible(asset.type)) {
@@ -1169,8 +1169,9 @@ export const PropertiesTab: React.FC = () => {
                     ...selectedEntity.animations,
                     rotation: {
                       enabled: e.target.checked,
-                      speed: selectedEntity.animations?.rotation?.speed ?? 1,
-                      direction: selectedEntity.animations?.rotation?.direction ?? 'cw'
+                      speed: selectedEntity.animations?.rotation?.speed ?? 0.2,
+                      direction: selectedEntity.animations?.rotation?.direction ?? 'cw',
+                      isVps: true
                     }
                   }
                 })
@@ -1189,7 +1190,8 @@ export const PropertiesTab: React.FC = () => {
                         ...selectedEntity.animations,
                         rotation: {
                           ...selectedEntity.animations!.rotation!,
-                          direction: selectedEntity.animations?.rotation?.direction === 'cw' ? 'ccw' : 'cw'
+                          direction: selectedEntity.animations?.rotation?.direction === 'cw' ? 'ccw' : 'cw',
+                          isVps: true
                         }
                       }
                     })
@@ -1202,21 +1204,24 @@ export const PropertiesTab: React.FC = () => {
               <div>
                 <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
                   <span>Velocidad</span>
-                  <span className="text-white font-mono">{selectedEntity.animations?.rotation?.speed ?? 1}x</span>
+                  <span className="text-white font-mono">
+                    {(Number(selectedEntity.animations?.rotation?.speed) || 0.2).toFixed(2)} v/s
+                  </span>
                 </div>
                 <input
                   type="range"
-                  min="0.1"
-                  max="5"
-                  step="0.1"
-                  value={selectedEntity.animations?.rotation?.speed ?? 1}
+                  min="0.05"
+                  max="2"
+                  step="0.05"
+                  value={selectedEntity.animations?.rotation?.speed ?? 0.2}
                   onChange={(e) =>
                     handleUpdate({
                       animations: {
                         ...selectedEntity.animations,
                         rotation: {
                           ...selectedEntity.animations!.rotation!,
-                          speed: parseFloat(e.target.value) || 1
+                          speed: parseFloat(e.target.value) || 0.2,
+                          isVps: true
                         }
                       }
                     })

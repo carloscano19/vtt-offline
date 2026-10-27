@@ -1366,7 +1366,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
             if ((!w || !h) && asset.blob) {
               try {
                 const dims = await getMediaDimensions(asset.blob);
-                if (dims.width > 0 && dims.height > 0) {
+                if (dims && dims.width > 0 && dims.height > 0) {
                   w = dims.width;
                   h = dims.height;
                   asset.width = w;

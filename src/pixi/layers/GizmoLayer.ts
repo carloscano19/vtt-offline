@@ -273,7 +273,7 @@ export class GizmoLayer extends Container {
     }
   }
 
-  public getEyeButtonWorldPos(entity: Entity): Point2D {
+  public getEyeButtonWorldPos(entity: Entity): { x: number; y: number } {
     const bounds = this.getEntityLocalBounds(entity);
     const zoom = this.cameraZoom;
     const sx = Math.max(0.001, Math.abs(entity.scaleX || 1));

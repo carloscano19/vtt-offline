@@ -143,7 +143,8 @@ export class MapsLayer extends Container {
       if (anim) {
         if (anim.rotation?.enabled) {
           const dirMultiplier = anim.rotation.direction === 'ccw' ? -1 : 1;
-          const rotSpeed = (anim.rotation.speed ?? 1) * 0.05 * dirMultiplier;
+          const vps = anim.rotation.speed ?? 0.2;
+          const rotSpeed = vps * (Math.PI * 2) * dirMultiplier;
           extraRot = this.animTime * rotSpeed;
         }
 

@@ -279,7 +279,7 @@ export const EffectsTab: React.FC = () => {
       if ((!a.width || !a.height) && a.blob) {
         getMediaDimensions(a.blob)
           .then(async (dims) => {
-            if (dims.width > 0 && dims.height > 0) {
+            if (dims && dims.width > 0 && dims.height > 0) {
               a.width = dims.width;
               a.height = dims.height;
               await db.assets.update(a.id, { width: dims.width, height: dims.height });
@@ -513,7 +513,7 @@ export const EffectsTab: React.FC = () => {
     if ((!w || !h) && asset.blob) {
       try {
         const dims = await getMediaDimensions(asset.blob);
-        if (dims.width > 0 && dims.height > 0) {
+        if (dims && dims.width > 0 && dims.height > 0) {
           w = dims.width;
           h = dims.height;
           asset.width = w;

@@ -67,10 +67,26 @@ export function normalizeEntity(entity: Entity): Entity {
         direction: dir
       };
     }
+    let rotAnim = rawAnim.rotation;
+    if (rotAnim && typeof rotAnim === 'object') {
+      let speed = typeof rotAnim.speed === 'number' && Number.isFinite(rotAnim.speed) ? rotAnim.speed : 0.2;
+      if (!rotAnim.isVps) {
+        // Migrar valores antiguos (donde speed era multiplicador y producía old_speed * 0.05 rad/s)
+        // para conservar la misma velocidad real en vueltas/segundo: (old_speed * 0.05) / (2 * Math.PI)
+        speed = (speed * 0.05) / (2 * Math.PI);
+      }
+      rotAnim = {
+        enabled: Boolean(rotAnim.enabled),
+        speed,
+        direction: rotAnim.direction === 'ccw' ? 'ccw' : 'cw',
+        isVps: true
+      };
+    }
     entity = {
       ...entity,
       animations: {
         ...rawAnim,
+        rotation: rotAnim,
         sway
       }
     };

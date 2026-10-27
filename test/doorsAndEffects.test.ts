@@ -484,5 +484,52 @@ describe('Effects lighting and scale integration', () => {
     const toggled2 = { ...toggled1, visibleToPlayers: !toggled1.visibleToPlayers };
     expect(toggled2.visibleToPlayers).toBe(true);
   });
+
+  it('migrates old continuous rotation speed to vueltas por segundo preserving real speed', () => {
+    const oldEntity: Entity = {
+      id: 'token_rot',
+      type: 'token',
+      name: 'Vortex Token',
+      x: 0,
+      y: 0,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      zIndex: 10,
+      visibleToPlayers: true,
+      locked: false,
+      animations: {
+        rotation: {
+          enabled: true,
+          speed: 1,
+          direction: 'cw'
+        }
+      } as any
+    };
+
+    const normalized = normalizeEntity(oldEntity);
+    expect(normalized.animations?.rotation?.isVps).toBe(true);
+    // (1 * 0.05) / (2 * Math.PI)
+    const expectedVps = (1 * 0.05) / (2 * Math.PI);
+    expect(normalized.animations?.rotation?.speed).toBeCloseTo(expectedVps, 5);
+
+    // If already has isVps: true, speed is not re-migrated
+    const reNormalized = normalizeEntity(normalized);
+    expect(reNormalized.animations?.rotation?.speed).toBeCloseTo(expectedVps, 5);
+
+    // An entity with new v/s value
+    const newEntity: Entity = {
+      ...oldEntity,
+      animations: {
+        rotation: {
+          enabled: true,
+          speed: 0.5,
+          direction: 'ccw',
+          isVps: true
+        }
+      }
+    };
+    expect(normalizeEntity(newEntity).animations?.rotation?.speed).toBe(0.5);
+  });
 });
 
