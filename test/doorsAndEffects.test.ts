@@ -352,5 +352,20 @@ describe('Effects lighting and scale integration', () => {
     expect(lights[0].brightRangePx).toBe(4 * 70);
     expect(lights[0].intensity).toBe(0.8);
   });
+
+  it('filters out effect assets and category tags from library view', () => {
+    const rawAssets = [
+      { id: '1', name: 'Goblin', type: 'image', tags: ['token', 'monster'] },
+      { id: '2', name: 'Dungeon Map', type: 'map', tags: ['map'] },
+      { id: '3', name: 'Campfire', type: 'video', tags: ['effect', 'category:fire'] },
+      { id: '4', name: 'Magic Portal', type: 'video', tags: ['category:arcane'] }
+    ];
+
+    const libraryAssets = rawAssets.filter(
+      (a) => !a.tags?.includes('effect') && !a.tags?.some((t) => t.startsWith('category:'))
+    );
+
+    expect(libraryAssets.map((a) => a.id)).toEqual(['1', '2']);
+  });
 });
 

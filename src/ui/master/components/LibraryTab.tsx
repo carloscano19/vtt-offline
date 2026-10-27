@@ -28,7 +28,11 @@ export const LibraryTab: React.FC = () => {
   const addEntity = useGameStore((s) => s.addEntity);
 
   const loadAssets = async (query = searchQuery) => {
-    const list = query.trim() ? await searchAssets(query) : await getAllAssets();
+    const rawList = query.trim() ? await searchAssets(query) : await getAllAssets();
+    // Excluir assets con la etiqueta effect o alguna category:* (criterio idéntico a EffectsTab)
+    const list = rawList.filter(
+      (a) => !a.tags?.includes('effect') && !a.tags?.some((t) => t.startsWith('category:'))
+    );
     setAssets(list);
   };
 
