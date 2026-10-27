@@ -190,4 +190,16 @@ export class MapsLayer extends Container {
   public getMapSprite(id: string): Sprite | undefined {
     return this.spriteMap.get(id);
   }
+
+  public reloadAsset(assetId?: string) {
+    for (const sprite of this.spriteMap.values()) {
+      const s = sprite as any;
+      if (!assetId || s._loadedAssetId === assetId) {
+        s._loadedAssetId = null;
+        s._loadedCkKey = null;
+        s._gifData = null;
+        sprite.texture = Texture.EMPTY;
+      }
+    }
+  }
 }

@@ -7,6 +7,7 @@ export type SyncMessage =
   | { type: 'PLAYER_CAMERA_CHANGED'; camera: CameraState }
   | { type: 'VIEWPORT_SYNC'; width: number; height: number }
   | { type: 'REQUEST_CURRENT_STATE' }
+  | { type: 'ASSET_DOWNLOADED'; assetId: string }
   | { type: 'MASTER_HELLO'; id: string }
   | { type: 'MASTER_PRESENT'; id: string }
   | { type: 'MASTER_TAKEOVER'; id: string }
@@ -22,6 +23,7 @@ class SyncManager {
   private playerCameraChangedListeners: Set<(camera: CameraState) => void> = new Set();
   private viewportListeners: Set<(vp: { width: number; height: number }) => void> = new Set();
   private requestStateListeners: Set<() => void> = new Set();
+  private assetDownloadedListeners: Set<(assetId: string) => void> = new Set();
 
   // Control de pestaña máster única
   private readonly tabId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -91,6 +93,9 @@ class SyncManager {
             break;
           case 'REQUEST_CURRENT_STATE':
             this.requestStateListeners.forEach((listener) => listener());
+            break;
+          case 'ASSET_DOWNLOADED':
+            this.assetDownloadedListeners.forEach((listener) => listener(msg.assetId));
             break;
         }
       };
@@ -273,6 +278,21 @@ class SyncManager {
   public onViewport(callback: (vp: { width: number; height: number }) => void): () => void {
     this.viewportListeners.add(callback);
     return () => this.viewportListeners.delete(callback);
+  }
+
+  public sendAssetDownloaded(assetId: string) {
+    if (this.channel) {
+      try {
+        this.channel.postMessage({ type: 'ASSET_DOWNLOADED', assetId });
+      } catch (err) {
+        console.error('[SyncManager] Error al enviar ASSET_DOWNLOADED:', err);
+      }
+    }
+  }
+
+  public onAssetDownloaded(callback: (assetId: string) => void): () => void {
+    this.assetDownloadedListeners.add(callback);
+    return () => this.assetDownloadedListeners.delete(callback);
   }
 }
 

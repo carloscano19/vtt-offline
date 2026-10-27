@@ -19,6 +19,7 @@ import { PlayerFrameLayout } from './layers/PlayerFrameLayout';
 import { visionManager } from '../modules/vision/visionManager';
 import { lightManager, LightVisibility } from '../modules/lights/lightManager';
 import { AmbientConfig, CameraState, WeatherConfig } from '../types/game';
+import { onTextureInvalidated } from './utils/textureCache';
 
 export class PixiRenderer {
   public app!: Application;
@@ -44,6 +45,7 @@ export class PixiRenderer {
   public isInitialized = false;
   public isDestroyed = false;
   private initPromise: Promise<void> | null = null;
+  private unsubTextureInvalidated: (() => void) | null = null;
 
   // Cache para el ticker de animación
   private lastGridSize = 70;
@@ -202,6 +204,12 @@ export class PixiRenderer {
         }
       });
 
+      this.unsubTextureInvalidated = onTextureInvalidated((assetId) => {
+        this.mapsLayer?.reloadAsset(assetId);
+        this.tokensLayer?.reloadAsset(assetId);
+        this.effectsLayer?.reloadAsset(assetId);
+      });
+
       this.isInitialized = true;
     })();
 
@@ -316,6 +324,11 @@ export class PixiRenderer {
   public async destroy() {
     if (this.isDestroyed) return;
     this.isDestroyed = true;
+
+    if (this.unsubTextureInvalidated) {
+      this.unsubTextureInvalidated();
+      this.unsubTextureInvalidated = null;
+    }
 
     if (this.initPromise) {
       try {

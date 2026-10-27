@@ -4,6 +4,7 @@ import { useUIStore } from '../../stores/useUIStore';
 import { PixiCanvas } from '../../pixi/PixiCanvas';
 import { CanvasErrorBoundary } from '../common/CanvasErrorBoundary';
 import { syncChannel } from '../../modules/sync/syncChannel';
+import { invalidateCachedTexture } from '../../pixi/utils/textureCache';
 import { Maximize2, Minimize2, Tv } from 'lucide-react';
 
 export const PlayersApp: React.FC = () => {
@@ -96,10 +97,16 @@ export const PlayersApp: React.FC = () => {
     // 4. Solicitar estado actual de la partida al máster al abrir la ventana
     syncChannel.requestCurrentState();
 
+    // 5. Invalidador de textura al descargarse un asset en segundo plano
+    const cleanupAsset = syncChannel.onAssetDownloaded((assetId) => {
+      invalidateCachedTexture(assetId);
+    });
+
     return () => {
       cleanupState();
       cleanupRuler();
       cleanupCamera();
+      cleanupAsset();
     };
   }, [setGame, setPlayerCamera, setRulerMode, setRulerDiagonalRule, setRulerVisibleToPlayers, startRulerMeasure, updateRulerMeasure, clearRuler]);
 

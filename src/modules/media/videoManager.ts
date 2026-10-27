@@ -22,6 +22,37 @@ class VideoManager {
   private activeEntityVideos = new Set<string>(); // IDs de entidades que están usando vídeo
   private warningListeners = new Set<(showWarning: boolean, count: number) => void>();
 
+  constructor() {
+    this.setupGlobalResumeListeners();
+  }
+
+  /**
+   * Escucha eventos globales de interacción y cambio de visibilidad de pestaña para
+   * reactivar vídeos pausados automáticamente por las políticas del navegador.
+   */
+  private setupGlobalResumeListeners() {
+    if (typeof window === 'undefined') return;
+
+    const resumeAll = () => {
+      for (const inst of this.instances.values()) {
+        if (!inst.destroyed && inst.video) {
+          if (inst.video.paused) {
+            inst.video.play().catch(() => {});
+          }
+        }
+      }
+    };
+
+    window.addEventListener('pointerdown', resumeAll, { passive: true });
+    window.addEventListener('keydown', resumeAll, { passive: true });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        resumeAll();
+      }
+    });
+  }
+
   public onWarningChange(listener: (showWarning: boolean, count: number) => void): () => void {
     this.warningListeners.add(listener);
     return () => this.warningListeners.delete(listener);
@@ -61,6 +92,26 @@ class VideoManager {
   }
 
   /**
+   * Invalida y libera una instancia de vídeo cuando su asset se actualiza o descarga de la nube.
+   */
+  public invalidateAsset(assetId: string) {
+    for (const [key, inst] of this.instances.entries()) {
+      if (inst.assetId === assetId) {
+        inst.destroyed = true;
+        try {
+          inst.video.pause();
+          inst.video.src = '';
+          inst.video.load();
+        } catch {}
+        try {
+          URL.revokeObjectURL(inst.blobUrl);
+        } catch {}
+        this.instances.delete(key);
+      }
+    }
+  }
+
+  /**
    * Obtiene o inicializa un elemento de vídeo HTML5 y su textura Pixi en bucle.
    * Si chromaKey está habilitado:
    *  - Dibuja cada frame a un canvas reducido (máximo 1024 px de lado).
@@ -76,10 +127,12 @@ class VideoManager {
     const key = this.getInstanceKey(assetId, chromaKey);
     if (this.instances.has(key)) {
       const inst = this.instances.get(key)!;
-      if (inst.video.paused) {
-        inst.video.play().catch(() => {});
+      if (!inst.destroyed && inst.video) {
+        if (inst.video.paused) {
+          inst.video.play().catch(() => {});
+        }
+        return { texture: inst.texture, video: inst.video };
       }
-      return { texture: inst.texture, video: inst.video };
     }
 
     const asset = await getAsset(assetId);
@@ -110,6 +163,12 @@ class VideoManager {
     // Caso 1: Vídeo normal sin Chroma Key
     if (!chromaKey || !chromaKey.enabled) {
       const texture = Texture.from(video);
+      // Garantizar que el VideoSource de Pixi v8 tenga autoPlay y autoUpdate activos
+      const source = texture.source as any;
+      if (source) {
+        source.autoPlay = true;
+        source.autoUpdate = true;
+      }
       const inst: VideoInstance = {
         video,
         texture,

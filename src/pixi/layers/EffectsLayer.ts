@@ -751,6 +751,17 @@ class ProceduralEffectNode extends Container {
       this.particleGfx.fill({ color: 0xe0f2fe, alpha: progress * 0.25 * intensity });
     }
   }
+
+  public reloadAsset(assetId?: string) {
+    if (!assetId || this.loadedAssetId === assetId) {
+      this.loadedAssetId = null;
+      this.loadedCkKey = null;
+      this.gifData = null;
+      if (this.sprite) {
+        this.sprite.texture = Texture.EMPTY;
+      }
+    }
+  }
 }
 
 export class EffectsLayer extends Container {
@@ -826,5 +837,11 @@ export class EffectsLayer extends Container {
       };
     }
     return { width: 70, height: 70 };
+  }
+
+  public reloadAsset(assetId?: string) {
+    for (const node of this.effectNodes.values()) {
+      node.reloadAsset(assetId);
+    }
   }
 }

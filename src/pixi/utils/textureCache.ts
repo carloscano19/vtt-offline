@@ -135,6 +135,57 @@ export function setCachedTexture(assetId: string, texture: Texture) {
   cache.set(assetId, texture);
 }
 
+const textureInvalidatedListeners = new Set<(assetId: string) => void>();
+
+export function onTextureInvalidated(listener: (assetId: string) => void): () => void {
+  textureInvalidatedListeners.add(listener);
+  return () => {
+    textureInvalidatedListeners.delete(listener);
+  };
+}
+
+/**
+ * Invalida texturas en caché, URLs de objeto y decodificaciones cuando un asset
+ * se descarga de la nube o se actualiza.
+ */
+export function invalidateCachedTexture(assetId: string) {
+  for (const key of Array.from(cache.keys())) {
+    if (key === assetId || key.startsWith(`${assetId}_ck_`)) {
+      const tex = cache.get(key);
+      if (tex && tex !== Texture.EMPTY) {
+        try {
+          tex.destroy(true);
+        } catch {}
+      }
+      cache.delete(key);
+    }
+  }
+
+  if (objectUrlMap.has(assetId)) {
+    const url = objectUrlMap.get(assetId)!;
+    try {
+      URL.revokeObjectURL(url);
+    } catch {}
+    objectUrlMap.delete(assetId);
+  }
+
+  for (const key of Array.from(gifDataMap.keys())) {
+    if (key === assetId || key.startsWith(`${assetId}_ck_`)) {
+      gifDataMap.delete(key);
+    }
+  }
+
+  videoManager.invalidateAsset(assetId);
+
+  for (const listener of textureInvalidatedListeners) {
+    try {
+      listener(assetId);
+    } catch (e) {
+      console.warn('[textureCache] Error en listener de invalidación:', e);
+    }
+  }
+}
+
 /**
  * Limpia los ObjectURLs y la memoria de texturas cuando sea necesario
  */

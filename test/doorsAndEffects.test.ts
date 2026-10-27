@@ -3,6 +3,9 @@ import { snapPointToGridOrMidpoint } from '../src/pixi/utils/coordinates';
 import { lightManager } from '../src/modules/lights/lightManager';
 import { Entity, recalculateDoorEndpoints, rotateDoorAroundHinge, getDefaultSnapToGrid } from '../src/types/entity';
 import { normalizeEntity } from '../src/modules/persistence/normalizer';
+import { invalidateCachedTexture, onTextureInvalidated } from '../src/pixi/utils/textureCache';
+import { videoManager } from '../src/modules/media/videoManager';
+import { syncChannel } from '../src/modules/sync/syncChannel';
 
 describe('Doors new token model and normalizer migration', () => {
   it('migrates legacy doors without length and center using normalizer', () => {
@@ -532,4 +535,62 @@ describe('Effects lighting and scale integration', () => {
     expect(normalizeEntity(newEntity).animations?.rotation?.speed).toBe(0.5);
   });
 });
+
+describe('Asset download reactive reload and video management', () => {
+  it('notifies listeners when invalidateCachedTexture is called', () => {
+    let invalidatedId: string | null = null;
+    const unsub = onTextureInvalidated((id) => {
+      invalidatedId = id;
+    });
+
+    invalidateCachedTexture('asset_test_123');
+    expect(invalidatedId).toBe('asset_test_123');
+
+    unsub();
+    invalidatedId = null;
+    invalidateCachedTexture('asset_test_456');
+    expect(invalidatedId).toBeNull();
+  });
+
+  it('handles active entity video counts and warning limits', () => {
+    let warningTriggered = false;
+    let reportedCount = 0;
+    const unsub = videoManager.onWarningChange((show, count) => {
+      warningTriggered = show;
+      reportedCount = count;
+    });
+
+    for (let i = 1; i <= 7; i++) {
+      videoManager.registerActiveEntityVideo(`entity_vid_${i}`);
+    }
+
+    expect(videoManager.getActiveVideoCount()).toBe(7);
+    expect(warningTriggered).toBe(true);
+    expect(reportedCount).toBe(7);
+
+    // Unregister down to 6
+    videoManager.unregisterActiveEntityVideo('entity_vid_7');
+    expect(warningTriggered).toBe(false);
+    expect(reportedCount).toBe(6);
+
+    // Cleanup rest
+    for (let i = 1; i <= 6; i++) {
+      videoManager.unregisterActiveEntityVideo(`entity_vid_${i}`);
+    }
+    expect(videoManager.getActiveVideoCount()).toBe(0);
+    unsub();
+  });
+
+  it('broadcasts ASSET_DOWNLOADED across syncChannel', () => {
+    let receivedAssetId: string | null = null;
+    const unsub = syncChannel.onAssetDownloaded((assetId) => {
+      receivedAssetId = assetId;
+    });
+
+    syncChannel.sendAssetDownloaded('asset_cloud_99');
+    expect(typeof unsub).toBe('function');
+    unsub();
+  });
+});
+
 

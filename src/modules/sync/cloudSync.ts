@@ -2,6 +2,8 @@ import { supabase } from '../supabase/supabaseClient';
 import { authManager } from '../auth/authManager';
 import { db, saveAsset, deleteAsset as deleteLocalAsset, getAllAssets } from '../../db/dexie';
 import { AssetItem, AssetType } from '../../types/game';
+import { invalidateCachedTexture } from '../../pixi/utils/textureCache';
+import { syncChannel } from './syncChannel';
 
 export type SyncState = 'synced' | 'syncing' | 'offline' | 'unauthenticated' | 'error';
 
@@ -305,6 +307,8 @@ class CloudSyncManager {
 
             await saveAsset(newLocalAsset);
             downloadedCount++;
+            invalidateCachedTexture(newLocalAsset.id);
+            syncChannel.sendAssetDownloaded(newLocalAsset.id);
           } catch (dlErr) {
             console.error(`[cloudSync] Error descargando ${cloudItem.id}:`, dlErr);
           }

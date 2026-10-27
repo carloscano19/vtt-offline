@@ -343,4 +343,19 @@ export class TokensLayer extends Container {
       radius: Math.max(w, h) / 2
     };
   }
+
+  public reloadAsset(assetId?: string) {
+    for (const container of this.containerMap.values()) {
+      const c = container as any;
+      if (!assetId || c._loadedAssetId === assetId) {
+        c._loadedAssetId = null;
+        c._loadedCkKey = null;
+        c._gifData = null;
+        const sp = container.getChildByLabel('sprite') as Sprite;
+        if (sp) {
+          sp.texture = Texture.EMPTY;
+        }
+      }
+    }
+  }
 }
