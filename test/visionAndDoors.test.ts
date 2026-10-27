@@ -314,5 +314,42 @@ describe('Phase 2: Vision and Doors', () => {
     const open = isMovementBlockedByWall({ x: 35, y: 35 }, { x: 35, y: -35 }, entities);
     expect(open).toBe(false);
   });
+
+  it('un token jugador con visión pero oculto (visibleToPlayers = false) no produce polígonos de visión; al hacerlo visible, sí', () => {
+    const tokenPlayer: Entity = {
+      id: 'token_player_hidden_test',
+      type: 'token',
+      name: 'Pícaro Sigiloso',
+      x: 100,
+      y: 100,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      zIndex: 10,
+      visibleToPlayers: false,
+      locked: false,
+      side: 'jugador',
+      vision: {
+        active: true,
+        brightRangeInSquares: 4,
+        dimRangeInSquares: 2,
+        hardness: 0.5
+      }
+    };
+
+    // 1. Oculto: no debe producir polígonos de visión
+    const visibilitiesHidden = visionManager.getTokensVisibility([tokenPlayer], 70);
+    expect(visibilitiesHidden.length).toBe(0);
+
+    // 2. Visible: al cambiar visibleToPlayers a true, sí debe producir visión
+    const visibleToken: Entity = {
+      ...tokenPlayer,
+      visibleToPlayers: true
+    };
+    const visibilitiesVisible = visionManager.getTokensVisibility([visibleToken], 70);
+    expect(visibilitiesVisible.length).toBe(1);
+    expect(visibilitiesVisible[0].tokenId).toBe('token_player_hidden_test');
+    expect(visibilitiesVisible[0].brightPolygon.length).toBeGreaterThan(0);
+  });
 });
 

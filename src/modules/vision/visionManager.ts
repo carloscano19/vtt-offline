@@ -12,7 +12,7 @@ export class VisionManager {
    */
   private generateStateKey(entities: Entity[], gridSize: number): string {
     const relevantTokens = entities.filter(
-      (e) => e.type === 'token' && e.side === 'jugador' && e.vision?.active
+      (e) => e.type === 'token' && e.side === 'jugador' && e.vision?.active && e.visibleToPlayers !== false
     );
 
     const tokenPart = relevantTokens
@@ -52,7 +52,7 @@ export class VisionManager {
     }
 
     const playerVisionTokens = entities.filter(
-      (e) => e.type === 'token' && e.side === 'jugador' && e.vision?.active
+      (e) => e.type === 'token' && e.side === 'jugador' && e.vision?.active && e.visibleToPlayers !== false
     );
 
     if (playerVisionTokens.length === 0) {
