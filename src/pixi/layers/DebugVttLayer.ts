@@ -1,5 +1,5 @@
 import { Container, Graphics } from 'pixi.js';
-import { Entity } from '../../types/entity';
+import { Entity, Point2D } from '../../types/entity';
 import { localToWorld } from '../utils/coordinates';
 import { getAllWallSegments } from '../../modules/walls/wallManager';
 
@@ -76,10 +76,26 @@ export class DebugVttLayer extends Container {
     }
 
     // b) Entidades de puerta independientes
+    const mapEntitiesById = new Map<string, Entity>();
+    for (const ent of entities) {
+      if (ent.type === 'map') {
+        mapEntitiesById.set(ent.id, ent);
+      }
+    }
+
     const doorEntities = entities.filter((e) => e.type === 'door' && e.door);
     for (const d of doorEntities) {
-      const p1 = d.door!.p1;
-      const p2 = d.door!.p2;
+      const parentMap = d.mapId ? mapEntitiesById.get(d.mapId) : undefined;
+      const transformPoint = (p: Point2D): Point2D => {
+        if (parentMap) {
+          const mapPos = { x: parentMap.x, y: parentMap.y };
+          return localToWorld(p, mapPos, parentMap.rotation, parentMap.scaleX, parentMap.scaleY);
+        }
+        return p;
+      };
+
+      const p1 = transformPoint(d.door!.p1);
+      const p2 = transformPoint(d.door!.p2);
       this.graphics.moveTo(p1.x, p1.y);
       this.graphics.lineTo(p2.x, p2.y);
       this.graphics.stroke({ width: 5, color: d.door!.isOpen ? 0x22c55e : 0xff9900, alpha: 0.9 });

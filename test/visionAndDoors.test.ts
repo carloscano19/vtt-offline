@@ -351,5 +351,103 @@ describe('Phase 2: Vision and Doors', () => {
     expect(visibilitiesVisible[0].tokenId).toBe('token_player_hidden_test');
     expect(visibilitiesVisible[0].brightPolygon.length).toBeGreaterThan(0);
   });
+
+  it('al importar un UVTT con portal y abrir la puerta, getAllWallSegments no devuelve ningún segmento en el hueco', () => {
+    // 1. Simular mapa UVTT con paredes y un portal convertido a door
+    const mapEntity: Entity = {
+      id: 'map_uvtt_test',
+      type: 'map',
+      name: 'Mapa con Portal',
+      x: 0,
+      y: 0,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      zIndex: 0,
+      visibleToPlayers: true,
+      locked: false,
+      mapData: {
+        walls: [
+          { p1: { x: 0, y: 0 }, p2: { x: 100, y: 0 } },
+          { p1: { x: 200, y: 0 }, p2: { x: 300, y: 0 } }
+        ],
+        portals: [], // Vaciado al convertir a entidad puerta
+        lights: []
+      }
+    };
+
+    const doorEntity: Entity = {
+      id: 'door_uvtt_test',
+      type: 'door',
+      name: 'Puerta 1',
+      x: 150,
+      y: 0,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      zIndex: 40,
+      visibleToPlayers: true,
+      locked: false,
+      mapId: 'map_uvtt_test',
+      door: {
+        isOpen: false,
+        isLocked: false,
+        length: 100,
+        p1: { x: 100, y: 0 },
+        p2: { x: 200, y: 0 },
+        openAngle: Math.PI / 2
+      }
+    };
+
+    // Con la puerta cerrada, hay 3 segmentos de pared: 2 de mapa y 1 de la puerta cerrada
+    const closedSegments = getAllWallSegments([mapEntity, doorEntity]);
+    expect(closedSegments.length).toBe(3);
+    const closedDoorSeg = closedSegments.find((s) => s.source === 'door');
+    expect(closedDoorSeg).toBeDefined();
+
+    // Al abrir la puerta:
+    const openDoorEntity: Entity = {
+      ...doorEntity,
+      door: {
+        ...doorEntity.door!,
+        isOpen: true
+      }
+    };
+    const openSegments = getAllWallSegments([mapEntity, openDoorEntity]);
+    // Solo quedan las 2 paredes del mapa, NINGÚN segmento en el hueco (x: 100..200)
+    expect(openSegments.length).toBe(2);
+    const anyDoorSeg = openSegments.find((s) => s.source === 'door');
+    expect(anyDoorSeg).toBeUndefined();
+
+    // 2. Probar normalizador con partida existente donde mapData aún contenía el portal duplicado
+    const legacyMapWithPortal: Entity = {
+      ...mapEntity,
+      mapData: {
+        ...mapEntity.mapData!,
+        portals: [
+          {
+            position: { x: 150, y: 0 },
+            bounds: [{ x: 100, y: 0 }, { x: 200, y: 0 }],
+            rotation: 0,
+            closed: true,
+            freestanding: false
+          }
+        ]
+      }
+    };
+
+    const normalizedGame = normalizeGameState({
+      entities: [legacyMapWithPortal, openDoorEntity]
+    } as any);
+
+    const normMap = normalizedGame.entities.find((e) => e.id === 'map_uvtt_test');
+    expect(normMap?.mapData?.portals?.length).toBe(0);
+
+    const normSegments = getAllWallSegments(normalizedGame.entities);
+    // Con la puerta abierta, el hueco no debe tener ningún segmento de pared
+    expect(normSegments.length).toBe(2);
+    expect(normSegments.find((s) => s.source === 'door')).toBeUndefined();
+  });
 });
+
 

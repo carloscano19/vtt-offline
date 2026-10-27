@@ -6,6 +6,8 @@ import { normalizeEntity } from '../src/modules/persistence/normalizer';
 import { invalidateCachedTexture, onTextureInvalidated } from '../src/pixi/utils/textureCache';
 import { videoManager } from '../src/modules/media/videoManager';
 import { syncChannel } from '../src/modules/sync/syncChannel';
+import { GizmoLayer } from '../src/pixi/layers/GizmoLayer';
+import { getDimRadialGradientTexture, getTintRadialGradientTexture } from '../src/pixi/utils/gradientTextures';
 
 describe('Doors new token model and normalizer migration', () => {
   it('migrates legacy doors without length and center using normalizer', () => {
@@ -591,6 +593,75 @@ describe('Asset download reactive reload and video management', () => {
     expect(typeof unsub).toBe('function');
     unsub();
   });
+
+  it('GizmoLayer eye button always calculates screen top-right regardless of entity rotation', () => {
+    const gizmo = new GizmoLayer(true);
+    // 1. Horizontal token at (100, 100), size 70x70, rot 0
+    const horizontalToken: Entity = {
+      id: 'token_h',
+      type: 'token',
+      name: 'Token H',
+      x: 100,
+      y: 100,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      zIndex: 10,
+      visibleToPlayers: true,
+      locked: false
+    };
+    gizmo.update([horizontalToken], [horizontalToken], 1, 70);
+    const posH = gizmo.getEyeButtonWorldPos(horizontalToken);
+    // Right edge is 100 + 35 = 135; with offset 14 => x = 149
+    // Top edge is 100 - 35 = 65; with offset 14 => y = 51
+    expect(posH.x).toBeCloseTo(149, 1);
+    expect(posH.y).toBeCloseTo(51, 1);
+
+    // 2. Vertical door: rotation Math.PI / 2 (90 degrees), length 70
+    // Center at (200, 200). Local bounds: [-35, -5, 70, 10]
+    const verticalDoor: Entity = {
+      id: 'door_v',
+      type: 'door',
+      name: 'Puerta Vertical',
+      x: 200,
+      y: 200,
+      rotation: Math.PI / 2,
+      scaleX: 1,
+      scaleY: 1,
+      zIndex: 40,
+      visibleToPlayers: true,
+      locked: false,
+      door: {
+        isOpen: false,
+        isLocked: false,
+        length: 70,
+        p1: { x: 200, y: 165 },
+        p2: { x: 200, y: 235 },
+        openAngle: Math.PI / 2
+      }
+    };
+    gizmo.update([verticalDoor], [verticalDoor], 1, 70);
+    const posV = gizmo.getEyeButtonWorldPos(verticalDoor);
+    // En pantalla, la esquina superior derecha del recuadro envolvente:
+    // x debe ser mayor que el centro (200) y y debe ser menor que el extremo superior (165)
+    expect(posV.x).toBeGreaterThan(200);
+    expect(posV.y).toBeLessThan(165);
+  });
+
+  it('generates cached radial gradient textures without errors', () => {
+    const tex1 = getDimRadialGradientTexture(0.6);
+    expect(tex1).toBeDefined();
+
+    const tex1Cached = getDimRadialGradientTexture(0.6);
+    expect(tex1Cached).toBe(tex1);
+
+    const texTint = getTintRadialGradientTexture(0.5);
+    expect(texTint).toBeDefined();
+
+    const texTintCached = getTintRadialGradientTexture(0.5);
+    expect(texTintCached).toBe(texTint);
+  });
 });
+
 
 

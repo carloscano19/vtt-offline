@@ -1,9 +1,10 @@
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, Sprite } from 'pixi.js';
 import { AmbientConfig, ExploredMultiPolygon } from '../../types/game';
 import { LightVisibility } from '../../modules/lights/lightManager';
 import { visionToMulti, simplifyMulti } from '../../modules/vision/fogMemory';
 import { safeClip } from '../../modules/vision/safeClip';
 import { parseColor, rgbComponents } from '../../utils/color';
+import { getDimRadialGradientTexture, getTintRadialGradientTexture } from '../utils/gradientTextures';
 
 export const AMBIENT_PRESET_CONFIGS: Record<string, { color: string; intensity: number }> = {
   dawn: { color: '#ff9d55', intensity: 0.80 },
@@ -36,12 +37,14 @@ export class AmbientLayer extends Container {
   // Contenedor con máscara stencil para degradado radial suave de oscuridad en zona tenue
   private dimContainer = new Container();
   private dimMaskGfx = new Graphics();
-  private dimRingsGfx = new Graphics();
+  private dimSpritesContainer = new Container();
+  private dimSprites: Sprite[] = [];
 
   // Contenedor con máscara stencil para degradado radial suave de tinte en zona tenue
   private tintDimContainer = new Container();
   private tintDimMaskGfx = new Graphics();
-  private tintDimRingsGfx = new Graphics();
+  private tintDimSpritesContainer = new Container();
+  private tintDimSprites: Sprite[] = [];
 
   // Estado para la transición suave de 2 segundos
   private currentR = 255;
@@ -73,7 +76,7 @@ export class AmbientLayer extends Container {
     // 2. Degradado suave de oscuridad en zona tenue
     this.dimContainer.mask = this.dimMaskGfx;
     this.dimContainer.addChild(this.dimMaskGfx);
-    this.dimContainer.addChild(this.dimRingsGfx);
+    this.dimContainer.addChild(this.dimSpritesContainer);
     this.addChild(this.dimContainer);
 
     // 3. Tinte de luz claro
@@ -82,7 +85,7 @@ export class AmbientLayer extends Container {
     // 4. Degradado suave de tinte en zona tenue
     this.tintDimContainer.mask = this.tintDimMaskGfx;
     this.tintDimContainer.addChild(this.tintDimMaskGfx);
-    this.tintDimContainer.addChild(this.tintDimRingsGfx);
+    this.tintDimContainer.addChild(this.tintDimSpritesContainer);
     this.addChild(this.tintDimContainer);
   }
 
@@ -187,10 +190,9 @@ export class AmbientLayer extends Container {
 
     const { outsideMulti, dimMulti, brightMulti } = this.cachedRegions;
 
-    // 4. Dibujar oscuridad ambiental con degradado radial suave
+    // 4. Dibujar oscuridad ambiental con degradado radial continuo
     this.darknessGfx.clear();
     this.dimMaskGfx.clear();
-    this.dimRingsGfx.clear();
     const darkColorHex = rgbToHex(this.currentR * 0.15, this.currentG * 0.15, this.currentB * 0.25);
 
     if (currentDarkness > 0.01) {
@@ -202,36 +204,46 @@ export class AmbientLayer extends Container {
         // Máscara stencil recortada por dimMulti (paredes y corte claro en seco)
         this.renderMulti(this.dimMaskGfx, dimMulti, 0xffffff, 1.0);
 
-        // Base tenue uniforme
-        this.renderMulti(this.dimRingsGfx, dimMulti, darkColorHex, currentDarkness * 0.15);
-
-        const STEPS = 16;
+        let darkSpriteIdx = 0;
         for (const light of lights) {
           const rBright = light.brightRangePx || 0;
           const rTotal = light.totalRangePx || 0;
           if (rTotal <= rBright || !light.center) continue;
 
-          const w = rTotal - rBright;
-          const stepW = w / STEPS;
-
-          for (let i = 0; i < STEPS; i++) {
-            const t = (i + 0.5) / STEPS;
-            const r = rBright + w * t;
-            // Desde 0 oscuridad en rBright hasta oscuridad total en rTotal
-            const ringAlpha = currentDarkness * 0.95 * Math.pow(t, 1.3);
-            this.dimRingsGfx.circle(light.center.x, light.center.y, r);
-            this.dimRingsGfx.stroke({ width: stepW + 1.5, color: darkColorHex, alpha: ringAlpha });
+          let sprite = this.dimSprites[darkSpriteIdx];
+          if (!sprite) {
+            sprite = new Sprite();
+            sprite.anchor.set(0.5);
+            this.dimSprites.push(sprite);
+            this.dimSpritesContainer.addChild(sprite);
           }
+          sprite.visible = true;
+
+          const ratio = rBright / rTotal;
+          sprite.texture = getDimRadialGradientTexture(ratio);
+          sprite.tint = darkColorHex;
+          sprite.alpha = currentDarkness * 0.95;
+          sprite.position.set(light.center.x, light.center.y);
+          sprite.width = rTotal * 2;
+          sprite.height = rTotal * 2;
+          darkSpriteIdx++;
         }
+        for (let i = darkSpriteIdx; i < this.dimSprites.length; i++) {
+          this.dimSprites[i].visible = false;
+        }
+      } else {
+        for (const s of this.dimSprites) s.visible = false;
       }
+    } else {
+      for (const s of this.dimSprites) s.visible = false;
     }
 
-    // 5. Dibujar tinte de color de cada luz dinámica (brillo suave y aditivo, modulado por la oscuridad del ambiente)
+    // 5. Dibujar tinte de color de cada luz dinámica (brillo suave y continuo, modulado por la oscuridad del ambiente)
     this.lightsTintGfx.clear();
     this.tintDimMaskGfx.clear();
-    this.tintDimRingsGfx.clear();
 
     const darknessFactor = 0.05 + 0.95 * Math.pow(Math.min(1.0, currentDarkness / 0.85), 1.5);
+    let tintSpriteIdx = 0;
 
     for (const light of lights) {
       const { rgb: colorNum } = parseColor(light.color, 0xffaa44);
@@ -243,7 +255,7 @@ export class AmbientLayer extends Container {
         flickerMod = 0.90 + 0.10 * Math.sin(this.timeSec * 8 + seed) * Math.cos(this.timeSec * 13 + seed);
       }
 
-      // Brillo suave y aditivo: alpha máximo en el centro de ~0.25
+      // Brillo suave: alpha en el centro de ~0.25
       const baseAlpha = light.intensity * 0.25 * darknessFactor * flickerMod;
 
       // Zona clara iluminada hasta su radio (recortada con su polígono de luz clara)
@@ -252,7 +264,7 @@ export class AmbientLayer extends Container {
         this.lightsTintGfx.fill({ color: colorNum, alpha: baseAlpha });
       }
 
-      // Zona tenue: degradado radial suave hasta apagarse en el borde exterior
+      // Zona tenue: degradado radial continuo hasta apagarse en el borde exterior
       if (light.totalPolygon && light.totalPolygon.length >= 3) {
         const rBright = light.brightRangePx || 0;
         const rTotal = light.totalRangePx || 0;
@@ -262,20 +274,28 @@ export class AmbientLayer extends Container {
           this.tintDimMaskGfx.poly(light.totalPolygon.map((p) => [p.x, p.y]).flat());
           this.tintDimMaskGfx.fill({ color: 0xffffff, alpha: 1.0 });
 
-          const STEPS = 16;
-          const w = rTotal - rBright;
-          const stepW = w / STEPS;
-
-          for (let i = 0; i < STEPS; i++) {
-            const t = (i + 0.5) / STEPS;
-            const r = rBright + w * t;
-            // Tinte desciende suavemente de baseAlpha a 0 en el borde
-            const tintAlpha = baseAlpha * Math.cos(t * Math.PI * 0.5);
-            this.tintDimRingsGfx.circle(light.center.x, light.center.y, r);
-            this.tintDimRingsGfx.stroke({ width: stepW + 1.5, color: colorNum, alpha: tintAlpha });
+          let sprite = this.tintDimSprites[tintSpriteIdx];
+          if (!sprite) {
+            sprite = new Sprite();
+            sprite.anchor.set(0.5);
+            this.tintDimSprites.push(sprite);
+            this.tintDimSpritesContainer.addChild(sprite);
           }
+          sprite.visible = true;
+
+          const ratio = rBright / rTotal;
+          sprite.texture = getTintRadialGradientTexture(ratio);
+          sprite.tint = colorNum;
+          sprite.alpha = baseAlpha;
+          sprite.position.set(light.center.x, light.center.y);
+          sprite.width = rTotal * 2;
+          sprite.height = rTotal * 2;
+          tintSpriteIdx++;
         }
       }
+    }
+    for (let i = tintSpriteIdx; i < this.tintDimSprites.length; i++) {
+      this.tintDimSprites[i].visible = false;
     }
   }
 }

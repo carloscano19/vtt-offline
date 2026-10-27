@@ -204,6 +204,12 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
             mapY = refY;
           }
 
+          const rawPortals = parsed.mapData?.portals || [];
+          const hasPortals = rawPortals.length > 0;
+          const entityMapData = parsed.mapData
+            ? { ...parsed.mapData, portals: [] }
+            : undefined;
+
           const entity: Entity = {
             id: `entity_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
             type: 'map',
@@ -217,15 +223,15 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
             zIndex: 0,
             visibleToPlayers: true, // Mapas visibles para jugadores por defecto
             locked: false,
-            mapData: parsed.mapData
+            mapData: entityMapData
           };
 
           addEntity(entity);
 
           // Convertir portales UVTT en entidades de puerta interactivas vinculadas al mapa
-          if (parsed.mapData.portals && parsed.mapData.portals.length > 0) {
-            for (let pIdx = 0; pIdx < parsed.mapData.portals.length; pIdx++) {
-              const portal = parsed.mapData.portals[pIdx];
+          if (hasPortals) {
+            for (let pIdx = 0; pIdx < rawPortals.length; pIdx++) {
+              const portal = rawPortals[pIdx];
               if (portal.bounds && portal.bounds.length >= 2) {
                 const b0 = portal.bounds[0];
                 const b1 = portal.bounds[1];

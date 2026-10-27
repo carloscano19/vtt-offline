@@ -146,7 +146,9 @@ export const LibraryTab: React.FC = () => {
       zIndex: isMap ? 0 : 10,
       visibleToPlayers: isMap, // Mapas visibles, tokens ocultos por defecto
       locked: false,
-      mapData: asset.mapData,
+      mapData: isMap && asset.mapData?.portals && asset.mapData.portals.length > 0
+        ? { ...asset.mapData, portals: [] }
+        : asset.mapData,
       side: isMap ? undefined : 'jugador',
       vision: isMap ? undefined : { active: true, brightRangeInSquares: 4, dimRangeInSquares: 2, hardness: 0.5 },
       statuses: []

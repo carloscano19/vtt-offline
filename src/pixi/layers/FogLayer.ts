@@ -1,8 +1,9 @@
-import { Container, Graphics, Renderer } from 'pixi.js';
+import { Container, Graphics, Renderer, Sprite } from 'pixi.js';
 import { ExploredMultiPolygon } from '../../types/game';
 import { TokenVisibility } from '../../modules/vision/visibilityPolygon';
 import { exploredSignature } from '../../modules/vision/fogMemory';
 import { computeFogRegions } from '../../modules/vision/fogRegions';
+import { getDimRadialGradientTexture } from '../utils/gradientTextures';
 
 const FOG_COLOR = 0x020617;
 const EXPLORED_ALPHA = 0.65;
@@ -22,7 +23,8 @@ export class FogLayer extends Container {
   // Contenedor con máscara stencil para degradado radial suave de visión tenue
   private dimContainer = new Container();
   private dimMaskGfx = new Graphics();
-  private dimRingsGfx = new Graphics();
+  private dimSpritesContainer = new Container();
+  private dimSprites: Sprite[] = [];
 
   private lastKey = '';
 
@@ -35,7 +37,7 @@ export class FogLayer extends Container {
 
     this.dimContainer.mask = this.dimMaskGfx;
     this.dimContainer.addChild(this.dimMaskGfx);
-    this.dimContainer.addChild(this.dimRingsGfx);
+    this.dimContainer.addChild(this.dimSpritesContainer);
     this.addChild(this.dimContainer);
   }
 
@@ -116,16 +118,12 @@ export class FogLayer extends Container {
     this.exploredDarkGfx.clear();
     this.renderMultiPolygon(this.exploredDarkGfx, regions.exploradoNoVisible, FOG_COLOR, EXPLORED_ALPHA);
 
-    // 3. Dibuja visibleDim (zona tenue de tokens y luces) con degradado radial suave
+    // 3. Dibuja visibleDim (zona tenue de tokens y luces) con degradado radial continuo
     this.dimMaskGfx.clear();
-    this.dimRingsGfx.clear();
 
     if (regions.visibleDim.length > 0) {
       // Máscara stencil recortada por visibleDim (paredes y huecos claros cortan en seco)
       this.renderMultiPolygon(this.dimMaskGfx, regions.visibleDim, 0xffffff, 1.0);
-
-      // Base suave para evitar huecos no cubiertos
-      this.renderMultiPolygon(this.dimRingsGfx, regions.visibleDim, FOG_COLOR, 0.12);
 
       const sources: { center: { x: number; y: number }; rBright: number; rTotal: number }[] = [];
       for (const v of visibilities) {
@@ -139,23 +137,37 @@ export class FogLayer extends Container {
         }
       }
 
-      const STEPS = 16;
+      let spriteIdx = 0;
       for (const src of sources) {
         const rBright = src.rBright || 0;
         const rTotal = src.rTotal || 0;
         if (rTotal <= rBright) continue;
 
-        const w = rTotal - rBright;
-        const stepW = w / STEPS;
-
-        for (let i = 0; i < STEPS; i++) {
-          const t = (i + 0.5) / STEPS;
-          const r = rBright + w * t;
-          // De 0.05 a 0.65 (oscuridad tenue suave a total en borde exterior)
-          const alpha = 0.05 + 0.60 * Math.pow(t, 1.3);
-          this.dimRingsGfx.circle(src.center.x, src.center.y, r);
-          this.dimRingsGfx.stroke({ width: stepW + 1.5, color: FOG_COLOR, alpha });
+        let sprite = this.dimSprites[spriteIdx];
+        if (!sprite) {
+          sprite = new Sprite();
+          sprite.anchor.set(0.5);
+          this.dimSprites.push(sprite);
+          this.dimSpritesContainer.addChild(sprite);
         }
+        sprite.visible = true;
+
+        const ratio = rBright / rTotal;
+        sprite.texture = getDimRadialGradientTexture(ratio);
+        sprite.tint = FOG_COLOR;
+        sprite.alpha = DIM_ALPHA;
+        sprite.position.set(src.center.x, src.center.y);
+        sprite.width = rTotal * 2;
+        sprite.height = rTotal * 2;
+        spriteIdx++;
+      }
+
+      for (let i = spriteIdx; i < this.dimSprites.length; i++) {
+        this.dimSprites[i].visible = false;
+      }
+    } else {
+      for (const s of this.dimSprites) {
+        s.visible = false;
       }
     }
   }

@@ -214,7 +214,10 @@ export function normalizeEntity(entity: Entity): Entity {
  */
 export function normalizeGameState(game: GameState): GameState {
   const currentGridSize = (game.grid?.size && game.grid.size > 0) ? game.grid.size : 70;
-  const normalizedEntities = (game.entities || []).map((ent) => {
+  const rawEntities = game.entities || [];
+  const doorEntities = rawEntities.filter((e) => e.type === 'door' && e.door);
+
+  const normalizedEntities = rawEntities.map((ent) => {
     let nEnt = normalizeEntity(ent);
     if (nEnt.type === 'map' && nEnt.mapData?.pixelsPerGrid && nEnt.mapData.pixelsPerGrid > 0) {
       const expectedScale = currentGridSize / nEnt.mapData.pixelsPerGrid;
@@ -226,6 +229,36 @@ export function normalizeGameState(game: GameState): GameState {
         };
       }
     }
+
+    // Si es un mapa con portales y hay entidades puerta con su mapId cuyos p1/p2 coinciden con los bounds del portal (tolerancia 1px),
+    // elimina esos portales del mapa para evitar paredes duplicadas en getAllWallSegments
+    if (nEnt.type === 'map' && nEnt.mapData?.portals && nEnt.mapData.portals.length > 0) {
+      const doorsForMap = doorEntities.filter((d) => d.mapId === nEnt.id && d.door);
+      if (doorsForMap.length > 0) {
+        const remainingPortals = nEnt.mapData.portals.filter((portal) => {
+          if (!portal.bounds || portal.bounds.length < 2) return false;
+          const b0 = portal.bounds[0];
+          const b1 = portal.bounds[1];
+          const hasMatchingDoor = doorsForMap.some((d) => {
+            const p1 = d.door!.p1;
+            const p2 = d.door!.p2;
+            const direct = Math.hypot(p1.x - b0.x, p1.y - b0.y) <= 1 && Math.hypot(p2.x - b1.x, p2.y - b1.y) <= 1;
+            const invert = Math.hypot(p1.x - b1.x, p1.y - b1.y) <= 1 && Math.hypot(p2.x - b0.x, p2.y - b0.y) <= 1;
+            return direct || invert;
+          });
+          return !hasMatchingDoor;
+        });
+
+        nEnt = {
+          ...nEnt,
+          mapData: {
+            ...nEnt.mapData,
+            portals: remainingPortals
+          }
+        };
+      }
+    }
+
     return nEnt;
   });
 
