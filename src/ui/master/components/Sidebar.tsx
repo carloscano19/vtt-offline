@@ -3,8 +3,9 @@ import { useUIStore } from '../../../stores/useUIStore';
 import { PropertiesTab } from './PropertiesTab';
 import { LayersTab } from './LayersTab';
 import { LibraryTab } from './LibraryTab';
+import { EffectsTab } from './EffectsTab';
 import { MusicTab } from './MusicTab';
-import { X, Sliders, Layers, FolderOpen, Music } from 'lucide-react';
+import { X, Sliders, Layers, FolderOpen, Music, Sparkles } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
   const activeSidebarTab = useUIStore((s) => s.activeSidebarTab);
@@ -41,6 +42,19 @@ export const Sidebar: React.FC = () => {
           >
             <Layers className="w-3.5 h-3.5" />
             <span>Capas</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSidebarTab('effects')}
+            className={`px-2 py-1 rounded flex items-center gap-1 transition-all text-[11px] font-medium whitespace-nowrap ${
+              activeSidebarTab === 'effects'
+                ? 'bg-amber-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+            }`}
+            title="Catálogo de efectos animados (fuego, humo, luces, portales...)"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Efectos</span>
           </button>
 
           <button
@@ -83,6 +97,7 @@ export const Sidebar: React.FC = () => {
       <div className="flex-1 overflow-hidden">
         {activeSidebarTab === 'properties' && <PropertiesTab />}
         {activeSidebarTab === 'layers' && <LayersTab />}
+        {activeSidebarTab === 'effects' && <EffectsTab />}
         {activeSidebarTab === 'library' && <LibraryTab />}
         {activeSidebarTab === 'music' && <MusicTab />}
       </div>

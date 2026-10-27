@@ -14,6 +14,7 @@ import { FogToolLayer } from './layers/FogToolLayer';
 import { AmbientLayer } from './layers/AmbientLayer';
 import { WeatherLayer } from './layers/WeatherLayer';
 import { LightsLayer } from './layers/LightsLayer';
+import { EffectsLayer } from './layers/EffectsLayer';
 import { PlayerFrameLayout } from './layers/PlayerFrameLayout';
 import { visionManager } from '../modules/vision/visionManager';
 import { lightManager, LightVisibility } from '../modules/lights/lightManager';
@@ -31,6 +32,7 @@ export class PixiRenderer {
   public ambientLayer!: AmbientLayer;
   public fogLayer!: FogLayer;
   public weatherLayer!: WeatherLayer;
+  public effectsLayer!: EffectsLayer;
   public lightsLayer!: LightsLayer;
   public wallsLayer!: WallsLayer;
   public rulerLayer!: RulerLayer;
@@ -45,6 +47,7 @@ export class PixiRenderer {
 
   // Cache para el ticker de animación
   private lastGridSize = 70;
+  private lastEntities: any[] = [];
   private lastWeather: WeatherConfig | null = null;
   private lastCamera: CameraState | null = null;
   private lastAmbient: AmbientConfig | null = null;
@@ -109,6 +112,11 @@ export class PixiRenderer {
       this.tokensLayer.label = 'TokensLayer';
       this.worldContainer.addChild(this.tokensLayer);
 
+      // 5b. Capa de Efectos Procedurales Animados
+      this.effectsLayer = new EffectsLayer(this.isMaster);
+      this.effectsLayer.label = 'EffectsLayer';
+      this.worldContainer.addChild(this.effectsLayer);
+
       // 6. Capa de Luz Ambiental Global y Luces Dinámicas (Vectorial)
       this.ambientLayer = new AmbientLayer(this.isMaster);
       this.ambientLayer.label = 'AmbientLayer';
@@ -162,6 +170,16 @@ export class PixiRenderer {
         const currentGridSize = this.lastGridSize || 70;
         this.tokensLayer?.animate(deltaSec, currentGridSize);
         this.mapsLayer?.animate(deltaSec, currentGridSize);
+
+        if (this.lastEntities && this.lastCamera) {
+          this.effectsLayer?.update(
+            this.lastEntities,
+            this.lastCamera,
+            this.app.screen.width,
+            this.app.screen.height,
+            deltaSec
+          );
+        }
 
         if (this.lastWeather && this.lastCamera) {
           this.weatherLayer?.update(
@@ -248,6 +266,7 @@ export class PixiRenderer {
     const lights = lightManager.getLightsVisibility(game.entities, gridSize);
 
     this.lastGridSize = gridSize;
+    this.lastEntities = game.entities;
     this.lastWeather = game.weather;
     this.lastCamera = camera;
     this.lastAmbient = game.ambient;
@@ -264,6 +283,7 @@ export class PixiRenderer {
     this.gridLayer.update(game.grid, camera, width, height, clipGrid ? worldBounds : undefined);
     this.doorsLayer.update(game.entities, selectedIds);
     this.tokensLayer.syncEntities(game.entities, selectedIds, visibilities, isPlayerPreview, game.fog.enabled);
+    this.effectsLayer.update(game.entities, camera, width, height, 0.016);
     this.ambientLayer.update(game.ambient, lights, worldBounds, 0.016);
     this.fogLayer.update(
       this.app.renderer as Renderer,

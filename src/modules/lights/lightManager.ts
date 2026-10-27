@@ -26,13 +26,13 @@ export class LightManager {
    */
   private generateStateKey(entities: Entity[], gridSize: number): string {
     const lightEntities = entities.filter(
-      (e) => e.type === 'light' && e.light && e.visibleToPlayers !== false
+      (e) => (e.type === 'light' || (e.type === 'effect' && e.effect?.emitsLight)) && e.light && e.visibleToPlayers !== false
     );
 
     const lightPart = lightEntities
       .map((l) => {
         const c = l.light!;
-        return `${l.id}:${Math.round(l.x)}:${Math.round(l.y)}:${c.brightRadiusInSquares}:${c.dimRadiusInSquares}:${c.color}:${c.intensity}:${c.edgeHardness}`;
+        return `${l.id}:${Math.round(l.x)}:${Math.round(l.y)}:${l.scaleX}:${l.scaleY}:${c.brightRadiusInSquares}:${c.dimRadiusInSquares}:${c.color}:${c.intensity}:${c.edgeHardness}`;
       })
       .join('|');
 
@@ -66,7 +66,7 @@ export class LightManager {
     }
 
     const lightEntities = entities.filter(
-      (e) => e.type === 'light' && e.light && e.visibleToPlayers !== false
+      (e) => (e.type === 'light' || (e.type === 'effect' && e.effect?.emitsLight)) && e.light && e.visibleToPlayers !== false
     );
 
     if (lightEntities.length === 0) {
@@ -81,8 +81,9 @@ export class LightManager {
     for (const lightEnt of lightEntities) {
       const cfg = lightEnt.light!;
       const center: Point2D = { x: lightEnt.x, y: lightEnt.y };
-      const brightSquares = cfg.brightRadiusInSquares ?? 4;
-      const dimSquares = cfg.dimRadiusInSquares ?? 2;
+      const scaleMultiplier = lightEnt.type === 'effect' ? Math.max(0.2, (Math.abs(lightEnt.scaleX || 1) + Math.abs(lightEnt.scaleY || 1)) / 2) : 1;
+      const brightSquares = (cfg.brightRadiusInSquares ?? 4) * scaleMultiplier;
+      const dimSquares = (cfg.dimRadiusInSquares ?? 2) * scaleMultiplier;
       const brightRangePx = Math.max(0, brightSquares * effectiveGridSize);
       const totalRangePx = Math.max(brightRangePx, (brightSquares + dimSquares) * effectiveGridSize);
 

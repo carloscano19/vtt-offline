@@ -40,6 +40,25 @@ export function snapPointToGrid(pos: Point2D, gridSize: number): Point2D {
 }
 
 /**
+ * Ajusta un punto a la intersección o punto medio de casilla más cercano (pasos de gridSize / 2),
+ * con respecto a un origen opcional (ej: la posición del mapa).
+ */
+export function snapPointToGridOrMidpoint(
+  pos: Point2D,
+  gridSize: number,
+  origin: Point2D = { x: 0, y: 0 }
+): Point2D {
+  if (gridSize <= 0) return pos;
+  const step = gridSize / 2;
+  const relX = pos.x - origin.x;
+  const relY = pos.y - origin.y;
+  return {
+    x: origin.x + Math.round(relX / step) * step,
+    y: origin.y + Math.round(relY / step) * step
+  };
+}
+
+/**
  * Transforma un punto local de una entidad (ej: pared de mapa) a coordenadas globales del mundo
  */
 export function localToWorld(

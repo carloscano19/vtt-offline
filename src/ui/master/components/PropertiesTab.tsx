@@ -23,6 +23,24 @@ import {
 } from 'lucide-react';
 import { TokenSide } from '../../../types/entity';
 
+const EFFECT_PRESET_NAMES: Record<string, string> = {
+  torch: 'Antorcha de pared',
+  campfire: 'Hoguera',
+  brazier: 'Brasero',
+  lantern: 'Farol',
+  candle: 'Vela',
+  fire_small: 'Llamas pequeñas',
+  fire_large: 'Incendio grande',
+  fire_magic: 'Fuego mágico',
+  smoke_light: 'Humo ligero',
+  smoke_dense: 'Humareda densa',
+  fog_low: 'Niebla baja',
+  magic_seal: 'Sello mágico',
+  portal: 'Portal arcano',
+  lightning: 'Rayos',
+  ice_zone: 'Zona de hielo'
+};
+
 export const PropertiesTab: React.FC = () => {
   const game = useGameStore((s) => s.game);
   const updateEntity = useGameStore((s) => s.updateEntity);
@@ -94,6 +112,8 @@ export const PropertiesTab: React.FC = () => {
               ? 'Puerta'
               : selectedEntity.type === 'light'
               ? 'Luz / Antorcha'
+              : selectedEntity.type === 'effect'
+              ? 'Efecto Animado'
               : 'Objeto'}
           </span>
           <div className="flex items-center gap-1">
@@ -424,6 +444,27 @@ export const PropertiesTab: React.FC = () => {
             </button>
           </div>
 
+          {/* Cambiar bisagra de extremo */}
+          <div className="pt-2 border-t border-slate-700/80">
+            <button
+              onClick={() => {
+                if (!selectedEntity.door) return;
+                handleUpdate({
+                  door: {
+                    ...selectedEntity.door,
+                    p1: selectedEntity.door.p2,
+                    p2: selectedEntity.door.p1
+                  }
+                });
+              }}
+              className="w-full py-1.5 px-3 rounded text-xs font-medium bg-slate-700/60 hover:bg-slate-700 border border-slate-600 text-slate-200 transition-colors flex items-center justify-center gap-2"
+              title="Intercambia el punto de giro de la puerta al otro extremo"
+            >
+              <RotateCw className="w-3.5 h-3.5 text-amber-400" />
+              <span>Cambiar bisagra de extremo</span>
+            </button>
+          </div>
+
           <p className="text-[11px] text-slate-400">
             {selectedEntity.door.isLocked
               ? 'La puerta está bloqueada con candado: no se puede abrir/cerrar accidentalmente.'
@@ -577,7 +618,239 @@ export const PropertiesTab: React.FC = () => {
         </div>
       )}
 
+      {/* Propiedades de Efecto si corresponde */}
+      {selectedEntity.type === 'effect' && selectedEntity.effect && (
+        <div className="bg-slate-800/60 p-3 rounded border border-slate-700 space-y-3">
+          <div className="flex items-center justify-between text-amber-400 font-semibold">
+            <span className="flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span>Propiedades del Efecto</span>
+            </span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded font-medium border border-amber-500/40 bg-amber-950/40 text-amber-300">
+              {EFFECT_PRESET_NAMES[selectedEntity.effect.preset] || selectedEntity.effect.preset}
+            </span>
+          </div>
+
+          {/* Color / Tinte */}
+          <div>
+            <div className="flex justify-between text-[11px] text-slate-400 mb-1">
+              <span>Color / Tinte</span>
+              <span className="font-mono text-white uppercase">{selectedEntity.effect.color}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={selectedEntity.effect.color || '#ff7700'}
+                onChange={(e) => {
+                  const newCol = e.target.value;
+                  const upd: any = {
+                    effect: { ...selectedEntity.effect!, color: newCol }
+                  };
+                  if (selectedEntity.effect?.emitsLight && selectedEntity.light) {
+                    upd.light = { ...selectedEntity.light, color: newCol };
+                  }
+                  handleUpdate(upd);
+                }}
+                className="w-8 h-8 rounded cursor-pointer border border-slate-600 bg-transparent shrink-0"
+              />
+              <div className="flex items-center gap-1 flex-wrap">
+                {[
+                  { name: 'Fuego', color: '#f97316' },
+                  { name: 'Carmesí', color: '#ef4444' },
+                  { name: 'Arcano', color: '#a855f7' },
+                  { name: 'Hielo', color: '#38bdf8' },
+                  { name: 'Vil', color: '#22c55e' },
+                  { name: 'Sagrado', color: '#eab308' },
+                  { name: 'Humo', color: '#94a3b8' }
+                ].map((c) => (
+                  <button
+                    key={c.color}
+                    type="button"
+                    onClick={() => {
+                      const upd: any = {
+                        effect: { ...selectedEntity.effect!, color: c.color }
+                      };
+                      if (selectedEntity.effect?.emitsLight && selectedEntity.light) {
+                        upd.light = { ...selectedEntity.light, color: c.color };
+                      }
+                      handleUpdate(upd);
+                    }}
+                    className="w-5 h-5 rounded-full border border-slate-600 hover:scale-110 transition-transform"
+                    style={{ backgroundColor: c.color }}
+                    title={c.name}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Intensidad */}
+          <div>
+            <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+              <span>Intensidad</span>
+              <span className="text-white font-mono">{selectedEntity.effect.intensity}%</span>
+            </div>
+            <input
+              type="range"
+              min="10"
+              max="100"
+              value={selectedEntity.effect.intensity}
+              onChange={(e) => {
+                const newInt = parseInt(e.target.value) || 80;
+                const upd: any = {
+                  effect: { ...selectedEntity.effect!, intensity: newInt }
+                };
+                if (selectedEntity.effect?.emitsLight && selectedEntity.light) {
+                  upd.light = { ...selectedEntity.light, intensity: newInt };
+                }
+                handleUpdate(upd);
+              }}
+              className="w-full accent-amber-500 cursor-pointer"
+            />
+          </div>
+
+          {/* Velocidad de animación */}
+          <div>
+            <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+              <span>Velocidad de animación</span>
+              <span className="text-white font-mono">{selectedEntity.effect.speed.toFixed(1)}x</span>
+            </div>
+            <input
+              type="range"
+              min="0.2"
+              max="3.0"
+              step="0.1"
+              value={selectedEntity.effect.speed}
+              onChange={(e) =>
+                handleUpdate({
+                  effect: { ...selectedEntity.effect!, speed: parseFloat(e.target.value) || 1.0 }
+                })
+              }
+              className="w-full accent-amber-500 cursor-pointer"
+            />
+          </div>
+
+          {/* Tamaño rápido (Casillas) */}
+          <div>
+            <span className="text-[11px] text-slate-400 block mb-1">Tamaño en el tablero</span>
+            <div className="grid grid-cols-4 gap-1.5">
+              {[
+                { label: '0.5x0.5', val: 0.5 },
+                { label: '1x1', val: 1 },
+                { label: '2x2', val: 2 },
+                { label: '3x3', val: 3 }
+              ].map((sz) => (
+                <button
+                  key={sz.val}
+                  type="button"
+                  onClick={() => {
+                    const upd: any = {
+                      scaleX: sz.val,
+                      scaleY: sz.val
+                    };
+                    if (selectedEntity.effect?.emitsLight && selectedEntity.light) {
+                      upd.light = {
+                        ...selectedEntity.light,
+                        brightRadiusInSquares: (selectedEntity.effect.baseLightRadius || 3) * sz.val,
+                        dimRadiusInSquares: 2 * sz.val
+                      };
+                    }
+                    handleUpdate(upd);
+                  }}
+                  className={`py-1 text-center rounded text-[11px] font-medium border transition-colors ${
+                    Math.abs(selectedEntity.scaleX - sz.val) < 0.05
+                      ? 'bg-amber-600 border-amber-400 text-white'
+                      : 'bg-slate-700/60 border-slate-600 text-slate-300 hover:text-white hover:bg-slate-700'
+                  }`}
+                >
+                  {sz.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Emite luz dinámica */}
+          <div className="pt-2 border-t border-slate-700/80 space-y-2">
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="font-medium text-slate-200 flex items-center gap-1.5">
+                <Flame className="w-4 h-4 text-amber-400" />
+                <span>Emite luz dinámica</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={selectedEntity.effect.emitsLight}
+                onChange={(e) => {
+                  const emits = e.target.checked;
+                  const scale = Math.max(selectedEntity.scaleX || 1, selectedEntity.scaleY || 1);
+                  const isFireOrTorch =
+                    selectedEntity.effect?.preset === 'torch' ||
+                    selectedEntity.effect?.preset === 'campfire' ||
+                    selectedEntity.effect?.preset === 'brazier' ||
+                    selectedEntity.effect?.preset === 'candle' ||
+                    (selectedEntity.effect?.preset || '').startsWith('fire');
+
+                  handleUpdate({
+                    effect: { ...selectedEntity.effect!, emitsLight: emits },
+                    light: emits
+                      ? {
+                          color: selectedEntity.effect?.color || '#ff7700',
+                          intensity: selectedEntity.effect?.intensity ?? 80,
+                          brightRadiusInSquares: (selectedEntity.effect?.baseLightRadius || 3) * scale,
+                          dimRadiusInSquares: 2 * scale,
+                          edgeHardness: 0.5,
+                          flicker: isFireOrTorch
+                        }
+                      : undefined
+                  });
+                }}
+                className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+              />
+            </label>
+
+            {selectedEntity.effect.emitsLight && (
+              <div className="space-y-2 pt-1">
+                <div>
+                  <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                    <span>Radio de luz base</span>
+                    <span className="text-white font-mono">{selectedEntity.effect.baseLightRadius} casillas</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    step="1"
+                    value={selectedEntity.effect.baseLightRadius}
+                    onChange={(e) => {
+                      const newRad = parseInt(e.target.value) || 3;
+                      const scale = Math.max(selectedEntity.scaleX || 1, selectedEntity.scaleY || 1);
+                      handleUpdate({
+                        effect: { ...selectedEntity.effect!, baseLightRadius: newRad },
+                        light: {
+                          ...(selectedEntity.light || {
+                            color: selectedEntity.effect!.color,
+                            intensity: selectedEntity.effect!.intensity,
+                            edgeHardness: 0.5,
+                            flicker: true
+                          }),
+                          brightRadiusInSquares: newRad * scale,
+                          dimRadiusInSquares: 2 * scale
+                        }
+                      });
+                    }}
+                    className="w-full accent-amber-500 cursor-pointer"
+                  />
+                  <span className="text-[10px] text-slate-500">
+                    Aumenta automáticamente si escalas el efecto con las manijas.
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Ajustes visuales (Tono, Saturación, Brillo) */}
+      {selectedEntity.type !== 'effect' && selectedEntity.type !== 'wall' && selectedEntity.type !== 'door' && selectedEntity.type !== 'light' && (
       <div className="bg-slate-800/60 p-3 rounded border border-slate-700 space-y-2.5">
         <div className="flex items-center justify-between">
           <span className="font-semibold text-sky-400 flex items-center gap-1.5">
@@ -676,6 +949,7 @@ export const PropertiesTab: React.FC = () => {
           />
         </div>
       </div>
+      )}
 
       {/* Animaciones (Giro, Temblor, Vaivén) */}
       <div className="bg-slate-800/60 p-3 rounded border border-slate-700 space-y-3">
@@ -887,7 +1161,7 @@ export const PropertiesTab: React.FC = () => {
       </div>
 
       {/* Chroma Key para Tokens, Objetos o Mapas */}
-      {selectedEntity.type !== 'wall' && selectedEntity.type !== 'door' && selectedEntity.type !== 'light' && (
+      {selectedEntity.type !== 'wall' && selectedEntity.type !== 'door' && selectedEntity.type !== 'light' && selectedEntity.type !== 'effect' && (
         <div className="bg-slate-800/60 p-3 rounded border border-slate-700 space-y-2.5">
           <div className="flex items-center justify-between">
             <span className="font-semibold text-emerald-400 flex items-center gap-1.5">

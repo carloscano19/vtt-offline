@@ -1,4 +1,4 @@
-export type EntityType = 'map' | 'token' | 'object' | 'door' | 'light' | 'wall';
+export type EntityType = 'map' | 'token' | 'object' | 'door' | 'light' | 'wall' | 'effect';
 
 export type TokenSide = 'jugador' | 'enemigo' | 'neutral';
 
@@ -137,6 +137,33 @@ export interface TokenHp {
   visibleToPlayers: boolean;
 }
 
+export type EffectPresetId =
+  | 'torch'
+  | 'campfire'
+  | 'brazier'
+  | 'lantern'
+  | 'candle'
+  | 'fire_small'
+  | 'fire_large'
+  | 'fire_magic'
+  | 'smoke_light'
+  | 'smoke_dense'
+  | 'fog_low'
+  | 'magic_seal'
+  | 'portal'
+  | 'lightning'
+  | 'ice_zone';
+
+export interface EffectConfig {
+  preset: EffectPresetId;
+  color: string;           // Hex principal (ej: '#ff7700')
+  secondaryColor?: string; // Hex secundario opcional
+  intensity: number;       // 0 a 100 (%)
+  speed: number;           // 0.1 a 3.0 (1.0 = normal)
+  emitsLight: boolean;     // Emite luz dinámica con el sistema de iluminación existente
+  baseLightRadius: number; // Radio de luz base en casillas (se escala con la entidad)
+}
+
 export interface Entity {
   id: string;
   type: EntityType;
@@ -174,6 +201,9 @@ export interface Entity {
   animations?: EntityAnimations;
   chromaKey?: EntityChromaKey;
   light?: LightConfig;
+
+  // Efectos procedurales animados (Fase Efectos)
+  effect?: EffectConfig;
 
   // Fase 4: Tokens y combate
   side?: TokenSide;
