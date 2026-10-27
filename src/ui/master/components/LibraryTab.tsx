@@ -5,6 +5,7 @@ import { useGameStore } from '../../../stores/useGameStore';
 import { Search, Upload, Trash2, Edit2, Check, Plus, Image as ImageIcon, Film, Cloud, CloudOff, RefreshCw, AlertTriangle } from 'lucide-react';
 import { parseUVTT } from '../../../modules/import/uvttParser';
 import { Entity } from '../../../types/entity';
+import { parseColor, colorToHex } from '../../../utils/color';
 import { cloudSync, SyncStatus } from '../../../modules/sync/cloudSync';
 import { authManager } from '../../../modules/auth/authManager';
 import { AuthModal } from './AuthModal';
@@ -191,6 +192,11 @@ export const LibraryTab: React.FC = () => {
         const brightRadiusInSquares = Math.max(1, Math.round(totalRangeInSquares * 0.6));
         const dimRadiusInSquares = Math.max(0, totalRangeInSquares - brightRadiusInSquares);
 
+        const parsedLightColor = parseColor(lgt.color, 0xffaa44);
+        const lightColor = colorToHex(parsedLightColor.rgb);
+        const baseIntensity = lgt.intensity ?? 1;
+        const intensity = Math.min(100, Math.max(10, Math.round(baseIntensity * parsedLightColor.alpha * 100)));
+
         const lightEntity: Entity = {
           id: `light_${Date.now()}_${lIdx}_${Math.random().toString(36).substring(2, 6)}`,
           type: 'light',
@@ -205,8 +211,8 @@ export const LibraryTab: React.FC = () => {
           locked: false,
           mapId: newEntity.id,
           light: {
-            color: lgt.color || '#ffaa44',
-            intensity: Math.min(100, Math.max(10, Math.round(lgt.intensity * 100))),
+            color: lightColor,
+            intensity,
             brightRadiusInSquares,
             dimRadiusInSquares,
             edgeHardness: 0.5,

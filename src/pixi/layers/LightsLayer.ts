@@ -1,6 +1,7 @@
 import { Container, Graphics } from 'pixi.js';
 import { Entity } from '../../types/entity';
 import { LightVisibility } from '../../modules/lights/lightManager';
+import { parseColor } from '../../utils/color';
 
 /**
  * Capa interactiva de Luces (Solo Máster).
@@ -50,7 +51,7 @@ export class LightsLayer extends Container {
       if (gfx) {
         gfx.clear();
 
-        const colorHex = light.light?.color ? parseInt(light.light.color.replace('#', ''), 16) : 0xffaa44;
+        const colorHex = parseColor(light.light?.color, 0xffaa44).rgb;
 
         // Halo tenue
         gfx.circle(0, 0, 16);

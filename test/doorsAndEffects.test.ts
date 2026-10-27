@@ -234,5 +234,30 @@ describe('Effects lighting and scale integration', () => {
     // Base 6 * scale 1.5 = 9 squares * 70px = 630px
     expect(lights[0].brightRangePx).toBe(6 * 1.5 * 70);
   });
+
+  it('normalizes saved entities with 8-digit ARGB colors to standard #rrggbb', () => {
+    const rawLight: Entity = {
+      id: 'saved_light_argb',
+      type: 'light',
+      name: 'Luz Dungeondraft',
+      x: 100,
+      y: 100,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      zIndex: 45,
+      light: {
+        color: 'ffeccd8b',
+        intensity: 80,
+        brightRadiusInSquares: 4,
+        dimRadiusInSquares: 2,
+        edgeHardness: 0.5,
+        flicker: false
+      }
+    };
+
+    const normalized = normalizeEntity(rawLight);
+    expect(normalized.light?.color).toBe('#eccd8b');
+  });
 });
 

@@ -1,6 +1,7 @@
 import { Entity, Point2D } from '../../types/entity';
 import { getAllWallSegments } from '../walls/wallManager';
 import { computeVisibilityPolygon } from '../vision/visibilityPolygon';
+import { parseColor, colorToHex } from '../../utils/color';
 
 export interface LightVisibility {
   lightId: string;
@@ -102,7 +103,7 @@ export class LightManager {
       visibilities.push({
         lightId: lightEnt.id,
         center,
-        color: cfg.color || '#ffaa44',
+        color: colorToHex(parseColor(cfg.color, 0xffaa44).rgb),
         intensity: Math.max(0, Math.min(100, cfg.intensity ?? 100)) / 100,
         brightPolygon,
         totalPolygon,

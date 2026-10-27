@@ -151,6 +151,14 @@ export const MasterApp: React.FC = () => {
       <SaveLoadModal />
       <DisplaysModal />
 
+      {/* Indicador discreto de versión en esquina inferior izquierda */}
+      <div
+        className="fixed bottom-2 left-2 z-20 pointer-events-auto text-[10px] text-slate-500 hover:text-slate-300 font-mono select-none px-1.5 py-0.5 rounded bg-slate-950/70 backdrop-blur-xs border border-slate-800/40 transition-colors cursor-default"
+        title={`Versión: ${__APP_VERSION__} (Compilación: ${__BUILD_TIME__})`}
+      >
+        v{__APP_VERSION__}
+      </div>
+
       {/* Aviso a pantalla completa si hay otra pestaña máster activa */}
       {hasConflict && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center z-50 p-6 select-none animate-fade-in">

@@ -4,6 +4,7 @@ import { CameraState } from '../../types/game';
 import { getTextureForAsset, getGifDataForAsset } from '../utils/textureCache';
 import { videoManager } from '../../modules/media/videoManager';
 import { AnimatedGifData, getFrameTextureForTime } from '../../modules/media/gifDecoder';
+import { parseColor } from '../../utils/color';
 
 interface EffectParticle {
   x: number;
@@ -143,7 +144,7 @@ class ProceduralEffectNode extends Container {
     const effectiveDelta = deltaSec * speed;
     this.time += effectiveDelta;
 
-    const hexColor = effect.color ? parseInt(effect.color.replace('#', ''), 16) : 0xff7700;
+    const hexColor = parseColor(effect.color, 0xff7700).rgb;
     const intensity = Math.max(0, Math.min(100, effect.intensity ?? 80)) / 100;
 
     this.renderEffect(effect.preset, hexColor, intensity, effectiveDelta);

@@ -3,6 +3,7 @@ import { AmbientConfig, ExploredMultiPolygon } from '../../types/game';
 import { LightVisibility } from '../../modules/lights/lightManager';
 import { visionToMulti, simplifyMulti } from '../../modules/vision/fogMemory';
 import { safeClip } from '../../modules/vision/safeClip';
+import { parseColor, rgbComponents } from '../../utils/color';
 
 export const AMBIENT_PRESET_CONFIGS: Record<string, { color: string; intensity: number }> = {
   dawn: { color: '#ff9d55', intensity: 0.80 },
@@ -13,19 +14,8 @@ export const AMBIENT_PRESET_CONFIGS: Record<string, { color: string; intensity: 
 };
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
-  const clean = hex.replace('#', '');
-  const num = parseInt(clean, 16);
-  if (clean.length === 3) {
-    const r = (num >> 8) & 0xf;
-    const g = (num >> 4) & 0xf;
-    const b = num & 0xf;
-    return { r: (r << 4) | r, g: (g << 4) | g, b: (b << 4) | b };
-  }
-  return {
-    r: (num >> 16) & 0xff,
-    g: (num >> 8) & 0xff,
-    b: num & 0xff
-  };
+  const { rgb } = parseColor(hex, 0xffffff);
+  return rgbComponents(rgb);
 }
 
 function rgbToHex(r: number, g: number, b: number): number {
@@ -198,8 +188,7 @@ export class AmbientLayer extends Container {
     const darknessFactor = 0.05 + 0.95 * Math.pow(Math.min(1.0, currentDarkness / 0.85), 1.5);
 
     for (const light of lights) {
-      const rgb = hexToRgb(light.color);
-      const colorNum = rgbToHex(rgb.r, rgb.g, rgb.b);
+      const { rgb: colorNum } = parseColor(light.color, 0xffaa44);
 
       // Parpadeo suave si está activo
       let flickerMod = 1.0;

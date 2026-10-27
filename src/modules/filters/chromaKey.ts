@@ -2,6 +2,8 @@
  * Módulo de utilidades matemáticas y procesamiento de Chroma Key.
  */
 
+import { parseColor, rgbComponents } from '../../utils/color';
+
 export interface RgbColor {
   r: number;
   g: number;
@@ -9,19 +11,8 @@ export interface RgbColor {
 }
 
 export function parseHexColor(hex: string): RgbColor {
-  const clean = hex.replace('#', '');
-  const num = parseInt(clean, 16);
-  if (clean.length === 3) {
-    const r = (num >> 8) & 0xf;
-    const g = (num >> 4) & 0xf;
-    const b = num & 0xf;
-    return { r: (r << 4) | r, g: (g << 4) | g, b: (b << 4) | b };
-  }
-  return {
-    r: (num >> 16) & 0xff,
-    g: (num >> 8) & 0xff,
-    b: num & 0xff
-  };
+  const { rgb } = parseColor(hex, 0x00ff00);
+  return rgbComponents(rgb);
 }
 
 /**

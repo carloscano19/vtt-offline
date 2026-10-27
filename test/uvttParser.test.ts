@@ -88,4 +88,30 @@ describe('uvttParser', () => {
     expect(result.mimeType).toBe('image/webp');
     expect(result.imageBlob.type).toBe('image/webp');
   });
+
+  it('importar un .dd2vtt con una luz de color "ffeccd8b" no lanza y la luz queda con color "#eccd8b"', () => {
+    const ddUVTT = JSON.stringify({
+      format: 0.2,
+      resolution: {
+        map_origin: { x: 0, y: 0 },
+        map_size: { x: 5, y: 5 },
+        pixels_per_grid: 70
+      },
+      image: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      lights: [
+        {
+          position: { x: 2, y: 2 },
+          range: 3,
+          color: 'ffeccd8b',
+          intensity: 1.0
+        }
+      ]
+    });
+
+    expect(() => {
+      const parsed = parseUVTT(ddUVTT);
+      expect(parsed.mapData.lights[0].color).toBe('#eccd8b');
+      expect(parsed.mapData.lights[0].intensity).toBeCloseTo(1.0);
+    }).not.toThrow();
+  });
 });

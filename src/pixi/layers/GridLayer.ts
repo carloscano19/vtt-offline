@@ -1,5 +1,6 @@
 import { Container, Graphics } from 'pixi.js';
 import { GridConfig, CameraState } from '../../types/game';
+import { parseColor } from '../../utils/color';
 
 export class GridLayer extends Container {
   private graphics: Graphics;
@@ -47,7 +48,7 @@ export class GridLayer extends Container {
     const endY = Math.ceil(maxY / step) * step;
 
     // Convertir color hex string (#ffffff) a número
-    const hexColor = parseInt(grid.color.replace('#', ''), 16) || 0xffffff;
+    const hexColor = parseColor(grid.color, 0xffffff).rgb;
     const strokeWidth = 1;
 
     // Dibujar líneas verticales

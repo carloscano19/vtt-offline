@@ -1,6 +1,7 @@
 import { Entity } from '../../types/entity';
 import { GameState } from '../../types/game';
 import { safeClip } from '../vision/safeClip';
+import { parseColor, colorToHex } from '../../utils/color';
 
 /**
  * Normaliza una entidad individual.
@@ -96,13 +97,44 @@ export function normalizeEntity(entity: Entity): Entity {
     };
   }
 
+  // Normalizar color de luz si existe en la entidad (tokens, efectos o luces)
+  if (entity.light) {
+    const parsed = parseColor(entity.light.color, 0xffaa44);
+    entity = {
+      ...entity,
+      light: {
+        ...entity.light,
+        color: colorToHex(parsed.rgb)
+      }
+    };
+  }
+
+  // Normalizar luces dentro de un mapa importado
+  if (entity.type === 'map' && entity.mapData?.lights) {
+    const normalizedLights = entity.mapData.lights.map((lgt) => {
+      const parsed = parseColor(lgt.color, 0xffffff);
+      return {
+        ...lgt,
+        color: colorToHex(parsed.rgb)
+      };
+    });
+    entity = {
+      ...entity,
+      mapData: {
+        ...entity.mapData,
+        lights: normalizedLights
+      }
+    };
+  }
+
   if (entity.type === 'light') {
+    const parsed = parseColor(entity.light?.color, 0xffaa44);
     return {
       ...entity,
       visibleToPlayers: entity.visibleToPlayers ?? true,
       locked: entity.locked ?? false,
       light: {
-        color: entity.light?.color || '#ffaa44',
+        color: colorToHex(parsed.rgb),
         intensity: entity.light?.intensity ?? 100,
         brightRadiusInSquares: entity.light?.brightRadiusInSquares ?? 4,
         dimRadiusInSquares: entity.light?.dimRadiusInSquares ?? 2,
@@ -190,10 +222,23 @@ export function normalizeGameState(game: GameState): GameState {
         return rev;
       })()
     },
-    ambient: game.ambient ?? {
+    ambient: game.ambient ? {
+      ...game.ambient,
+      color: colorToHex(parseColor(game.ambient.color, 0xffffff).rgb)
+    } : {
       preset: 'noon',
       color: '#ffffff',
       intensity: 1.0
+    },
+    grid: game.grid ? {
+      ...game.grid,
+      color: colorToHex(parseColor(game.grid.color, 0xffffff).rgb)
+    } : {
+      size: 70,
+      color: '#ffffff',
+      opacity: 0.25,
+      visible: true,
+      snapToGrid: true
     },
     weather: game.weather ?? {
       rain: { enabled: false, intensity: 50, direction: 90 },

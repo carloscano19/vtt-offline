@@ -1,5 +1,6 @@
 import { UVTTData } from '../../types/uvtt';
 import { MapData, MapWall, MapPortal, MapLight } from '../../types/entity';
+import { parseColor, colorToHex } from '../../utils/color';
 
 export interface ParsedUVTTResult {
   imageBlob: Blob;
@@ -140,14 +141,18 @@ export function parseUVTT(jsonString: string): ParsedUVTTResult {
   const lights: MapLight[] = [];
   if (Array.isArray(data.lights)) {
     for (const light of data.lights) {
+      const parsedColor = parseColor(light.color, 0xffffff);
+      const normalizedColor = colorToHex(parsedColor.rgb);
+      const rawIntensity = light.intensity ?? 1;
+      const intensity = rawIntensity * parsedColor.alpha;
       lights.push({
         position: {
           x: (light.position.x - originX) * ppg,
           y: (light.position.y - originY) * ppg
         },
         range: (light.range ?? 1) * ppg,
-        color: light.color?.startsWith('#') ? light.color : (light.color ? `#${light.color}` : '#ffffff'),
-        intensity: light.intensity ?? 1,
+        color: normalizedColor,
+        intensity,
         shadows: light.shadows
       });
     }
