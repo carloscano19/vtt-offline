@@ -39,11 +39,11 @@ export function getAllWallSegments(entities: Entity[]): WallSegment[] {
       }
     }
 
-    // 2. Portales cerrados de mapas UVTT (que no hayan sido convertidos a entidades independientes)
+    // 2. Portales de mapas UVTT no convertidos a entidades puerta (incluso si closed=false o freestanding)
     if (ent.type === 'map' && ent.mapData?.portals) {
       const mapPos = { x: ent.x, y: ent.y };
       for (const portal of ent.mapData.portals) {
-        if (portal.closed && portal.bounds && portal.bounds.length >= 2) {
+        if (portal.bounds && portal.bounds.length >= 2) {
           const p1 = localToWorld(portal.bounds[0], mapPos, ent.rotation, ent.scaleX, ent.scaleY);
           const p2 = localToWorld(portal.bounds[1], mapPos, ent.rotation, ent.scaleX, ent.scaleY);
           segments.push({

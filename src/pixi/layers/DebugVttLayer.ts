@@ -1,6 +1,7 @@
 import { Container, Graphics } from 'pixi.js';
 import { Entity } from '../../types/entity';
 import { localToWorld } from '../utils/coordinates';
+import { getAllWallSegments } from '../../modules/walls/wallManager';
 
 export class DebugVttLayer extends Container {
   private graphics: Graphics;
@@ -21,27 +22,25 @@ export class DebugVttLayer extends Container {
       return;
     }
 
-    const mapEntities = entities.filter((e) => e.type === 'map' && e.mapData);
+    const allSegments = getAllWallSegments(entities);
 
+    // 1. Dibujar todos los segmentos de pared activos (UVTT, dibujadas, puertas cerradas) en azul cian
+    if (allSegments.length > 0) {
+      for (const seg of allSegments) {
+        this.graphics.moveTo(seg.p1.x, seg.p1.y);
+        this.graphics.lineTo(seg.p2.x, seg.p2.y);
+      }
+      this.graphics.stroke({ width: 3, color: 0x00d2ff, alpha: 0.85 });
+    }
+
+    // 2. Dibujar portales y puertas
+    // a) Portales y luces de mapas UVTT
+    const mapEntities = entities.filter((e) => e.type === 'map' && e.mapData);
     for (const map of mapEntities) {
       const { mapData, x, y, rotation, scaleX, scaleY } = map;
       if (!mapData) continue;
-
       const mapPos = { x, y };
 
-      // 1. Dibujar paredes (line_of_sight) en azul cian
-      if (mapData.walls && mapData.walls.length > 0) {
-        for (const wall of mapData.walls) {
-          const w1 = localToWorld(wall.p1, mapPos, rotation, scaleX, scaleY);
-          const w2 = localToWorld(wall.p2, mapPos, rotation, scaleX, scaleY);
-
-          this.graphics.moveTo(w1.x, w1.y);
-          this.graphics.lineTo(w2.x, w2.y);
-        }
-        this.graphics.stroke({ width: 3, color: 0x00d2ff, alpha: 0.85 });
-      }
-
-      // 2. Dibujar portales (puertas) en naranja
       if (mapData.portals && mapData.portals.length > 0) {
         for (const portal of mapData.portals) {
           const b1 = localToWorld(portal.bounds[0], mapPos, rotation, scaleX, scaleY);
@@ -51,7 +50,6 @@ export class DebugVttLayer extends Container {
           this.graphics.lineTo(b2.x, b2.y);
           this.graphics.stroke({ width: 5, color: 0xff9900, alpha: 0.9 });
 
-          // Dibujar punto central del portal
           const center = localToWorld(portal.position, mapPos, rotation, scaleX, scaleY);
           this.graphics.circle(center.x, center.y, 4);
           this.graphics.fill({ color: 0xffcc00, alpha: 1.0 });
@@ -75,6 +73,21 @@ export class DebugVttLayer extends Container {
           this.graphics.fill({ color: 0xffea00, alpha: 0.9 });
         }
       }
+    }
+
+    // b) Entidades de puerta independientes
+    const doorEntities = entities.filter((e) => e.type === 'door' && e.door);
+    for (const d of doorEntities) {
+      const p1 = d.door!.p1;
+      const p2 = d.door!.p2;
+      this.graphics.moveTo(p1.x, p1.y);
+      this.graphics.lineTo(p2.x, p2.y);
+      this.graphics.stroke({ width: 5, color: d.door!.isOpen ? 0x22c55e : 0xff9900, alpha: 0.9 });
+
+      const midX = (p1.x + p2.x) / 2;
+      const midY = (p1.y + p2.y) / 2;
+      this.graphics.circle(midX, midY, 4);
+      this.graphics.fill({ color: d.door!.isOpen ? 0x4ade80 : 0xffcc00, alpha: 1.0 });
     }
   }
 }

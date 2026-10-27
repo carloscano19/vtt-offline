@@ -14,6 +14,21 @@ export interface TokenVisibility {
   losPolygon?: Point2D[]; // Línea de visión ilimitada (hasta paredes) para ver zonas iluminadas lejanas
 }
 
+function distToSegment(p: Point2D, v: Point2D, w: Point2D): number {
+  const l2 = (w.x - v.x) ** 2 + (w.y - v.y) ** 2;
+  if (l2 === 0) return Math.hypot(p.x - v.x, p.y - v.y);
+  let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (v.x + t * (w.x - v.x)), p.y - (v.y + t * (w.y - v.y)));
+}
+
+function normalizeAngle(a: number): number {
+  const twoPi = Math.PI * 2;
+  a = a % twoPi;
+  if (a < 0) a += twoPi;
+  return a;
+}
+
 /**
  * Calcula la intersección de un rayo desde el origen `origin` en dirección `(dx, dy)`
  * con un segmento `[p1, p2]`.
@@ -41,7 +56,7 @@ function getRayIntersection(
 
   // Si son paralelos
   const denom = r_dx * s_dy - r_dy * s_dx;
-  if (Math.abs(denom) < 1e-8) return null;
+  if (Math.abs(denom) < 1e-9) return null;
 
   const dx_p = s_px - r_px;
   const dy_p = s_py - r_py;
@@ -49,16 +64,17 @@ function getRayIntersection(
   const t1 = (dx_p * s_dy - dy_p * s_dx) / denom;
   const t2 = (dx_p * r_dy - dy_p * r_dx) / denom;
 
-  // t1 > 0: en la dirección del rayo hacia adelante
-  // 0 <= t2 <= 1: dentro del segmento
-  if (t1 > 0 && t2 >= 0 && t2 <= 1) {
+  // Tolerancia EPS para evitar que rayos a vértices, uniones en esquina o segmentos tocantes se cuelen
+  const EPS = 1e-5;
+  if (t1 > 1e-4 && t2 >= -EPS && t2 <= 1 + EPS) {
+    const clampedT2 = Math.max(0, Math.min(1, t2));
     return {
       point: {
-        x: r_px + r_dx * t1,
-        y: r_py + r_dy * t1
+        x: s_px + s_dx * clampedT2,
+        y: s_py + s_dy * clampedT2
       },
       distance: t1,
-      angle: Math.atan2(r_dy, r_dx)
+      angle: normalizeAngle(Math.atan2(r_dy, r_dx))
     };
   }
 
@@ -77,19 +93,17 @@ export function computeVisibilityPolygon(
   // Radio efectivo: si rangePx <= 0 (ilimitado), usar un radio amplio
   const maxRadius = rangePx > 0 ? rangePx : 5000;
 
-  // 1. Filtrar segmentos que puedan estar dentro del alcance
+  // 1. Filtrar segmentos que crucen o estén dentro del alcance usando distancia real al segmento
   const relevantSegments: { p1: Point2D; p2: Point2D }[] = [];
   const pad = 10;
   for (const seg of segments) {
-    const d1 = Math.hypot(seg.p1.x - origin.x, seg.p1.y - origin.y);
-    const d2 = Math.hypot(seg.p2.x - origin.x, seg.p2.y - origin.y);
-    if (d1 <= maxRadius + pad || d2 <= maxRadius + pad) {
+    if (distToSegment(origin, seg.p1, seg.p2) <= maxRadius + pad) {
       relevantSegments.push({ p1: seg.p1, p2: seg.p2 });
     }
   }
 
-  // 2. Generar caja delimitadora circular/octogonal del alcance máximo
-  const circleSteps = 32;
+  // 2. Generar caja delimitadora circular del alcance máximo
+  const circleSteps = 48;
   const circlePoints: Point2D[] = [];
   for (let i = 0; i < circleSteps; i++) {
     const angle = (i / circleSteps) * Math.PI * 2;
@@ -105,21 +119,25 @@ export function computeVisibilityPolygon(
     });
   }
 
-  // 3. Recopilar todos los ángulos de interés (extremos de los segmentos relevantes +- un delta pequeño)
-  const angles: number[] = [];
+  // 3. Recopilar todos los ángulos de interés (extremos de segmentos +- delta)
+  const angleSet = new Set<number>();
   const delta = 0.0001;
 
   for (const seg of relevantSegments) {
     for (const pt of [seg.p1, seg.p2]) {
-      const angle = Math.atan2(pt.y - origin.y, pt.x - origin.x);
-      angles.push(angle - delta, angle, angle + delta);
+      const baseAngle = Math.atan2(pt.y - origin.y, pt.x - origin.x);
+      angleSet.add(normalizeAngle(baseAngle - delta));
+      angleSet.add(normalizeAngle(baseAngle));
+      angleSet.add(normalizeAngle(baseAngle + delta));
     }
   }
 
-  // Añadir también rayos regulares para suavizar los arcos circulares
+  // Añadir rayos regulares para el arco circular
   for (let i = 0; i < circleSteps; i++) {
-    angles.push((i / circleSteps) * Math.PI * 2);
+    angleSet.add(normalizeAngle((i / circleSteps) * Math.PI * 2));
   }
+
+  const angles = Array.from(angleSet).sort((a, b) => a - b);
 
   // 4. Lanzar cada rayo y encontrar la intersección más cercana
   const intersections: { x: number; y: number; angle: number }[] = [];
@@ -149,10 +167,7 @@ export function computeVisibilityPolygon(
     });
   }
 
-  // 5. Ordenar puntos por ángulo para formar un polígono convexo/cóncavo cerrado válido
-  intersections.sort((a, b) => a.angle - b.angle);
-
-  // Filtrar puntos casi idénticos contiguos
+  // 5. Filtrar puntos casi idénticos contiguos
   const polygon: Point2D[] = [];
   for (let i = 0; i < intersections.length; i++) {
     const curr = intersections[i];

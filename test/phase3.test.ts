@@ -276,4 +276,96 @@ describe('Phase 3: Luces, Visión a Distancia y Chroma Key', () => {
       expect(posY).toBe(baseWorldY);
     }
   });
+
+  it('prevents light leaking at wall corners and window portal gaps', () => {
+    // 1. Esquina en L con dos paredes que se tocan exactamente en (100, 100)
+    const cornerSegments = [
+      {
+        p1: { x: 0, y: 100 },
+        p2: { x: 100, y: 100 },
+        entityId: 'wall_h',
+        source: 'drawn' as const
+      },
+      {
+        p1: { x: 100, y: 100 },
+        p2: { x: 100, y: 0 },
+        entityId: 'wall_v',
+        source: 'drawn' as const
+      }
+    ];
+
+    // Luz dentro de la habitación en (50, 50) con radio 200px
+    const lightOrigin = { x: 50, y: 50 };
+    const polyCorner = computeVisibilityPolygon(lightOrigin, 200, cornerSegments);
+
+    // Ningún punto del polígono debe colarse a través de la esquina hacia afuera (x > 100.5 && y > 100.5)
+    const cornerLeaks = polyCorner.filter((p) => p.x > 100.5 && p.y > 100.5);
+    expect(cornerLeaks).toHaveLength(0);
+
+    // 2. Pared con hueco de ventana cubierto por un portal UVTT no convertido
+    const mapWithWindowPortal: Entity = {
+      id: 'map_window',
+      type: 'map',
+      name: 'Mapa con Ventana',
+      x: 0,
+      y: 0,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      zIndex: 1,
+      visibleToPlayers: true,
+      locked: true,
+      mapData: {
+        gridWidth: 10,
+        gridHeight: 10,
+        pixelsPerGrid: 70,
+        walls: [
+          { p1: { x: 0, y: 100 }, p2: { x: 40, y: 100 } },
+          { p1: { x: 60, y: 100 }, p2: { x: 100, y: 100 } }
+        ],
+        portals: [
+          {
+            position: { x: 50, y: 100 },
+            bounds: [
+              { x: 40, y: 100 },
+              { x: 60, y: 100 }
+            ],
+            rotation: 0,
+            closed: false, // ventana o portal abierto
+            freestanding: true
+          }
+        ],
+        lights: []
+      }
+    };
+
+    const lightEntity: Entity = {
+      id: 'light_inside',
+      type: 'light',
+      name: 'Luz interior',
+      x: 50,
+      y: 50,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      zIndex: 45,
+      visibleToPlayers: true,
+      locked: false,
+      light: {
+        color: '#ffaa44',
+        intensity: 100,
+        brightRadiusInSquares: 3,
+        dimRadiusInSquares: 2,
+        edgeHardness: 0.5,
+        flicker: false
+      }
+    };
+
+    const lightVis = lightManager.getLightsVisibility([mapWithWindowPortal, lightEntity], 70);
+    expect(lightVis).toHaveLength(1);
+
+    // El portal en el hueco (40-60 a y=100) bloquea la luz: ningún punto pasa a y > 100.5 en x entre 35 y 65
+    const windowLeaks = lightVis[0].totalPolygon.filter((p) => p.y > 100.5 && p.x >= 35 && p.x <= 65);
+    expect(windowLeaks).toHaveLength(0);
+  });
 });
