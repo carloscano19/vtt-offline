@@ -35,10 +35,13 @@ export class GizmoLayer extends Container {
     this.effectsLayer = layer;
   }
 
-  public update(selectedEntities: Entity[], allEntities: Entity[] = [], cameraZoom: number = 1) {
+  private gridSize: number = 70;
+
+  public update(selectedEntities: Entity[], allEntities: Entity[] = [], cameraZoom: number = 1, gridSize: number = 70) {
     this.graphics.clear();
     this.allEntities = allEntities;
     this.cameraZoom = Math.max(0.05, cameraZoom || 1);
+    this.gridSize = Math.max(20, gridSize || 70);
 
     if (!this.isMaster || selectedEntities.length === 0) {
       return;
@@ -58,7 +61,7 @@ export class GizmoLayer extends Container {
   public getEntityLocalBounds(entity: Entity) {
     if (entity.type === 'door') {
       const w = entity.door?.length ?? 70;
-      const h = 20;
+      const h = Math.max(6, 0.18 * this.gridSize);
       return {
         offsetX: -w / 2,
         offsetY: -h / 2,

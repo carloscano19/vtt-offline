@@ -1,4 +1,4 @@
-import { Container, Graphics, Text, TextStyle } from 'pixi.js';
+import { Container, Graphics } from 'pixi.js';
 import { Entity, Point2D } from '../../types/entity';
 import { localToWorld } from '../utils/coordinates';
 
@@ -13,9 +13,10 @@ export class DoorsLayer extends Container {
     this.addChild(this.graphics);
   }
 
-  public update(entities: Entity[], selectedIds: string[] = []) {
+  public update(entities: Entity[], selectedIds: string[] = [], gridSize: number = 70) {
     this.graphics.clear();
 
+    const gSize = Math.max(20, gridSize || 70);
     const mapEntitiesById = new Map<string, Entity>();
     for (const ent of entities) {
       if (ent.type === 'map') {
@@ -41,53 +42,143 @@ export class DoorsLayer extends Container {
       const p1 = transformPoint(door.p1);
       const p2 = transformPoint(door.p2);
 
-      const doorLength = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      const doorLength = Math.max(10, Math.hypot(p2.x - p1.x, p2.y - p1.y));
       const closedAngle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
 
-      // Si está abierta, gira 90 grados respecto a la bisagra p1
-      const currentAngle = door.isOpen ? closedAngle + (door.openAngle ?? Math.PI / 2) : closedAngle;
-
-      const leafEnd: Point2D = {
-        x: p1.x + Math.cos(currentAngle) * doorLength,
-        y: p1.y + Math.sin(currentAngle) * doorLength
-      };
-
+      // Grosor proporcional a grid.size (mínimo 6 px)
+      const thickness = Math.max(6, 0.18 * gSize);
+      const halfThick = thickness / 2;
       const op = typeof ent.opacity === 'number' ? ent.opacity : 1.0;
 
-      // Si está abierta, dibujar línea de referencia cerrada tenue
-      if (door.isOpen) {
-        this.graphics.moveTo(p1.x, p1.y);
-        this.graphics.lineTo(p2.x, p2.y);
-        this.graphics.stroke({ width: 2, color: 0x38bdf8, alpha: (isSelected ? 0.6 : 0.25) * op });
+      // 1. Marco (Jambas) en p1 y p2: siempre en la posición cerrada de la pared
+      const jambaLength = Math.max(5, 0.1 * gSize);
+      const jambaThick = Math.max(7, 0.22 * gSize);
+      const closedUx = Math.cos(closedAngle);
+      const closedUy = Math.sin(closedAngle);
+      const closedNx = -closedUy;
+      const closedNy = closedUx;
+
+      const drawJamba = (pt: Point2D) => {
+        const jx = pt.x;
+        const jy = pt.y;
+        const jHalfL = jambaLength / 2;
+        const jHalfT = jambaThick / 2;
+
+        const corners: Point2D[] = [
+          { x: jx - closedUx * jHalfL - closedNx * jHalfT, y: jy - closedUy * jHalfL - closedNy * jHalfT },
+          { x: jx + closedUx * jHalfL - closedNx * jHalfT, y: jy + closedUy * jHalfL - closedNy * jHalfT },
+          { x: jx + closedUx * jHalfL + closedNx * jHalfT, y: jy + closedUy * jHalfL + closedNy * jHalfT },
+          { x: jx - closedUx * jHalfL + closedNx * jHalfT, y: jy - closedUy * jHalfL - closedNy * jHalfT }
+        ];
+
+        this.graphics.moveTo(corners[0].x, corners[0].y);
+        for (let i = 1; i < corners.length; i++) {
+          this.graphics.lineTo(corners[i].x, corners[i].y);
+        }
+        this.graphics.closePath();
+        this.graphics.fill({ color: 0x27180c, alpha: op });
+        this.graphics.stroke({ width: 1.5, color: 0x110b05, alpha: op });
+      };
+
+      drawJamba(p1);
+      drawJamba(p2);
+
+      // Ángulo actual de la hoja (gira sobre la bisagra p1 si está abierta)
+      const currentAngle = door.isOpen ? closedAngle + (door.openAngle ?? Math.PI / 2) : closedAngle;
+      const ux = Math.cos(currentAngle);
+      const uy = Math.sin(currentAngle);
+      const nx = -uy;
+      const ny = ux;
+
+      // 2. Bisagra en p1: pequeño rectángulo oscuro de hierro
+      const hingeW = Math.max(4, 0.08 * gSize);
+      const hingeH = Math.max(6, 0.14 * gSize);
+      const hUx = ux;
+      const hUy = uy;
+      const hNx = nx;
+      const hNy = ny;
+      const hCorners: Point2D[] = [
+        { x: p1.x - hUx * (hingeW / 2) - hNx * (hingeH / 2), y: p1.y - hUy * (hingeW / 2) - hNy * (hingeH / 2) },
+        { x: p1.x + hUx * (hingeW / 2) - hNx * (hingeH / 2), y: p1.y + hUy * (hingeW / 2) - hNy * (hingeH / 2) },
+        { x: p1.x + hUx * (hingeW / 2) + hNx * (hingeH / 2), y: p1.y + hUy * (hingeW / 2) + hNy * (hingeH / 2) },
+        { x: p1.x - hUx * (hingeW / 2) + hNx * (hingeH / 2), y: p1.y - hUy * (hingeW / 2) + hNy * (hingeH / 2) }
+      ];
+      this.graphics.moveTo(hCorners[0].x, hCorners[0].y);
+      for (let i = 1; i < hCorners.length; i++) {
+        this.graphics.lineTo(hCorners[i].x, hCorners[i].y);
+      }
+      this.graphics.closePath();
+      this.graphics.fill({ color: 0x1e293b, alpha: op });
+      this.graphics.stroke({ width: 1, color: 0x090d16, alpha: op });
+
+      // 3. Hoja de la puerta (rectángulo de madera)
+      // Va desde p1 (0) hasta doorLength, con grosor centrado en [-halfThick, +halfThick]
+      const leafCorners: Point2D[] = [
+        { x: p1.x - nx * halfThick, y: p1.y - ny * halfThick },
+        { x: p1.x + ux * doorLength - nx * halfThick, y: p1.y + uy * doorLength - ny * halfThick },
+        { x: p1.x + ux * doorLength + nx * halfThick, y: p1.y + uy * doorLength + ny * halfThick },
+        { x: p1.x + nx * halfThick, y: p1.y + ny * halfThick }
+      ];
+
+      this.graphics.moveTo(leafCorners[0].x, leafCorners[0].y);
+      for (let i = 1; i < leafCorners.length; i++) {
+        this.graphics.lineTo(leafCorners[i].x, leafCorners[i].y);
+      }
+      this.graphics.closePath();
+      // Madera: relleno marrón #8b5a2b, borde oscuro #3b2412
+      this.graphics.fill({ color: 0x8b5a2b, alpha: (door.isOpen ? 0.95 : 1.0) * op });
+      this.graphics.stroke({ width: 1.5, color: 0x3b2412, alpha: op });
+
+      // 4. Líneas longitudinales que marcan las tablas de la hoja
+      const plankOffsets = [-halfThick * 0.35, halfThick * 0.35];
+      for (const po of plankOffsets) {
+        this.graphics.moveTo(p1.x + nx * po, p1.y + ny * po);
+        this.graphics.lineTo(p1.x + ux * doorLength + nx * po, p1.y + uy * doorLength + ny * po);
+        this.graphics.stroke({ width: 1, color: 0x5a3818, alpha: 0.8 * op });
       }
 
-      // 1. Dibujar bisagra (círculo)
-      this.graphics.circle(p1.x, p1.y, 5);
-      this.graphics.fill({ color: door.isLocked ? 0xef4444 : 0xf59e0b, alpha: op });
-      this.graphics.stroke({ width: 1.5, color: 0x000000, alpha: op });
+      // 5. Pomos dorados: círculo dorado (#d4af37, borde oscuro) de radio ≈ 0.07 × grid.size
+      // A un 85 % del largo desde la bisagra, visible por ambas caras de la hoja
+      const knobDist = doorLength * 0.85;
+      const knobRadius = Math.max(2.5, 0.07 * gSize);
+      const knobFaceOffset = halfThick;
 
-      // 2. Dibujar hoja de la puerta (línea sólida de madera)
-      const leafColor = door.isLocked ? 0xb91c1c : door.isOpen ? 0x10b981 : 0xd97706;
-      this.graphics.moveTo(p1.x, p1.y);
-      this.graphics.lineTo(leafEnd.x, leafEnd.y);
-      this.graphics.stroke({ width: 6, color: leafColor, alpha: (door.isOpen ? 0.85 : 1) * op });
+      const knob1: Point2D = {
+        x: p1.x + ux * knobDist - nx * knobFaceOffset,
+        y: p1.y + uy * knobDist - ny * knobFaceOffset
+      };
+      const knob2: Point2D = {
+        x: p1.x + ux * knobDist + nx * knobFaceOffset,
+        y: p1.y + uy * knobDist + ny * knobFaceOffset
+      };
 
-      // 3. Marcadores (solo Máster)
-      if (this.isMaster) {
-        // Marcador visual no interactivo de la bisagra en p1
-        this.graphics.circle(p1.x, p1.y, 3.5);
-        this.graphics.fill({ color: 0x0f172a });
-        this.graphics.stroke({ width: 1.5, color: door.isOpen ? 0x10b981 : 0xf59e0b });
+      for (const kp of [knob1, knob2]) {
+        this.graphics.circle(kp.x, kp.y, knobRadius);
+        this.graphics.fill({ color: 0xd4af37, alpha: op });
+        this.graphics.stroke({ width: 1, color: 0x3b2412, alpha: op });
+      }
 
-        // Si está bloqueada con candado, pequeño indicador visual sobre la hoja
-        if (door.isLocked) {
-          const midX = (p1.x + p2.x) / 2;
-          const midY = (p1.y + p2.y) / 2;
-          this.graphics.circle(midX, midY, 4);
-          this.graphics.fill({ color: 0xef4444 });
-          this.graphics.stroke({ width: 1.5, color: 0xffffff });
+      // 6. Resaltado de selección (contorno azul celeste)
+      if (isSelected) {
+        this.graphics.moveTo(leafCorners[0].x, leafCorners[0].y);
+        for (let i = 1; i < leafCorners.length; i++) {
+          this.graphics.lineTo(leafCorners[i].x, leafCorners[i].y);
         }
+        this.graphics.closePath();
+        this.graphics.stroke({ width: 2, color: 0x38bdf8, alpha: 0.95 });
+      }
+
+      // 7. Candado / Punto rojo de puerta cerrada con llave (Solo Máster)
+      if (this.isMaster && door.isLocked) {
+        const midX = p1.x + ux * (doorLength * 0.5);
+        const midY = p1.y + uy * (doorLength * 0.5);
+        const lockR = Math.max(3.5, 0.06 * gSize);
+
+        this.graphics.circle(midX, midY, lockR);
+        this.graphics.fill({ color: 0xef4444, alpha: 1 });
+        this.graphics.stroke({ width: 1.5, color: 0xffffff, alpha: 1 });
       }
     }
   }
 }
+

@@ -78,6 +78,33 @@ export function recalculateDoorEndpoints(
   };
 }
 
+/**
+ * Rota la puerta alrededor de su bisagra (p1) manteniendo p1 fija en el espacio local.
+ * Devuelve el nuevo centro (x, y), rotación y los nuevos endpoints p1 (idéntico) y p2.
+ */
+export function rotateDoorAroundHinge(
+  p1: Point2D,
+  newRotation: number,
+  length: number,
+  isHingeInverted: boolean = false
+): { x: number; y: number; rotation: number; p1: Point2D; p2: Point2D } {
+  const halfL = length / 2;
+  const cosR = Math.cos(newRotation);
+  const sinR = Math.sin(newRotation);
+
+  const x = isHingeInverted ? p1.x - halfL * cosR : p1.x + halfL * cosR;
+  const y = isHingeInverted ? p1.y - halfL * sinR : p1.y + halfL * sinR;
+
+  const endpoints = recalculateDoorEndpoints(x, y, newRotation, length, isHingeInverted);
+  return {
+    x,
+    y,
+    rotation: newRotation,
+    p1: { ...p1 },
+    p2: endpoints.p2
+  };
+}
+
 export interface MapPortal {
   position: Point2D;
   bounds: [Point2D, Point2D];

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { snapPointToGridOrMidpoint } from '../src/pixi/utils/coordinates';
 import { lightManager } from '../src/modules/lights/lightManager';
-import { Entity, recalculateDoorEndpoints } from '../src/types/entity';
+import { Entity, recalculateDoorEndpoints, rotateDoorAroundHinge } from '../src/types/entity';
 import { normalizeEntity } from '../src/modules/persistence/normalizer';
 
 describe('Doors new token model and normalizer migration', () => {
@@ -61,6 +61,29 @@ describe('Doors new token model and normalizer migration', () => {
     expect(horizInv.p1.y).toBeCloseTo(100);
     expect(horizInv.p2.x).toBeCloseTo(65);
     expect(horizInv.p2.y).toBeCloseTo(100);
+  });
+
+  it('rotates door around hinge (p1 remains completely stationary while p2 describes an arc)', () => {
+    const p1 = { x: 50, y: 100 };
+    const length = 80;
+
+    // Rotación inicial 0 rad (horizontal hacia la derecha)
+    const rot0 = rotateDoorAroundHinge(p1, 0, length, false);
+    expect(rot0.p1).toEqual(p1);
+    expect(rot0.x).toBeCloseTo(90);
+    expect(rot0.y).toBeCloseTo(100);
+    expect(rot0.p2.x).toBeCloseTo(130);
+    expect(rot0.p2.y).toBeCloseTo(100);
+
+    // Rotar 90 grados hacia abajo (Math.PI / 2)
+    const rot90 = rotateDoorAroundHinge(p1, Math.PI / 2, length, false);
+    // p1 DEBE permanecer fija e inmóvil
+    expect(rot90.p1).toEqual(p1);
+    expect(rot90.x).toBeCloseTo(50);
+    expect(rot90.y).toBeCloseTo(140);
+    expect(rot90.p2.x).toBeCloseTo(50);
+    expect(rot90.p2.y).toBeCloseTo(180);
+    expect(Math.hypot(rot90.p2.x - rot90.p1.x, rot90.p2.y - rot90.p1.y)).toBeCloseTo(length);
   });
 
   it('swaps door hinge and retains exact length and center', () => {

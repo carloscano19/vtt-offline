@@ -3,7 +3,7 @@ import { PixiRenderer } from './PixiRenderer';
 import { useGameStore } from '../stores/useGameStore';
 import { useUIStore } from '../stores/useUIStore';
 import { screenToWorld, snapPointToGrid, snapPointToGridOrMidpoint, localToWorld, worldToLocal } from './utils/coordinates';
-import { Entity, Point2D, recalculateDoorEndpoints } from '../types/entity';
+import { Entity, Point2D, recalculateDoorEndpoints, rotateDoorAroundHinge } from '../types/entity';
 import { CameraState } from '../types/game';
 import { syncChannel } from '../modules/sync/syncChannel';
 import { getZoomSensitivity } from '../modules/settings/zoomSensitivity';
@@ -270,23 +270,21 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
             newRot = (newRot % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
 
             if (selectedEntity.type === 'door' && selectedEntity.door) {
-              const { p1, p2 } = recalculateDoorEndpoints(
-                selectedEntity.x,
-                selectedEntity.y,
-                newRot,
-                selectedEntity.door.length ?? 70,
-                selectedEntity.door.isHingeInverted
-              );
+              const length = selectedEntity.door.length ?? 70;
+              const isInv = selectedEntity.door.isHingeInverted ?? false;
+              const rotated = rotateDoorAroundHinge(selectedEntity.door.p1, newRot, length, isInv);
               updateEntity(
                 selectedEntity.id,
                 {
+                  x: rotated.x,
+                  y: rotated.y,
                   rotation: newRot,
                   scaleX: 1,
                   scaleY: 1,
                   door: {
                     ...selectedEntity.door,
-                    p1,
-                    p2
+                    p1: rotated.p1,
+                    p2: rotated.p2
                   }
                 },
                 true
@@ -912,23 +910,49 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     if (interactionState.current.isTransforming === 'rotate' && interactionState.current.dragEntityId) {
       const entity = game.entities.find((ent) => ent.id === interactionState.current.dragEntityId);
       if (entity) {
-        const parentMap = entity.mapId ? game.entities.find((m) => m.id === entity.mapId) : undefined;
-        const worldCenter = parentMap
-          ? localToWorld({ x: entity.x, y: entity.y }, { x: parentMap.x, y: parentMap.y }, parentMap.rotation, parentMap.scaleX, parentMap.scaleY)
-          : { x: entity.x, y: entity.y };
-
-        let worldAngle = Math.atan2(worldPos.y - worldCenter.y, worldPos.x - worldCenter.x) + Math.PI / 2;
-        if (entity.type === 'door' && game.grid.snapToGrid && !e.altKey) {
-          const step = Math.PI / 4; // 45 grados
-          worldAngle = Math.round(worldAngle / step) * step;
-        }
-
-        const localRotation = parentMap ? worldAngle - parentMap.rotation : worldAngle;
         if (entity.type === 'door' && entity.door) {
+          const parentMap = entity.mapId ? game.entities.find((m) => m.id === entity.mapId) : undefined;
+          const worldP1 = parentMap
+            ? localToWorld(entity.door.p1, { x: parentMap.x, y: parentMap.y }, parentMap.rotation, parentMap.scaleX, parentMap.scaleY)
+            : entity.door.p1;
+
+          let worldAngle = Math.atan2(worldPos.y - worldP1.y, worldPos.x - worldP1.x);
+          if (entity.door.isHingeInverted) {
+            worldAngle += Math.PI;
+          }
+          if (game.grid.snapToGrid && !e.altKey) {
+            const step = Math.PI / 4; // 45 grados
+            worldAngle = Math.round(worldAngle / step) * step;
+          }
+
+          const localRotation = parentMap ? worldAngle - parentMap.rotation : worldAngle;
           const length = entity.door.length ?? 70;
-          const { p1, p2 } = recalculateDoorEndpoints(entity.x, entity.y, localRotation, length, entity.door.isHingeInverted);
-          updateEntity(entity.id, { rotation: localRotation, door: { ...entity.door, p1, p2 } }, false);
+          const isInv = entity.door.isHingeInverted ?? false;
+          const rotated = rotateDoorAroundHinge(entity.door.p1, localRotation, length, isInv);
+          updateEntity(
+            entity.id,
+            {
+              x: rotated.x,
+              y: rotated.y,
+              rotation: localRotation,
+              scaleX: 1,
+              scaleY: 1,
+              door: {
+                ...entity.door,
+                p1: rotated.p1,
+                p2: rotated.p2
+              }
+            },
+            false
+          );
         } else {
+          const parentMap = entity.mapId ? game.entities.find((m) => m.id === entity.mapId) : undefined;
+          const worldCenter = parentMap
+            ? localToWorld({ x: entity.x, y: entity.y }, { x: parentMap.x, y: parentMap.y }, parentMap.rotation, parentMap.scaleX, parentMap.scaleY)
+            : { x: entity.x, y: entity.y };
+
+          let worldAngle = Math.atan2(worldPos.y - worldCenter.y, worldPos.x - worldCenter.x) + Math.PI / 2;
+          const localRotation = parentMap ? worldAngle - parentMap.rotation : worldAngle;
           updateEntity(entity.id, { rotation: localRotation }, false);
         }
       }

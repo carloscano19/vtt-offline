@@ -282,7 +282,7 @@ export class PixiRenderer {
     // se dibuja solo dentro de los límites del mapa para no proyectar líneas en el vacío.
     const clipGrid = (!this.isMaster || isPlayerPreview) && game.fog.enabled;
     this.gridLayer.update(game.grid, camera, width, height, clipGrid ? worldBounds : undefined);
-    this.doorsLayer.update(game.entities, selectedIds);
+    this.doorsLayer.update(game.entities, selectedIds, gridSize);
     this.tokensLayer.syncEntities(game.entities, selectedIds, visibilities, isPlayerPreview, game.fog.enabled);
     this.effectsLayer.update(game.entities, camera, width, height, 0.016);
     this.ambientLayer.update(game.ambient, lights, worldBounds, 0.016);
@@ -304,7 +304,7 @@ export class PixiRenderer {
     this.rulerLayer.update(ruler, game.grid.size);
 
     const selectedEntities = game.entities.filter((e) => selectedIds.includes(e.id));
-    this.gizmoLayer.update(isPlayerPreview ? [] : selectedEntities, game.entities, camera.zoom);
+    this.gizmoLayer.update(isPlayerPreview ? [] : selectedEntities, game.entities, camera.zoom, gridSize);
 
     // Marco verde de la pantalla de jugadores
     this.playerFrameLayout.update(game.playerCamera, game.playerViewport, showPlayerFrame && !isPlayerPreview);
