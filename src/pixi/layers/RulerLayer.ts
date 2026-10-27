@@ -21,8 +21,8 @@ export class RulerLayer extends Container {
     this.badgeText = new Text({
       text: '',
       style: new TextStyle({
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: 14,
+        fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        fontSize: 20,
         fontWeight: 'bold',
         fill: '#ffffff',
         align: 'center'
@@ -35,7 +35,7 @@ export class RulerLayer extends Container {
     this.addChild(this.badgeContainer);
   }
 
-  public update(ruler: RulerState, gridSize: number) {
+  public update(ruler: RulerState, gridSize: number, cameraZoom: number = 1) {
     this.graphics.clear();
     this.badgeBg.clear();
 
@@ -53,6 +53,7 @@ export class RulerLayer extends Container {
     this.visible = true;
     const { startPos, currentPos, mode, diagonalRule } = ruler;
     const measurement = calculateRulerDistance(startPos, currentPos, gridSize, mode, diagonalRule);
+    const zoom = Math.max(0.05, cameraZoom || 1);
 
     if (mode === 'radial') {
       const radius = measurement.pixelDistance;
@@ -82,21 +83,24 @@ export class RulerLayer extends Container {
       this.graphics.fill({ color: 0x38bdf8, alpha: 1 });
     }
 
-    // Actualizar texto del badge
+    // Actualizar texto del badge con tamaño constante en pantalla independiente del zoom
     this.badgeText.text = measurement.displayText;
-    const paddingX = 14;
+    const paddingX = 16;
     const paddingY = 8;
     const textWidth = this.badgeText.width;
     const textHeight = this.badgeText.height;
     const bgWidth = textWidth + paddingX * 2;
     const bgHeight = textHeight + paddingY * 2;
+    const offsetY = -34;
 
-    this.badgeBg.roundRect(-bgWidth / 2, -bgHeight / 2, bgWidth, bgHeight, 6);
-    this.badgeBg.fill({ color: 0x0f172a, alpha: 0.9 });
-    this.badgeBg.stroke({ width: 1.5, color: 0x38bdf8, alpha: 0.9 });
+    this.badgeBg.roundRect(-bgWidth / 2, offsetY - bgHeight / 2, bgWidth, bgHeight, 8);
+    this.badgeBg.fill({ color: 0x0f172a, alpha: 0.88 });
+    this.badgeBg.stroke({ width: 1.5, color: 0x38bdf8, alpha: 0.95 });
 
-    // Posicionar el badge cerca del puntero
-    this.badgeContainer.x = currentPos.x;
-    this.badgeContainer.y = currentPos.y - 28;
+    this.badgeText.position.set(0, offsetY);
+
+    // Posicionar el badge en la posición del cursor con escala inversa al zoom (tamaño constante)
+    this.badgeContainer.position.set(currentPos.x, currentPos.y);
+    this.badgeContainer.scale.set(1 / zoom);
   }
 }

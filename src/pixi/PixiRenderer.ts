@@ -301,7 +301,7 @@ export class PixiRenderer {
     this.weatherLayer.update(game.weather, camera, width, height, 0.016);
     this.lightsLayer.update(game.entities, selectedIds, isPlayerPreview);
     this.wallsLayer.update(game.entities, selectedIds, activeDraftWallPoints);
-    this.rulerLayer.update(ruler, game.grid.size);
+    this.rulerLayer.update(ruler, game.grid.size, camera.zoom);
 
     const selectedEntities = game.entities.filter((e) => selectedIds.includes(e.id));
     this.gizmoLayer.update(isPlayerPreview ? [] : selectedEntities, game.entities, camera.zoom, gridSize);
