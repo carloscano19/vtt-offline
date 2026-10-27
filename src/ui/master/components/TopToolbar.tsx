@@ -513,7 +513,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           }`}
           title={
             isCloudConnected
-              ? 'Mesa conectada a la nube (clic para ver estado o cambiar clave)'
+              ? 'Nube y almacenamiento: ver espacio usado o Salir'
               : 'Clave de la mesa: Conectar partida y biblioteca a la nube'
           }
         >

@@ -13,10 +13,14 @@ class AuthManager {
 
   constructor() {
     if (supabase) {
-      // Obtener sesión inicial
+      // Obtener sesión inicial (funciona offline leyendo localStorage)
       supabase.auth.getSession().then(({ data: { session } }) => {
         this.currentSession = session;
         this.currentUser = session?.user ?? null;
+        this.initialized = true;
+        this.notifyListeners();
+      }).catch((err) => {
+        console.warn('[authManager] Error al recuperar sesión:', err);
         this.initialized = true;
         this.notifyListeners();
       });

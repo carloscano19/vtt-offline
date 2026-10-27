@@ -174,10 +174,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                 type="button"
                 onClick={handleSignOut}
                 disabled={loading}
-                className="px-3 py-2 rounded text-xs font-medium text-rose-300 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-900/60 transition-colors flex items-center gap-1.5"
+                className="px-3 py-2 rounded text-xs font-semibold text-rose-300 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-900/60 transition-colors flex items-center gap-1.5"
+                title="Cerrar sesión y volver a la pantalla de clave"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                <span>Cerrar sesión</span>
+                <span>Salir (cerrar sesión)</span>
               </button>
               <button
                 type="button"

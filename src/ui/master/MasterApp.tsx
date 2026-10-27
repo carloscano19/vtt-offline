@@ -10,6 +10,7 @@ import { RulerModal } from './components/RulerModal';
 import { SaveLoadModal } from './components/SaveLoadModal';
 import { DisplaysModal } from './components/DisplaysModal';
 import { AuthModal } from './components/AuthModal';
+import { LockScreen } from './components/LockScreen';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { saveAutoSaveToDb, loadAutoSaveFromDb } from '../../modules/persistence/saveManager';
 import { syncChannel } from '../../modules/sync/syncChannel';
@@ -35,6 +36,17 @@ export const MasterApp: React.FC = () => {
   const [hasConflict, setHasConflict] = useState(false);
   const [hasControl, setHasControl] = useState(true);
 
+  // Estado de autenticación para pantalla de clave al abrir
+  const [isAuthenticated, setIsAuthenticated] = useState(authManager.isAuthenticated());
+  const [isAuthReady, setIsAuthReady] = useState(authManager.isReady());
+
+  useEffect(() => {
+    return authManager.onAuthStateChange((user) => {
+      setIsAuthenticated(!!user);
+      setIsAuthReady(true);
+    });
+  }, []);
+
   // Detección de máster único por BroadcastChannel
   useEffect(() => {
     syncChannel.startMasterElection();
@@ -51,24 +63,18 @@ export const MasterApp: React.FC = () => {
 
   // 1. Restaurar último autoguardado al arrancar si existe y sincronizar con la nube
   useEffect(() => {
+    if (!isAuthenticated) return;
     loadAutoSaveFromDb().then(async (auto) => {
       if (auto && auto.entities && auto.entities.length > 0) {
         setGame(auto);
       }
       await cloudGameSync.syncOnStartupOrLogin();
     });
-
-    const cleanupAuth = authManager.onAuthStateChange((user) => {
-      if (user) {
-        cloudGameSync.syncOnStartupOrLogin();
-      }
-    });
-    return cleanupAuth;
-  }, [setGame]);
+  }, [isAuthenticated, setGame]);
 
   // 2. Autoguardado periódico cada 60 segundos y autoguardado a la nube con debounce tras cada cambio
   useEffect(() => {
-    if (!hasControl) return;
+    if (!hasControl || !isAuthenticated) return;
     cloudGameSync.scheduleAutoSave(game);
 
     const timer = setInterval(() => {
@@ -79,12 +85,12 @@ export const MasterApp: React.FC = () => {
       }
     }, 60000);
     return () => clearInterval(timer);
-  }, [game, hasControl]);
+  }, [game, hasControl, isAuthenticated]);
 
   // 3. Autoguardado web en beforeunload y pagehide (solo si esta pestaña tiene el control)
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (hasControlRef.current) {
+      if (hasControlRef.current && authManager.isAuthenticated()) {
         const curr = useGameStore.getState().game;
         saveAutoSaveToDb(curr);
         cloudGameSync.saveImmediate(curr);
@@ -101,16 +107,16 @@ export const MasterApp: React.FC = () => {
 
   // 4. Sincronización ligera por BroadcastChannel hacia la ventana de jugadores (sin blobs)
   useEffect(() => {
-    if (!hasControl) return;
+    if (!hasControl || !isAuthenticated) return;
     syncChannel.sendState(game);
-  }, [game, hasControl]);
+  }, [game, hasControl, isAuthenticated]);
 
   // 4b. Memoria de exploración (fuente única: el máster). Solo se actualiza cuando visionManager
   // recalcula (nueva referencia de visibilidades), no en cada render.
   const lastVisRef = useRef<TokenVisibility[] | null>(null);
   const exploredEmpty = (game.fog.explored?.length ?? 0) === 0;
   useEffect(() => {
-    if (!hasControl) return;
+    if (!hasControl || !isAuthenticated) return;
     const vis = visionManager.getTokensVisibility(game.entities, game.grid.size || 70);
     if (vis.length === 0) return;
     if (vis === lastVisRef.current && !exploredEmpty) return;
@@ -118,12 +124,13 @@ export const MasterApp: React.FC = () => {
     const store = useGameStore.getState();
     const next = unionExplored(store.game.fog.explored ?? [], vis.map((v) => v.polygon));
     store.setFogExplored(next);
-  }, [game.entities, game.grid.size, exploredEmpty, hasControl]);
+  }, [game.entities, game.grid.size, exploredEmpty, hasControl, isAuthenticated]);
 
   // 4c. Reproducción de música exclusivamente en la ventana máster (HDMI / salida del sistema)
   useEffect(() => {
+    if (!isAuthenticated) return;
     audioManager.sync(game.music);
-  }, [game.music]);
+  }, [game.music, isAuthenticated]);
 
   useEffect(() => {
     syncChannel.sendRuler(ruler);
@@ -157,6 +164,18 @@ export const MasterApp: React.FC = () => {
     });
     return cleanup;
   }, [game, ruler]);
+
+  if (!isAuthReady) {
+    return (
+      <div className="w-screen h-screen bg-slate-950 flex items-center justify-center select-none">
+        <div className="w-8 h-8 border-2 border-sky-400 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LockScreen onUnlock={() => setIsAuthenticated(true)} />;
+  }
 
   return (
     <div className="w-screen h-screen flex flex-col bg-slate-950 overflow-hidden">
