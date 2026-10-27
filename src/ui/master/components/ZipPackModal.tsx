@@ -26,6 +26,7 @@ import {
 import { AssetItem } from '../../../types/game';
 import { saveAsset } from '../../../db/dexie';
 import { cloudSync, formatStorageBytes } from '../../../modules/sync/cloudSync';
+import { getMediaDimensions } from '../../../utils/mediaDimensions';
 
 interface ZipPackModalProps {
   isOpen: boolean;
@@ -381,12 +382,19 @@ export const ZipPackModal: React.FC<ZipPackModalProps> = ({
             ? 'gif'
             : 'image';
 
+        let dimensions: { width: number; height: number } | null = null;
+        try {
+          dimensions = await getMediaDimensions(blob);
+        } catch {}
+
         const newAsset: AssetItem = {
           id: assetId,
           name: item.filename.replace(/\.[^/.]+$/, '').replace(/_/g, ' '),
           type: assetType,
           mimeType: item.mimeType,
           blob,
+          width: dimensions?.width,
+          height: dimensions?.height,
           tags: [
             'effect',
             `category:${cat}`,

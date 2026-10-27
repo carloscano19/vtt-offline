@@ -98,11 +98,12 @@ export class MapsLayer extends Container {
       sprite.scale.set(entity.scaleX, entity.scaleY);
       sprite.zIndex = entity.zIndex ?? 0;
 
-      // Opacidad según visibilidad para jugadores en la vista del máster
+      // Opacidad configurable combinada con visibilidad para jugadores en la vista del máster
+      const entityOpacity = typeof entity.opacity === 'number' ? entity.opacity : 1.0;
       if (this.isMaster) {
-        sprite.alpha = entity.visibleToPlayers ? 1.0 : 0.45;
+        sprite.alpha = (entity.visibleToPlayers ? 1.0 : 0.45) * entityOpacity;
       } else {
-        sprite.alpha = 1.0;
+        sprite.alpha = entityOpacity;
       }
     }
 

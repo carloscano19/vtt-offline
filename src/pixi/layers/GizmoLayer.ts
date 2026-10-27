@@ -16,6 +16,7 @@ export class GizmoLayer extends Container {
   private graphics: Graphics;
   private isMaster: boolean;
   private tokensLayer?: any;
+  private effectsLayer?: any;
   private allEntities: Entity[] = [];
   private cameraZoom: number = 1;
 
@@ -28,6 +29,10 @@ export class GizmoLayer extends Container {
 
   public setTokensLayer(layer: any) {
     this.tokensLayer = layer;
+  }
+
+  public setEffectsLayer(layer: any) {
+    this.effectsLayer = layer;
   }
 
   public update(selectedEntities: Entity[], allEntities: Entity[] = [], cameraZoom: number = 1) {
@@ -68,6 +73,24 @@ export class GizmoLayer extends Container {
       return {
         offsetX: 0,
         offsetY: 0,
+        width: w,
+        height: h
+      };
+    }
+
+    if (entity.type === 'effect') {
+      let w = 70;
+      let h = 70;
+      if (this.effectsLayer && typeof this.effectsLayer.getEntityBounds === 'function') {
+        const bounds = this.effectsLayer.getEntityBounds(entity.id);
+        if (bounds) {
+          w = bounds.width;
+          h = bounds.height;
+        }
+      }
+      return {
+        offsetX: -w / 2,
+        offsetY: -h / 2,
         width: w,
         height: h
       };

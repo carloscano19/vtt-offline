@@ -151,6 +151,29 @@ export const PropertiesTab: React.FC = () => {
         />
       </div>
 
+      {/* Opacidad (0–100%) para cualquier entidad */}
+      <div className="bg-slate-800/60 p-3 rounded border border-slate-700 space-y-1.5">
+        <div className="flex justify-between items-center text-slate-300">
+          <span className="font-medium">Opacidad</span>
+          <span className="font-mono text-sky-400 font-semibold">
+            {Math.round(((typeof selectedEntity.opacity === 'number' ? selectedEntity.opacity : 1.0)) * 100)}%
+          </span>
+        </div>
+        <input
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          value={Math.round(((typeof selectedEntity.opacity === 'number' ? selectedEntity.opacity : 1.0)) * 100)}
+          onChange={(e) =>
+            handleUpdate({
+              opacity: (parseInt(e.target.value) || 0) / 100
+            })
+          }
+          className="w-full accent-sky-500 cursor-pointer"
+        />
+      </div>
+
       {/* Selector de bando para tokens */}
       {selectedEntity.type === 'token' && (
         <div className="space-y-1.5">

@@ -52,23 +52,25 @@ export class DoorsLayer extends Container {
         y: p1.y + Math.sin(currentAngle) * doorLength
       };
 
+      const op = typeof ent.opacity === 'number' ? ent.opacity : 1.0;
+
       // Si está abierta, dibujar línea de referencia cerrada tenue
       if (door.isOpen) {
         this.graphics.moveTo(p1.x, p1.y);
         this.graphics.lineTo(p2.x, p2.y);
-        this.graphics.stroke({ width: 2, color: 0x38bdf8, alpha: isSelected ? 0.6 : 0.25 });
+        this.graphics.stroke({ width: 2, color: 0x38bdf8, alpha: (isSelected ? 0.6 : 0.25) * op });
       }
 
       // 1. Dibujar bisagra (círculo)
       this.graphics.circle(p1.x, p1.y, 5);
-      this.graphics.fill({ color: door.isLocked ? 0xef4444 : 0xf59e0b });
-      this.graphics.stroke({ width: 1.5, color: 0x000000 });
+      this.graphics.fill({ color: door.isLocked ? 0xef4444 : 0xf59e0b, alpha: op });
+      this.graphics.stroke({ width: 1.5, color: 0x000000, alpha: op });
 
       // 2. Dibujar hoja de la puerta (línea sólida de madera)
       const leafColor = door.isLocked ? 0xb91c1c : door.isOpen ? 0x10b981 : 0xd97706;
       this.graphics.moveTo(p1.x, p1.y);
       this.graphics.lineTo(leafEnd.x, leafEnd.y);
-      this.graphics.stroke({ width: 6, color: leafColor, alpha: door.isOpen ? 0.85 : 1 });
+      this.graphics.stroke({ width: 6, color: leafColor, alpha: (door.isOpen ? 0.85 : 1) * op });
 
       // 3. Marcadores (solo Máster)
       if (this.isMaster) {

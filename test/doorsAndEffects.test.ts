@@ -259,5 +259,75 @@ describe('Effects lighting and scale integration', () => {
     const normalized = normalizeEntity(rawLight);
     expect(normalized.light?.color).toBe('#eccd8b');
   });
+
+  it('normalizes opacity on all entities defaulting to 1.0 and clamped to [0, 1]', () => {
+    const entNoOpacity: Entity = {
+      id: 'ent_1',
+      type: 'token',
+      name: 'Heroe',
+      x: 0,
+      y: 0,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      zIndex: 10,
+      visibleToPlayers: true,
+      locked: false
+    };
+    expect(normalizeEntity(entNoOpacity).opacity).toBe(1.0);
+
+    const entCustomOpacity: Entity = {
+      ...entNoOpacity,
+      opacity: 0.45
+    };
+    expect(normalizeEntity(entCustomOpacity).opacity).toBe(0.45);
+
+    const entOutOfRange: Entity = {
+      ...entNoOpacity,
+      opacity: 1.5
+    };
+    expect(normalizeEntity(entOutOfRange).opacity).toBe(1.0);
+  });
+
+  it('lightManager maintains light emission regardless of effect opacity', () => {
+    const effectWithOpacity: Entity = {
+      id: 'fx_transparent_torch',
+      type: 'effect',
+      name: 'Antorcha semi-invisible',
+      x: 200,
+      y: 200,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      zIndex: 25,
+      visibleToPlayers: true,
+      locked: false,
+      opacity: 0.1, // 10% opacidad del sprite/vídeo
+      effect: {
+        preset: 'torch',
+        category: 'lights',
+        color: '#ffaa33',
+        intensity: 80,
+        speed: 1.0,
+        emitsLight: true,
+        baseLightRadius: 4
+      },
+      light: {
+        color: '#ffaa33',
+        intensity: 80,
+        brightRadiusInSquares: 4,
+        dimRadiusInSquares: 2,
+        edgeHardness: 0.5,
+        flicker: true
+      }
+    };
+
+    const lights = lightManager.getLightsVisibility([effectWithOpacity], 70);
+    expect(lights.length).toBe(1);
+    expect(lights[0].lightId).toBe('fx_transparent_torch');
+    // La intensidad y alcance de la luz se mantienen intactos
+    expect(lights[0].brightRangePx).toBe(4 * 70);
+    expect(lights[0].intensity).toBe(0.8);
+  });
 });
 

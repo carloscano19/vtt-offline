@@ -5,6 +5,7 @@ import { Entity, EffectPresetId } from '../../../types/entity';
 import { AssetItem } from '../../../types/game';
 import { getAllAssets, saveAsset } from '../../../db/dexie';
 import { cloudSync } from '../../../modules/sync/cloudSync';
+import { getMediaDimensions } from '../../../utils/mediaDimensions';
 import {
   Sparkles,
   Flame,
@@ -353,6 +354,11 @@ export const EffectsTab: React.FC = () => {
       const isVideo = modalFile.type.startsWith('video/') || modalFile.name.toLowerCase().endsWith('.mp4') || modalFile.name.toLowerCase().endsWith('.webm');
       const assetType = isGif ? 'gif' : isVideo ? 'video' : 'image';
 
+      let dimensions: { width: number; height: number } | null = null;
+      try {
+        dimensions = await getMediaDimensions(modalFile);
+      } catch {}
+
       const assetId = crypto.randomUUID();
       const newAsset: AssetItem = {
         id: assetId,
@@ -360,6 +366,8 @@ export const EffectsTab: React.FC = () => {
         type: assetType,
         mimeType: modalFile.type || (isGif ? 'image/gif' : isVideo ? 'video/mp4' : 'image/png'),
         blob: modalFile,
+        width: dimensions?.width,
+        height: dimensions?.height,
         tags: [
           'effect',
           `category:${modalCategory}`,
@@ -485,6 +493,8 @@ export const EffectsTab: React.FC = () => {
     const gridSize = game.grid.size || 70;
     const posX = Math.round(camera.x / gridSize) * gridSize;
     const posY = Math.round(camera.y / gridSize) * gridSize;
+    const maxDim = Math.max(asset.width || 0, asset.height || 0);
+    const initialScale = maxDim > 0 ? parseFloat((gridSize / maxDim).toFixed(3)) : 1.0;
     const meta = parseCustomMetadata(asset);
 
     const newEffect: Entity = {
@@ -495,8 +505,8 @@ export const EffectsTab: React.FC = () => {
       x: posX,
       y: posY,
       rotation: 0,
-      scaleX: 1.0,
-      scaleY: 1.0,
+      scaleX: initialScale,
+      scaleY: initialScale,
       zIndex: 25,
       visibleToPlayers: true,
       locked: false,
@@ -638,6 +648,10 @@ export const EffectsTab: React.FC = () => {
                   key={asset.id}
                   draggable
                   onDragStart={(e) => {
+                    const maxDim = Math.max(asset.width || 0, asset.height || 0);
+                    const currentGridSize = game.grid.size || 70;
+                    const dragScale = maxDim > 0 ? parseFloat((currentGridSize / maxDim).toFixed(3)) : 1.0;
+
                     e.dataTransfer.setData(
                       'application/vtt-effect',
                       JSON.stringify({
@@ -646,7 +660,7 @@ export const EffectsTab: React.FC = () => {
                         category: meta.category,
                         name: asset.name,
                         color: meta.color,
-                        scale: 1.0,
+                        scale: dragScale,
                         emitsLight: meta.emitsLight,
                         baseLightRadius: meta.baseLightRadius,
                         flicker: meta.flicker

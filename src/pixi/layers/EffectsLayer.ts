@@ -47,11 +47,12 @@ class ProceduralEffectNode extends Container {
     this.scale.set(entity.scaleX, entity.scaleY);
     this.zIndex = entity.zIndex ?? 25;
 
-    // Opacidad para máster vs jugadores
+    // Opacidad configurable combinada con visibilidad para jugadores
+    const entityOpacity = typeof entity.opacity === 'number' ? entity.opacity : 1.0;
     if (isMaster) {
-      this.alpha = entity.visibleToPlayers ? 1.0 : 0.45;
+      this.alpha = (entity.visibleToPlayers ? 1.0 : 0.45) * entityOpacity;
     } else {
-      this.alpha = 1.0;
+      this.alpha = entityOpacity;
     }
 
     if (!isVisible) {

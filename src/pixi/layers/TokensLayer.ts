@@ -146,11 +146,12 @@ export class TokensLayer extends Container {
       entityContainer.scale.set(entity.scaleX, entity.scaleY);
       entityContainer.zIndex = entity.zIndex ?? 10;
 
-      // Opacidad según visibilidad para jugadores
+      // Opacidad configurable combinada con visibilidad para jugadores
+      const entityOpacity = typeof entity.opacity === 'number' ? entity.opacity : 1.0;
       if (this.isMaster && !isPlayerPreview) {
-        entityContainer.alpha = entity.visibleToPlayers ? 1.0 : 0.45;
+        entityContainer.alpha = (entity.visibleToPlayers ? 1.0 : 0.45) * entityOpacity;
       } else {
-        entityContainer.alpha = 1.0;
+        entityContainer.alpha = entityOpacity;
       }
 
       this.updateEntityVisuals(entityContainer, entity, selectedIds.includes(entity.id));

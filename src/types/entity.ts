@@ -207,9 +207,10 @@ export interface Entity {
   scaleY: number;
   zIndex: number;
 
-  // Control de visibilidad y bloqueo
+  // Control de visibilidad, bloqueo y opacidad
   visibleToPlayers: boolean;
   locked: boolean;
+  opacity?: number; // 0.0 a 1.0 (1.0 = 100% opaco por defecto)
 
   // Datos específicos de mapa (coordenadas relativas locales)
   mapData?: MapData;

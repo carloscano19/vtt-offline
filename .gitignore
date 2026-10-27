@@ -8,3 +8,5 @@ release/
 .env.*.local
 .DS_Store
 *.log
+scratch/
+

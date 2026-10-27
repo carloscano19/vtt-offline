@@ -179,6 +179,13 @@ export function normalizeEntity(entity: Entity): Entity {
     };
   }
 
+  // Normalizar opacidad (0.0 a 1.0, por defecto 1.0 si es undefined o NaN)
+  const rawOpacity = typeof entity.opacity === 'number' && Number.isFinite(entity.opacity) ? entity.opacity : 1.0;
+  entity = {
+    ...entity,
+    opacity: Math.max(0, Math.min(1, rawOpacity))
+  };
+
   return entity;
 }
 

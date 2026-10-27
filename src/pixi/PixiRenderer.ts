@@ -152,6 +152,7 @@ export class PixiRenderer {
       this.gizmoLayer = new GizmoLayer(this.isMaster);
       this.gizmoLayer.label = 'GizmoLayer';
       this.gizmoLayer.setTokensLayer(this.tokensLayer);
+      this.gizmoLayer.setEffectsLayer(this.effectsLayer);
       this.worldContainer.addChild(this.gizmoLayer);
 
       // 13. Marco de TV de jugadores (Solo Máster)

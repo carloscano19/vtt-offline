@@ -648,38 +648,13 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       // 2. Si hay una entidad seleccionada y no bloqueada, comprobar manijas del Gizmo (incluyendo Puertas)
       const selectedEntity = game.entities.find((ent) => selectedEntityIds.includes(ent.id) && !ent.locked);
       if (selectedEntity && selectedEntity.type !== 'wall') {
-        let bW = 70;
-        let bH = 70;
-        let offX = -35;
-        let offY = -35;
-
-        if (selectedEntity.type === 'door') {
-          bW = selectedEntity.door?.length ?? 70;
-          bH = 20;
-          offX = -bW / 2;
-          offY = -bH / 2;
-        } else if (selectedEntity.type === 'map') {
-          bW = (selectedEntity.mapData?.gridWidth ?? 10) * (selectedEntity.mapData?.pixelsPerGrid ?? 70);
-          bH = (selectedEntity.mapData?.gridHeight ?? 10) * (selectedEntity.mapData?.pixelsPerGrid ?? 70);
-          offX = 0;
-          offY = 0;
-        } else if (selectedEntity.type === 'effect' && rendererRef.current?.effectsLayer) {
-          const eBounds = rendererRef.current.effectsLayer.getEntityBounds(selectedEntity.id);
-          if (eBounds) {
-            bW = eBounds.width;
-            bH = eBounds.height;
-            offX = -bW / 2;
-            offY = -bH / 2;
-          }
-        } else if (rendererRef.current?.tokensLayer) {
-          const tBounds = rendererRef.current.tokensLayer.getEntityBounds(selectedEntity.id);
-          if (tBounds) {
-            bW = tBounds.width;
-            bH = tBounds.height;
-            offX = -bW / 2;
-            offY = -bH / 2;
-          }
-        }
+        const localBounds = rendererRef.current?.gizmoLayer
+          ? rendererRef.current.gizmoLayer.getEntityLocalBounds(selectedEntity)
+          : { offsetX: -35, offsetY: -35, width: 70, height: 70 };
+        const bW = localBounds.width;
+        const bH = localBounds.height;
+        const offX = localBounds.offsetX;
+        const offY = localBounds.offsetY;
 
         const parentMap = selectedEntity.mapId ? game.entities.find((m) => m.id === selectedEntity.mapId) : undefined;
         const worldCenter = parentMap
@@ -834,7 +809,12 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         }
 
         let baseRadius = ent.type === 'token' || ent.type === 'effect' ? 35 : 45;
-        if (rendererRef.current?.tokensLayer) {
+        if (rendererRef.current?.gizmoLayer) {
+          const lb = rendererRef.current.gizmoLayer.getEntityLocalBounds(ent);
+          if (lb) {
+            baseRadius = Math.max(lb.width, lb.height) / 2;
+          }
+        } else if (rendererRef.current?.tokensLayer) {
           const tb = rendererRef.current.tokensLayer.getEntityBounds(ent.id);
           if (tb) baseRadius = tb.radius;
         }
@@ -1109,38 +1089,13 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       if (newCursor === 'default' && selectedEntity && selectedEntity.type !== 'wall') {
         const handleHitRadius = 12 / camera.zoom;
 
-        let bW = 70;
-        let bH = 70;
-        let offX = -35;
-        let offY = -35;
-
-        if (selectedEntity.type === 'door') {
-          bW = selectedEntity.door?.length ?? 70;
-          bH = 20;
-          offX = -bW / 2;
-          offY = -bH / 2;
-        } else if (selectedEntity.type === 'map') {
-          bW = (selectedEntity.mapData?.gridWidth ?? 10) * (selectedEntity.mapData?.pixelsPerGrid ?? 70);
-          bH = (selectedEntity.mapData?.gridHeight ?? 10) * (selectedEntity.mapData?.pixelsPerGrid ?? 70);
-          offX = 0;
-          offY = 0;
-        } else if (selectedEntity.type === 'effect' && rendererRef.current?.effectsLayer) {
-          const eBounds = rendererRef.current.effectsLayer.getEntityBounds(selectedEntity.id);
-          if (eBounds) {
-            bW = eBounds.width;
-            bH = eBounds.height;
-            offX = -bW / 2;
-            offY = -bH / 2;
-          }
-        } else if (rendererRef.current?.tokensLayer) {
-          const tBounds = rendererRef.current.tokensLayer.getEntityBounds(selectedEntity.id);
-          if (tBounds) {
-            bW = tBounds.width;
-            bH = tBounds.height;
-            offX = -bW / 2;
-            offY = -bH / 2;
-          }
-        }
+        const localBounds = rendererRef.current?.gizmoLayer
+          ? rendererRef.current.gizmoLayer.getEntityLocalBounds(selectedEntity)
+          : { offsetX: -35, offsetY: -35, width: 70, height: 70 };
+        const bW = localBounds.width;
+        const bH = localBounds.height;
+        const offX = localBounds.offsetX;
+        const offY = localBounds.offsetY;
 
         const parentMap = selectedEntity.mapId ? game.entities.find((m) => m.id === selectedEntity.mapId) : undefined;
         const worldCenter = parentMap
