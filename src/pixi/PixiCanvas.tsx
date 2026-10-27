@@ -602,14 +602,14 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
         const p1 = transformPoint(door.p1);
         const p2 = transformPoint(door.p2);
-        const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
         const isSelected = selectedEntityIds.includes(ent.id);
 
-        const handleRadius = Math.max(16 / camera.zoom, 16);
+        // Radio de interacción de las manijas de extremo (mínimo 18px en pantalla)
+        const handleRadius = Math.max(18 / camera.zoom, 18);
         const hitP1 = isSelected && Math.hypot(worldPos.x - p1.x, worldPos.y - p1.y) <= handleRadius;
         const hitP2 = isSelected && Math.hypot(worldPos.x - p2.x, worldPos.y - p2.y) <= handleRadius;
-        const hitCenter = Math.hypot(worldPos.x - mid.x, worldPos.y - mid.y) <= handleRadius;
 
+        // Distancia al cuerpo de la puerta (hoja)
         let hitLeaf = false;
         const l2 = (p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2;
         if (l2 > 0) {
@@ -617,10 +617,10 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           t = Math.max(0, Math.min(1, t));
           const projX = p1.x + t * (p2.x - p1.x);
           const projY = p1.y + t * (p2.y - p1.y);
-          hitLeaf = Math.hypot(worldPos.x - projX, worldPos.y - projY) <= 12 / camera.zoom;
+          hitLeaf = Math.hypot(worldPos.x - projX, worldPos.y - projY) <= Math.max(18 / camera.zoom, 18);
         }
 
-        if (hitP1 || hitP2 || hitCenter || hitLeaf) {
+        if (hitP1 || hitP2 || hitLeaf) {
           selectEntity(ent.id, e.shiftKey);
 
           if (hitP1) {
@@ -641,13 +641,12 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
             return;
           }
 
-          // Arrastrar centro o cuerpo de la puerta
+          // Arrastrar el cuerpo de la puerta la mueve entera
           interactionState.current.isDraggingDoorHandle = 'body';
           interactionState.current.dragDoorEntityId = ent.id;
           interactionState.current.startDoorP1 = { ...door.p1 };
           interactionState.current.startDoorP2 = { ...door.p2 };
           interactionState.current.startMouse = worldPos;
-          interactionState.current.doorClickToggled = false;
           return;
         }
       }
@@ -665,6 +664,14 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           bH = (selectedEntity.mapData?.gridHeight ?? 10) * (selectedEntity.mapData?.pixelsPerGrid ?? 70);
           offX = 0;
           offY = 0;
+        } else if (selectedEntity.type === 'effect' && rendererRef.current?.effectsLayer) {
+          const eBounds = rendererRef.current.effectsLayer.getEntityBounds(selectedEntity.id);
+          if (eBounds) {
+            bW = eBounds.width;
+            bH = eBounds.height;
+            offX = -bW / 2;
+            offY = -bH / 2;
+          }
         } else if (rendererRef.current?.tokensLayer) {
           const tBounds = rendererRef.current.tokensLayer.getEntityBounds(selectedEntity.id);
           if (tBounds) {
@@ -1051,27 +1058,32 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           const parentMap = ent.mapId ? game.entities.find((m) => m.id === ent.mapId) : undefined;
           const p1 = parentMap ? localToWorld(door.p1, { x: parentMap.x, y: parentMap.y }, parentMap.rotation, parentMap.scaleX, parentMap.scaleY) : door.p1;
           const p2 = parentMap ? localToWorld(door.p2, { x: parentMap.x, y: parentMap.y }, parentMap.rotation, parentMap.scaleX, parentMap.scaleY) : door.p2;
-          const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
           const isSelected = selectedEntityIds.includes(ent.id);
 
+          // Si la puerta está seleccionada, comprobar manijas en los extremos p1 y p2
           if (isSelected) {
-            if (Math.hypot(worldPos.x - p1.x, worldPos.y - p1.y) <= Math.max(14 / camera.zoom, 16)) {
+            const handleRadius = Math.max(18 / camera.zoom, 18);
+            if (Math.hypot(worldPos.x - p1.x, worldPos.y - p1.y) <= handleRadius) {
               newCursor = 'crosshair';
               break;
             }
-            if (Math.hypot(worldPos.x - p2.x, worldPos.y - p2.y) <= Math.max(14 / camera.zoom, 16)) {
+            if (Math.hypot(worldPos.x - p2.x, worldPos.y - p2.y) <= handleRadius) {
               newCursor = 'crosshair';
-              break;
-            }
-            if (Math.hypot(worldPos.x - mid.x, worldPos.y - mid.y) <= Math.max(16 / camera.zoom, 18)) {
-              newCursor = 'move';
               break;
             }
           }
 
-          if (Math.hypot(worldPos.x - mid.x, worldPos.y - mid.y) <= Math.max(16 / camera.zoom, 18)) {
-            newCursor = 'pointer';
-            break;
+          // Comprobar cuerpo de la puerta (hoja)
+          const l2 = (p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2;
+          if (l2 > 0) {
+            let t = ((worldPos.x - p1.x) * (p2.x - p1.x) + (worldPos.y - p1.y) * (p2.y - p1.y)) / l2;
+            t = Math.max(0, Math.min(1, t));
+            const projX = p1.x + t * (p2.x - p1.x);
+            const projY = p1.y + t * (p2.y - p1.y);
+            if (Math.hypot(worldPos.x - projX, worldPos.y - projY) <= Math.max(14 / camera.zoom, 12)) {
+              newCursor = 'move';
+              break;
+            }
           }
         }
       }
@@ -1091,6 +1103,14 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           bH = (selectedEntity.mapData?.gridHeight ?? 10) * (selectedEntity.mapData?.pixelsPerGrid ?? 70);
           offX = 0;
           offY = 0;
+        } else if (selectedEntity.type === 'effect' && rendererRef.current?.effectsLayer) {
+          const eBounds = rendererRef.current.effectsLayer.getEntityBounds(selectedEntity.id);
+          if (eBounds) {
+            bW = eBounds.width;
+            bH = eBounds.height;
+            offX = -bW / 2;
+            offY = -bH / 2;
+          }
         } else if (rendererRef.current?.tokensLayer) {
           const tBounds = rendererRef.current.tokensLayer.getEntityBounds(selectedEntity.id);
           if (tBounds) {
@@ -1210,14 +1230,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       );
 
       if (doorEnt && doorEnt.door) {
-        if (interactionState.current.isDraggingDoorHandle === 'body' && movedDist < 5) {
-          // Fue un clic simple sobre el centro o la hoja: alternar abrir/cerrar (o candado si Alt)
-          if (e.altKey) {
-            setDoorLocked(doorId, !doorEnt.door.isLocked);
-          } else {
-            toggleDoor(doorId);
-          }
-        } else {
+        if (movedDist >= 3) {
           // Registrar en historial tras arrastre
           updateEntity(doorId, { door: { ...doorEnt.door } }, true);
         }
@@ -1282,6 +1295,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           id: `effect_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
           type: 'effect',
           name: item.name || 'Efecto',
+          assetId: item.assetId,
           x: worldPos.x,
           y: worldPos.y,
           rotation: 0,
@@ -1291,7 +1305,8 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           visibleToPlayers: true,
           locked: false,
           effect: {
-            preset: item.preset,
+            preset: item.preset || 'custom',
+            category: item.category,
             color: item.color || '#ff7700',
             intensity: item.intensity ?? 80,
             speed: item.speed ?? 1.0,
@@ -1306,11 +1321,12 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
                 dimRadiusInSquares: 2 * (item.scale || 1),
                 edgeHardness: 0.5,
                 flicker:
-                  item.preset === 'torch' ||
-                  item.preset === 'campfire' ||
-                  item.preset === 'brazier' ||
-                  item.preset === 'candle' ||
-                  item.preset.startsWith('fire')
+                  item.flicker ??
+                  (item.preset === 'torch' ||
+                    item.preset === 'campfire' ||
+                    item.preset === 'brazier' ||
+                    item.preset === 'candle' ||
+                    (item.preset || '').startsWith('fire'))
               }
             : undefined
         };
@@ -1381,6 +1397,70 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     }
   };
 
+  // Doble clic: abre o cierra puertas (o alterna candado si se presiona Alt)
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    if (!isMaster) return;
+    const { width, height } = getCanvasDimensions();
+    const camera = getCamera();
+    const localMouse = getLocalPointer(e);
+    const worldPos = screenToWorld(localMouse, camera, width, height);
+
+    const doorEntities = game.entities.filter((ent) => ent.type === 'door' && ent.door);
+    for (const ent of doorEntities) {
+      const door = ent.door!;
+      const parentMap = ent.mapId ? game.entities.find((m) => m.id === ent.mapId) : undefined;
+      const transformPoint = (p: Point2D): Point2D => {
+        if (parentMap) {
+          return localToWorld(p, { x: parentMap.x, y: parentMap.y }, parentMap.rotation, parentMap.scaleX, parentMap.scaleY);
+        }
+        return p;
+      };
+
+      const p1 = transformPoint(door.p1);
+      const p2 = transformPoint(door.p2);
+
+      // 1. Distancia al vano de la puerta (p1 - p2)
+      let hit = false;
+      const l2 = (p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2;
+      if (l2 > 0) {
+        let t = ((worldPos.x - p1.x) * (p2.x - p1.x) + (worldPos.y - p1.y) * (p2.y - p1.y)) / l2;
+        t = Math.max(0, Math.min(1, t));
+        const projX = p1.x + t * (p2.x - p1.x);
+        const projY = p1.y + t * (p2.y - p1.y);
+        hit = Math.hypot(worldPos.x - projX, worldPos.y - projY) <= Math.max(22 / camera.zoom, 22);
+      }
+
+      // 2. Si la puerta está abierta, comprobar también la hoja abierta
+      if (!hit && door.isOpen) {
+        const length = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        const baseAngle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+        const currentAngle = baseAngle + (door.openAngle ?? Math.PI / 2);
+        const leafEnd = {
+          x: p1.x + Math.cos(currentAngle) * length,
+          y: p1.y + Math.sin(currentAngle) * length
+        };
+        const leafL2 = (leafEnd.x - p1.x) ** 2 + (leafEnd.y - p1.y) ** 2;
+        if (leafL2 > 0) {
+          let t = ((worldPos.x - p1.x) * (leafEnd.x - p1.x) + (worldPos.y - p1.y) * (leafEnd.y - p1.y)) / leafL2;
+          t = Math.max(0, Math.min(1, t));
+          const projX = p1.x + t * (leafEnd.x - p1.x);
+          const projY = p1.y + t * (leafEnd.y - p1.y);
+          hit = Math.hypot(worldPos.x - projX, worldPos.y - projY) <= Math.max(22 / camera.zoom, 22);
+        }
+      }
+
+      if (hit) {
+        if (e.altKey) {
+          setDoorLocked(ent.id, !door.isLocked);
+        } else if (!door.isLocked) {
+          toggleDoor(ent.id);
+        }
+        selectEntity(ent.id);
+        return;
+      }
+    }
+  };
+
   // Determinar cursor CSS dinámico
   let activeCursor = 'default';
   if (isSpacePressed || interactionState.current.isPanning) {
@@ -1406,6 +1486,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
+      onDoubleClick={handleDoubleClick}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >

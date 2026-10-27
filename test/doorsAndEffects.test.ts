@@ -158,4 +158,45 @@ describe('Effects lighting and scale integration', () => {
     // Base 5 * scale 2 = 10 squares * 70px = 700px
     expect(lights[0].brightRangePx).toBe(10 * 70);
   });
+
+  it('supports custom user effects with assetId emitting dynamic light', () => {
+    const customUserEffect: Entity = {
+      id: 'custom_fx_portal',
+      type: 'effect',
+      name: 'Vórtice Abisal',
+      assetId: 'asset_user_video_123',
+      x: 150,
+      y: 150,
+      rotation: 0,
+      scaleX: 1.5,
+      scaleY: 1.5,
+      zIndex: 25,
+      visibleToPlayers: true,
+      locked: false,
+      effect: {
+        preset: 'custom',
+        category: 'arcane',
+        color: '#8b5cf6',
+        intensity: 95,
+        speed: 1.0,
+        emitsLight: true,
+        baseLightRadius: 6
+      },
+      light: {
+        color: '#8b5cf6',
+        intensity: 95,
+        brightRadiusInSquares: 6,
+        dimRadiusInSquares: 2,
+        edgeHardness: 0.5,
+        flicker: false
+      }
+    };
+
+    const lights = lightManager.getLightsVisibility([customUserEffect], 70);
+    expect(lights.length).toBe(1);
+    expect(lights[0].lightId).toBe('custom_fx_portal');
+    // Base 6 * scale 1.5 = 9 squares * 70px = 630px
+    expect(lights[0].brightRangePx).toBe(6 * 1.5 * 70);
+  });
 });
+

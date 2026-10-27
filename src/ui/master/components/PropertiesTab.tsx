@@ -808,41 +808,94 @@ export const PropertiesTab: React.FC = () => {
             </label>
 
             {selectedEntity.effect.emitsLight && (
-              <div className="space-y-2 pt-1">
-                <div>
-                  <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
-                    <span>Radio de luz base</span>
-                    <span className="text-white font-mono">{selectedEntity.effect.baseLightRadius} casillas</span>
+              <div className="space-y-2 pt-1 border-t border-slate-700/60">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                      <span>Radio claro</span>
+                      <span className="text-white font-mono">{selectedEntity.effect.baseLightRadius} cas.</span>
+                    </div>
+                    <input
+                      type="number"
+                      min="1"
+                      max="30"
+                      value={selectedEntity.effect.baseLightRadius}
+                      onChange={(e) => {
+                        const newRad = Math.max(1, parseInt(e.target.value) || 1);
+                        const scale = Math.max(selectedEntity.scaleX || 1, selectedEntity.scaleY || 1);
+                        handleUpdate({
+                          effect: { ...selectedEntity.effect!, baseLightRadius: newRad },
+                          light: {
+                            ...(selectedEntity.light || {
+                              color: selectedEntity.effect!.color,
+                              intensity: selectedEntity.effect!.intensity,
+                              edgeHardness: 0.5,
+                              flicker: true
+                            }),
+                            brightRadiusInSquares: newRad * scale,
+                            dimRadiusInSquares: (selectedEntity.light?.dimRadiusInSquares ?? 2)
+                          }
+                        });
+                      }}
+                      className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200"
+                    />
                   </div>
+
+                  <div>
+                    <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                      <span>Radio tenue</span>
+                      <span className="text-white font-mono">+{selectedEntity.light?.dimRadiusInSquares ?? 2} cas.</span>
+                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      max="30"
+                      value={selectedEntity.light?.dimRadiusInSquares ?? 2}
+                      onChange={(e) => {
+                        const newDim = Math.max(0, parseInt(e.target.value) || 0);
+                        handleUpdate({
+                          light: {
+                            ...(selectedEntity.light || {
+                              color: selectedEntity.effect!.color,
+                              intensity: selectedEntity.effect!.intensity,
+                              edgeHardness: 0.5,
+                              flicker: true,
+                              brightRadiusInSquares: (selectedEntity.effect?.baseLightRadius || 3) * Math.max(selectedEntity.scaleX || 1, selectedEntity.scaleY || 1)
+                            }),
+                            dimRadiusInSquares: newDim
+                          }
+                        });
+                      }}
+                      className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200"
+                    />
+                  </div>
+                </div>
+
+                <label className="flex items-center justify-between cursor-pointer pt-1">
+                  <span className="text-slate-300 text-[11px]">Parpadeo de antorcha</span>
                   <input
-                    type="range"
-                    min="1"
-                    max="10"
-                    step="1"
-                    value={selectedEntity.effect.baseLightRadius}
+                    type="checkbox"
+                    checked={selectedEntity.light?.flicker ?? true}
                     onChange={(e) => {
-                      const newRad = parseInt(e.target.value) || 3;
-                      const scale = Math.max(selectedEntity.scaleX || 1, selectedEntity.scaleY || 1);
                       handleUpdate({
-                        effect: { ...selectedEntity.effect!, baseLightRadius: newRad },
                         light: {
                           ...(selectedEntity.light || {
                             color: selectedEntity.effect!.color,
                             intensity: selectedEntity.effect!.intensity,
                             edgeHardness: 0.5,
-                            flicker: true
+                            brightRadiusInSquares: (selectedEntity.effect?.baseLightRadius || 3) * Math.max(selectedEntity.scaleX || 1, selectedEntity.scaleY || 1),
+                            dimRadiusInSquares: 2
                           }),
-                          brightRadiusInSquares: newRad * scale,
-                          dimRadiusInSquares: 2 * scale
+                          flicker: e.target.checked
                         }
                       });
                     }}
-                    className="w-full accent-amber-500 cursor-pointer"
+                    className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
                   />
-                  <span className="text-[10px] text-slate-500">
-                    Aumenta automáticamente si escalas el efecto con las manijas.
-                  </span>
-                </div>
+                </label>
+                <span className="text-[10px] text-slate-500 block">
+                  💡 El radio crece automáticamente si escalas el efecto en el tablero con las manijas.
+                </span>
               </div>
             )}
           </div>
@@ -850,7 +903,7 @@ export const PropertiesTab: React.FC = () => {
       )}
 
       {/* Ajustes visuales (Tono, Saturación, Brillo) */}
-      {selectedEntity.type !== 'effect' && selectedEntity.type !== 'wall' && selectedEntity.type !== 'door' && selectedEntity.type !== 'light' && (
+      {selectedEntity.type !== 'wall' && selectedEntity.type !== 'door' && selectedEntity.type !== 'light' && (
       <div className="bg-slate-800/60 p-3 rounded border border-slate-700 space-y-2.5">
         <div className="flex items-center justify-between">
           <span className="font-semibold text-sky-400 flex items-center gap-1.5">
@@ -1160,8 +1213,8 @@ export const PropertiesTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Chroma Key para Tokens, Objetos o Mapas */}
-      {selectedEntity.type !== 'wall' && selectedEntity.type !== 'door' && selectedEntity.type !== 'light' && selectedEntity.type !== 'effect' && (
+      {/* Chroma Key para Tokens, Objetos, Mapas o Efectos */}
+      {selectedEntity.type !== 'wall' && selectedEntity.type !== 'door' && selectedEntity.type !== 'light' && (
         <div className="bg-slate-800/60 p-3 rounded border border-slate-700 space-y-2.5">
           <div className="flex items-center justify-between">
             <span className="font-semibold text-emerald-400 flex items-center gap-1.5">

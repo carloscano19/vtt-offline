@@ -15,82 +15,88 @@ export const Sidebar: React.FC = () => {
 
   return (
     <aside className="w-[360px] h-[calc(100vh-3.5rem)] bg-slate-900/95 border-l border-slate-700/80 flex flex-col shadow-2xl z-20 backdrop-blur-sm">
-      {/* Encabezado del panel lateral con pestañas de navegación */}
-      <div className="h-11 px-1.5 bg-slate-900 border-b border-slate-700/80 flex items-center justify-between text-xs font-semibold text-slate-300 gap-1 select-none">
-        <div className="flex items-center gap-0.5 flex-1 overflow-x-auto py-1 scrollbar-none">
-          <button
-            onClick={() => setActiveSidebarTab('properties')}
-            className={`px-2 py-1 rounded flex items-center gap-1 transition-all text-[11px] font-medium whitespace-nowrap ${
-              activeSidebarTab === 'properties'
-                ? 'bg-sky-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            }`}
-            title="Propiedades de la entidad seleccionada"
-          >
-            <Sliders className="w-3.5 h-3.5" />
-            <span>Propiedades</span>
-          </button>
+      {/* Encabezado del panel lateral en dos filas para garantizar espacio completo a todas las pestañas */}
+      <div className="bg-slate-900 border-b border-slate-700/80 p-1.5 flex flex-col gap-1 select-none">
+        {/* Fila 1: Herramientas de entidades + Botón cerrar */}
+        <div className="flex items-center justify-between gap-1">
+          <div className="flex items-center gap-1 flex-1">
+            <button
+              onClick={() => setActiveSidebarTab('properties')}
+              className={`flex-1 px-2 py-1 rounded flex items-center justify-center gap-1.5 transition-all text-[11px] font-medium whitespace-nowrap ${
+                activeSidebarTab === 'properties'
+                  ? 'bg-sky-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+              title="Propiedades de la entidad seleccionada"
+            >
+              <Sliders className="w-3.5 h-3.5 shrink-0" />
+              <span>Propiedades</span>
+            </button>
+
+            <button
+              onClick={() => setActiveSidebarTab('layers')}
+              className={`px-2.5 py-1 rounded flex items-center justify-center gap-1.5 transition-all text-[11px] font-medium whitespace-nowrap ${
+                activeSidebarTab === 'layers'
+                  ? 'bg-sky-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+              title="Capas y orden de profundidad (zIndex)"
+            >
+              <Layers className="w-3.5 h-3.5 shrink-0" />
+              <span>Capas</span>
+            </button>
+
+            <button
+              onClick={() => setActiveSidebarTab('effects')}
+              className={`px-2.5 py-1 rounded flex items-center justify-center gap-1.5 transition-all text-[11px] font-medium whitespace-nowrap ${
+                activeSidebarTab === 'effects'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+              title="Catálogo de efectos animados (fuego, humo, luces, portales...)"
+            >
+              <Sparkles className="w-3.5 h-3.5 shrink-0" />
+              <span>Efectos</span>
+            </button>
+          </div>
 
           <button
-            onClick={() => setActiveSidebarTab('layers')}
-            className={`px-2 py-1 rounded flex items-center gap-1 transition-all text-[11px] font-medium whitespace-nowrap ${
-              activeSidebarTab === 'layers'
-                ? 'bg-sky-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            }`}
-            title="Capas y orden de profundidad (zIndex)"
+            onClick={() => setActiveSidebarTab(null)}
+            className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors shrink-0"
+            title="Cerrar panel lateral"
           >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Capas</span>
+            <X className="w-4 h-4" />
           </button>
+        </div>
 
-          <button
-            onClick={() => setActiveSidebarTab('effects')}
-            className={`px-2 py-1 rounded flex items-center gap-1 transition-all text-[11px] font-medium whitespace-nowrap ${
-              activeSidebarTab === 'effects'
-                ? 'bg-amber-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-            }`}
-            title="Catálogo de efectos animados (fuego, humo, luces, portales...)"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Efectos</span>
-          </button>
-
+        {/* Fila 2: Biblioteca de assets y Música */}
+        <div className="flex items-center gap-1">
           <button
             onClick={() => setActiveSidebarTab('library')}
-            className={`px-2 py-1 rounded flex items-center gap-1 transition-all text-[11px] font-medium whitespace-nowrap ${
+            className={`flex-1 px-2.5 py-1 rounded flex items-center justify-center gap-1.5 transition-all text-[11px] font-medium whitespace-nowrap ${
               activeSidebarTab === 'library'
                 ? 'bg-sky-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
             }`}
             title="Biblioteca de mapas, tokens e imágenes"
           >
-            <FolderOpen className="w-3.5 h-3.5" />
+            <FolderOpen className="w-3.5 h-3.5 shrink-0" />
             <span>Biblioteca</span>
           </button>
 
           <button
             onClick={() => setActiveSidebarTab('music')}
-            className={`px-2 py-1 rounded flex items-center gap-1 transition-all text-[11px] font-medium whitespace-nowrap ${
+            className={`flex-1 px-2.5 py-1 rounded flex items-center justify-center gap-1.5 transition-all text-[11px] font-medium whitespace-nowrap ${
               activeSidebarTab === 'music'
                 ? 'bg-purple-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
             }`}
-            title="Música ambiental y efectos"
+            title="Música ambiental y efectos de audio"
           >
-            <Music className="w-3.5 h-3.5" />
+            <Music className="w-3.5 h-3.5 shrink-0" />
             <span>Música</span>
           </button>
         </div>
-
-        <button
-          onClick={() => setActiveSidebarTab(null)}
-          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors ml-1"
-          title="Cerrar panel lateral"
-        >
-          <X className="w-4 h-4" />
-        </button>
       </div>
 
       {/* Contenido de la pestaña activa */}

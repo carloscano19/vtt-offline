@@ -78,44 +78,37 @@ export class DoorsLayer extends Container {
       this.graphics.lineTo(leafEnd.x, leafEnd.y);
       this.graphics.stroke({ width: 6, color: leafColor, alpha: door.isOpen ? 0.85 : 1 });
 
-      // 3. Indicador central (Máster)
+      // 3. Marcadores y Manijas (solo Máster)
       if (this.isMaster) {
-        const midX = (p1.x + p2.x) / 2;
-        const midY = (p1.y + p2.y) / 2;
+        // Marcador visual no interactivo de la bisagra en p1
+        this.graphics.circle(p1.x, p1.y, 3.5);
+        this.graphics.fill({ color: 0x0f172a });
+        this.graphics.stroke({ width: 1.5, color: door.isOpen ? 0x10b981 : 0xf59e0b });
 
-        this.graphics.circle(midX, midY, 9);
-        this.graphics.fill({ color: 0x0f172a, alpha: 0.85 });
-        this.graphics.stroke({
-          width: isSelected ? 2 : 1.5,
-          color: isSelected ? 0x38bdf8 : door.isLocked ? 0xef4444 : door.isOpen ? 0x10b981 : 0xf59e0b
-        });
-
+        // Si está bloqueada con candado, pequeño indicador visual sobre la hoja
         if (door.isLocked) {
-          // Marca de candado
-          this.graphics.circle(midX, midY, 3.5);
+          const midX = (p1.x + p2.x) / 2;
+          const midY = (p1.y + p2.y) / 2;
+          this.graphics.circle(midX, midY, 4);
           this.graphics.fill({ color: 0xef4444 });
-        } else if (!isSelected) {
-          // Pequeño punto indicador de estado
-          this.graphics.circle(midX, midY, 2.5);
-          this.graphics.fill({ color: door.isOpen ? 0x10b981 : 0xf59e0b });
+          this.graphics.stroke({ width: 1.5, color: 0xffffff });
         }
 
-        // Si la puerta está seleccionada, dibujar manijas en los extremos y centro
+        // Si la puerta está seleccionada: EXACTAMENTE DOS manijas (una en cada extremo)
         if (isSelected) {
-          // Manija bisagra (p1)
-          this.graphics.circle(p1.x, p1.y, 7);
-          this.graphics.stroke({ width: 2, color: 0x38bdf8 });
+          // Manija extremo p1 (bisagra / redimensionar y mover extremo)
+          this.graphics.circle(p1.x, p1.y, 9);
+          this.graphics.fill({ color: 0x0284c7 });
+          this.graphics.stroke({ width: 2.5, color: 0xffffff });
           this.graphics.circle(p1.x, p1.y, 3);
           this.graphics.fill({ color: 0xffffff });
 
-          // Manija extremo libre (p2)
-          this.graphics.circle(p2.x, p2.y, 6.5);
+          // Manija extremo p2 (extremo libre / redimensionar y rotar)
+          this.graphics.circle(p2.x, p2.y, 9);
           this.graphics.fill({ color: 0x0284c7 });
-          this.graphics.stroke({ width: 2, color: 0xffffff });
-
-          // Manija centro para mover toda la puerta
-          this.graphics.circle(midX, midY, 4.5);
-          this.graphics.fill({ color: 0x38bdf8 });
+          this.graphics.stroke({ width: 2.5, color: 0xffffff });
+          this.graphics.circle(p2.x, p2.y, 3);
+          this.graphics.fill({ color: 0xffffff });
         }
       }
     }

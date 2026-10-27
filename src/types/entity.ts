@@ -152,10 +152,12 @@ export type EffectPresetId =
   | 'magic_seal'
   | 'portal'
   | 'lightning'
-  | 'ice_zone';
+  | 'ice_zone'
+  | 'custom';
 
 export interface EffectConfig {
   preset: EffectPresetId;
+  category?: 'lights' | 'fire' | 'smoke' | 'arcane';
   color: string;           // Hex principal (ej: '#ff7700')
   secondaryColor?: string; // Hex secundario opcional
   intensity: number;       // 0 a 100 (%)

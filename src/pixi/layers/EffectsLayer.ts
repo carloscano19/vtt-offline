@@ -1,6 +1,9 @@
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, Sprite, Texture, ColorMatrixFilter } from 'pixi.js';
 import { Entity, EffectConfig, EffectPresetId, Point2D } from '../../types/entity';
 import { CameraState } from '../../types/game';
+import { getTextureForAsset, getGifDataForAsset } from '../utils/textureCache';
+import { videoManager } from '../../modules/media/videoManager';
+import { AnimatedGifData, getFrameTextureForTime } from '../../modules/media/gifDecoder';
 
 interface EffectParticle {
   x: number;
@@ -18,6 +21,10 @@ class ProceduralEffectNode extends Container {
   public entityId: string;
   public baseGfx: Graphics;
   public particleGfx: Graphics;
+  public sprite: Sprite | null = null;
+  private loadedAssetId: string | null = null;
+  private loadedCkKey: string | null = null;
+  private gifData: AnimatedGifData | null = null;
   private particles: EffectParticle[] = [];
   private time = 0;
   private lightningTimer = 0;
@@ -32,18 +39,102 @@ class ProceduralEffectNode extends Container {
     this.addChild(this.particleGfx);
   }
 
-  public update(entity: Entity, deltaSec: number, isVisible: boolean) {
+  public update(entity: Entity, deltaSec: number, isVisible: boolean, isMaster: boolean) {
     this.x = entity.x;
     this.y = entity.y;
     this.rotation = entity.rotation;
     this.scale.set(entity.scaleX, entity.scaleY);
     this.zIndex = entity.zIndex ?? 25;
 
+    // Opacidad para máster vs jugadores
+    if (isMaster) {
+      this.alpha = entity.visibleToPlayers ? 1.0 : 0.45;
+    } else {
+      this.alpha = 1.0;
+    }
+
     if (!isVisible) {
       this.visible = false;
       return;
     }
     this.visible = true;
+
+    // 1. Si el efecto tiene un asset multimedia propio (GIF, vídeo MP4/WebM o imagen PNG)
+    if (entity.assetId) {
+      this.baseGfx.visible = false;
+      this.particleGfx.visible = false;
+
+      if (!this.sprite) {
+        this.sprite = new Sprite(Texture.EMPTY);
+        this.sprite.label = 'effect-sprite';
+        this.sprite.anchor.set(0.5);
+        this.addChild(this.sprite);
+      }
+      this.sprite.visible = true;
+
+      const ck = entity.chromaKey;
+      const currentCkKey = ck && ck.enabled ? `ck_${ck.color}_${ck.tolerance}` : 'no_ck';
+      if (
+        this.loadedAssetId !== entity.assetId ||
+        this.loadedCkKey !== currentCkKey ||
+        this.sprite.texture === Texture.EMPTY
+      ) {
+        this.loadedAssetId = entity.assetId;
+        this.loadedCkKey = currentCkKey;
+
+        getGifDataForAsset(entity.assetId, ck).then((gd) => {
+          if (gd && !this.destroyed) {
+            this.gifData = gd;
+          }
+        });
+
+        videoManager.registerActiveEntityVideo(entity.id);
+
+        getTextureForAsset(entity.assetId, ck).then((tex) => {
+          if (tex && this.sprite && !this.destroyed) {
+            this.sprite.texture = tex;
+          }
+        });
+      }
+
+      // Animación continua de frames de GIF
+      if (this.gifData && this.sprite) {
+        const frame = getFrameTextureForTime(this.gifData, Date.now());
+        if (frame && frame !== this.sprite.texture) {
+          this.sprite.texture = frame;
+        }
+      }
+
+      // Filtros visuales (Tono, saturación y brillo)
+      if (entity.filters && this.sprite) {
+        const { hue = 0, saturation = 1, brightness = 1 } = entity.filters;
+        if (hue !== 0 || saturation !== 1 || brightness !== 1) {
+          let cmf = (this.sprite as any)._cmf as ColorMatrixFilter;
+          if (!cmf) {
+            cmf = new ColorMatrixFilter();
+            (this.sprite as any)._cmf = cmf;
+          }
+          cmf.reset();
+          if (hue !== 0) cmf.hue(hue, false);
+          if (saturation !== 1) cmf.saturate(saturation, false);
+          if (brightness !== 1) cmf.brightness(brightness, false);
+          this.sprite.filters = [cmf];
+        } else {
+          this.sprite.filters = null;
+        }
+      } else if (this.sprite) {
+        this.sprite.filters = null;
+      }
+
+      return;
+    }
+
+    // 2. Efecto procedural (gráficos y partículas PixiJS)
+    if (this.sprite) {
+      this.sprite.visible = false;
+    }
+    this.baseGfx.visible = true;
+    this.particleGfx.visible = true;
 
     const effect = entity.effect;
     if (!effect) return;
@@ -709,16 +800,29 @@ export class EffectsLayer extends Container {
         ent.y >= minWorldY &&
         ent.y <= maxWorldY;
 
-      node.update(ent, deltaSeconds, isVisibleInView);
+      node.update(ent, deltaSeconds, isVisibleInView, this.isMaster);
     }
 
     // Limpiar efectos eliminados
     for (const [id, node] of this.effectNodes.entries()) {
       if (!currentIds.has(id)) {
+        videoManager.unregisterActiveEntityVideo(id);
         this.removeChild(node);
         node.destroy({ children: true });
         this.effectNodes.delete(id);
       }
     }
+  }
+
+  public getEntityBounds(entityId: string): { width: number; height: number } | null {
+    const node = this.effectNodes.get(entityId);
+    if (!node) return null;
+    if (node.sprite && node.sprite.texture && node.sprite.texture !== Texture.EMPTY) {
+      return {
+        width: Math.max(20, node.sprite.texture.width),
+        height: Math.max(20, node.sprite.texture.height)
+      };
+    }
+    return { width: 70, height: 70 };
   }
 }

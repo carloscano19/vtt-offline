@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useGameStore } from '../../../stores/useGameStore';
 import { useUIStore } from '../../../stores/useUIStore';
 import { Entity, EffectPresetId } from '../../../types/entity';
+import { AssetItem } from '../../../types/game';
+import { getAllAssets, saveAsset } from '../../../db/dexie';
+import { cloudSync } from '../../../modules/sync/cloudSync';
 import {
   Sparkles,
   Flame,
@@ -11,7 +14,15 @@ import {
   Zap,
   Snowflake,
   Compass,
-  Lightbulb
+  Lightbulb,
+  Upload,
+  Eye,
+  EyeOff,
+  Trash2,
+  X,
+  Film,
+  Image as ImageIcon,
+  Check
 } from 'lucide-react';
 
 interface EffectCatalogItem {
@@ -210,16 +221,197 @@ export const EffectsTab: React.FC = () => {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
-  const filteredItems = CATALOG_ITEMS.filter((item) => {
+  // Efectos personalizados del usuario cargados de Dexie
+  const [customAssets, setCustomAssets] = useState<AssetItem[]>([]);
+  const [assetUrls, setAssetUrls] = useState<Map<string, string>>(new Map());
+
+  // Gestión de efectos procedurales ocultos en local
+  const [hiddenPresets, setHiddenPresets] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('vtt_hidden_effects');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [showHidden, setShowHidden] = useState(false);
+
+  // Modal para añadir efecto propio
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalFile, setModalFile] = useState<File | null>(null);
+  const [modalName, setModalName] = useState('');
+  const [modalCategory, setModalCategory] = useState<'lights' | 'fire' | 'smoke' | 'arcane'>('fire');
+  const [modalEmitsLight, setModalEmitsLight] = useState(true);
+  const [modalLightColor, setModalLightColor] = useState('#ff7700');
+  const [modalLightRadius, setModalLightRadius] = useState(4);
+  const [modalFlicker, setModalFlicker] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const loadCustomAssets = async () => {
+    const all = await getAllAssets();
+    const effects = all.filter(
+      (a) => a.tags?.includes('effect') || a.tags?.some((t) => t.startsWith('category:'))
+    );
+    setCustomAssets(effects);
+
+    // Generar object URLs para las miniaturas
+    const urls = new Map<string, string>();
+    effects.forEach((a) => {
+      if (a.blob) {
+        urls.set(a.id, URL.createObjectURL(a.blob));
+      }
+    });
+    setAssetUrls(urls);
+  };
+
+  useEffect(() => {
+    loadCustomAssets();
+    const unbind = cloudSync.onStatusChange(() => {
+      loadCustomAssets();
+    });
+    return () => {
+      unbind();
+      assetUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, []);
+
+  const handleToggleHidePreset = (presetId: string) => {
+    setHiddenPresets((prev) => {
+      const updated = prev.includes(presetId) ? prev.filter((id) => id !== presetId) : [...prev, presetId];
+      try {
+        localStorage.setItem('vtt_hidden_effects', JSON.stringify(updated));
+      } catch (err) {
+        console.error('Error guardando efectos ocultos:', err);
+      }
+      return updated;
+    });
+  };
+
+  const handleResetHidden = () => {
+    setHiddenPresets([]);
+    try {
+      localStorage.removeItem('vtt_hidden_effects');
+    } catch {}
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setModalFile(file);
+    // Extraer nombre por defecto sin extensión
+    const cleanName = file.name.replace(/\.[^/.]+$/, '');
+    setModalName(cleanName);
+
+    // Deducir categoría inicial sugerida
+    const lower = cleanName.toLowerCase();
+    if (lower.includes('luz') || lower.includes('antorcha') || lower.includes('light') || lower.includes('vela')) {
+      setModalCategory('lights');
+      setModalEmitsLight(true);
+      setModalLightColor('#ffaa33');
+    } else if (lower.includes('fuego') || lower.includes('fire') || lower.includes('llama')) {
+      setModalCategory('fire');
+      setModalEmitsLight(true);
+      setModalLightColor('#ff6600');
+    } else if (lower.includes('humo') || lower.includes('smoke') || lower.includes('niebla') || lower.includes('fog')) {
+      setModalCategory('smoke');
+      setModalEmitsLight(false);
+      setModalLightColor('#94a3b8');
+    } else if (lower.includes('magia') || lower.includes('arcane') || lower.includes('portal') || lower.includes('rayo')) {
+      setModalCategory('arcane');
+      setModalEmitsLight(true);
+      setModalLightColor('#a855f7');
+    }
+  };
+
+  const handleSaveCustomEffect = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!modalFile || !modalName.trim()) return;
+
+    setIsSaving(true);
+    try {
+      const isGif = modalFile.type === 'image/gif' || modalFile.name.toLowerCase().endsWith('.gif');
+      const isVideo = modalFile.type.startsWith('video/') || modalFile.name.toLowerCase().endsWith('.mp4') || modalFile.name.toLowerCase().endsWith('.webm');
+      const assetType = isGif ? 'gif' : isVideo ? 'video' : 'image';
+
+      const assetId = crypto.randomUUID();
+      const newAsset: AssetItem = {
+        id: assetId,
+        name: modalName.trim(),
+        type: assetType,
+        mimeType: modalFile.type || (isGif ? 'image/gif' : isVideo ? 'video/mp4' : 'image/png'),
+        blob: modalFile,
+        tags: [
+          'effect',
+          `category:${modalCategory}`,
+          modalEmitsLight ? 'emits_light' : 'no_light',
+          `light_color:${modalLightColor}`,
+          `light_radius:${modalLightRadius}`,
+          modalFlicker ? 'flicker' : 'no_flicker'
+        ],
+        createdAt: Date.now()
+      };
+
+      await saveAsset(newAsset);
+      if (cloudSync.isCloudEligible(newAsset.type)) {
+        cloudSync.enqueueUpload(newAsset.id);
+      }
+
+      await loadCustomAssets();
+      setIsModalOpen(false);
+      setModalFile(null);
+      setModalName('');
+    } catch (err) {
+      console.error('Error al guardar efecto propio:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteCustomEffect = async (assetId: string) => {
+    try {
+      await cloudSync.deleteAssetComplete(assetId);
+      await loadCustomAssets();
+    } catch (err) {
+      console.error('Error al borrar efecto:', err);
+    }
+  };
+
+  // Extraer metadatos de un custom asset
+  const parseCustomMetadata = (asset: AssetItem) => {
+    const tags = asset.tags || [];
+    const catTag = tags.find((t) => t.startsWith('category:'));
+    const category = (catTag ? catTag.replace('category:', '') : 'fire') as 'lights' | 'fire' | 'smoke' | 'arcane';
+    const emitsLight = tags.includes('emits_light') || category === 'lights' || category === 'fire';
+    const colTag = tags.find((t) => t.startsWith('light_color:'));
+    const color = colTag ? colTag.replace('light_color:', '') : '#ff7700';
+    const radTag = tags.find((t) => t.startsWith('light_radius:'));
+    const baseLightRadius = radTag ? parseInt(radTag.replace('light_radius:', '')) || 4 : 4;
+    const flicker = tags.includes('flicker') || category === 'lights' || category === 'fire';
+    return { category, emitsLight, color, baseLightRadius, flicker };
+  };
+
+  // Filtrado de procedurales
+  const filteredProceduralItems = CATALOG_ITEMS.filter((item) => {
     const matchesSearch =
       item.name.toLowerCase().includes(search.toLowerCase()) ||
       item.description.toLowerCase().includes(search.toLowerCase());
     const matchesCat = selectedCategory === 'all' || item.category === selectedCategory;
+    const isHidden = hiddenPresets.includes(item.id);
+    const passesHidden = showHidden || !isHidden;
+    return matchesSearch && matchesCat && passesHidden;
+  });
+
+  // Filtrado de personalizados
+  const filteredCustomItems = customAssets.filter((asset) => {
+    const meta = parseCustomMetadata(asset);
+    const matchesSearch = asset.name.toLowerCase().includes(search.toLowerCase());
+    const matchesCat = selectedCategory === 'all' || meta.category === selectedCategory;
     return matchesSearch && matchesCat;
   });
 
-  const handleAddEffect = (item: EffectCatalogItem) => {
-    // Colocar en el centro de la vista del máster ajustado a cuadrícula
+  const handleAddProceduralEffect = (item: EffectCatalogItem) => {
     const camera = game.masterCamera;
     const gridSize = game.grid.size || 70;
     const posX = Math.round(camera.x / gridSize) * gridSize;
@@ -239,6 +431,7 @@ export const EffectsTab: React.FC = () => {
       locked: false,
       effect: {
         preset: item.id,
+        category: item.category,
         color: item.defaultColor,
         intensity: 80,
         speed: 1.0,
@@ -267,10 +460,66 @@ export const EffectsTab: React.FC = () => {
     setActiveSidebarTab('properties');
   };
 
+  const handleAddCustomEffect = (asset: AssetItem) => {
+    const camera = game.masterCamera;
+    const gridSize = game.grid.size || 70;
+    const posX = Math.round(camera.x / gridSize) * gridSize;
+    const posY = Math.round(camera.y / gridSize) * gridSize;
+    const meta = parseCustomMetadata(asset);
+
+    const newEffect: Entity = {
+      id: `effect_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      type: 'effect',
+      name: asset.name,
+      assetId: asset.id,
+      x: posX,
+      y: posY,
+      rotation: 0,
+      scaleX: 1.0,
+      scaleY: 1.0,
+      zIndex: 25,
+      visibleToPlayers: true,
+      locked: false,
+      effect: {
+        preset: 'custom',
+        category: meta.category,
+        color: meta.color,
+        intensity: 80,
+        speed: 1.0,
+        emitsLight: meta.emitsLight,
+        baseLightRadius: meta.baseLightRadius
+      },
+      light: meta.emitsLight
+        ? {
+            color: meta.color,
+            intensity: 80,
+            brightRadiusInSquares: meta.baseLightRadius,
+            dimRadiusInSquares: 2,
+            edgeHardness: 0.5,
+            flicker: meta.flicker
+          }
+        : undefined
+    };
+
+    addEntity(newEffect);
+    selectEntity(newEffect.id);
+    setActiveSidebarTab('properties');
+  };
+
   return (
     <div className="flex flex-col h-full text-slate-200 select-none">
-      {/* Cabecera y búsqueda */}
+      {/* Cabecera y acciones */}
       <div className="p-3 border-b border-slate-700/80 space-y-2 bg-slate-900/90">
+        {/* Botón principal: Añadir efecto propio */}
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="w-full py-2 px-3 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white rounded-lg font-medium text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-950/40 transition-all border border-amber-400/30"
+        >
+          <Upload className="w-3.5 h-3.5" />
+          <span>Añadir efecto propio (GIF / Vídeo / PNG)</span>
+        </button>
+
+        {/* Buscador */}
         <div className="relative">
           <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input
@@ -304,82 +553,422 @@ export const EffectsTab: React.FC = () => {
             </button>
           ))}
         </div>
+
+        {/* Barra de estado si hay efectos ocultos */}
+        {hiddenPresets.length > 0 && (
+          <div className="flex items-center justify-between text-[10px] text-slate-400 bg-slate-800/60 px-2 py-1 rounded border border-slate-700/60">
+            <span>{hiddenPresets.length} efecto(s) oculto(s)</span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setShowHidden(!showHidden)}
+                className="text-amber-400 hover:underline flex items-center gap-0.5"
+              >
+                {showHidden ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                <span>{showHidden ? 'Ocultar' : 'Ver todos'}</span>
+              </button>
+              <button
+                onClick={handleResetHidden}
+                className="text-slate-400 hover:text-white"
+                title="Restablecer todos los efectos"
+              >
+                Restablecer
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Lista de tarjetas de efectos */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
-        {filteredItems.length === 0 ? (
-          <div className="p-6 text-center text-slate-500 text-xs">
-            No se encontraron efectos con ese filtro.
-          </div>
-        ) : (
-          filteredItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <div
-                key={item.id}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData(
-                    'application/vtt-effect',
-                    JSON.stringify({
-                      preset: item.id,
-                      name: item.name,
-                      color: item.defaultColor,
-                      scale: item.defaultScale,
-                      emitsLight: item.emitsLight,
-                      baseLightRadius: item.baseLightRadius
-                    })
-                  );
-                  e.dataTransfer.effectAllowed = 'copy';
-                }}
-                className="group p-2.5 bg-slate-800/70 hover:bg-slate-800 border border-slate-700/80 hover:border-amber-500/60 rounded-xl transition-all cursor-grab active:cursor-grabbing flex items-start justify-between gap-2.5 shadow-sm"
-              >
-                <div className="flex items-start gap-2.5 min-w-0">
-                  <div
-                    className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border border-white/10 shadow-inner"
-                    style={{ backgroundColor: `${item.defaultColor}25` }}
-                  >
-                    <Icon className="w-5 h-5" style={{ color: item.defaultColor }} />
-                  </div>
+      {/* Catálogo de tarjetas */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+        {/* 1. SECCIÓN: Efectos Propios del Usuario */}
+        {filteredCustomItems.length > 0 && (
+          <div className="space-y-1.5">
+            <div className="text-[11px] font-semibold text-amber-400 flex items-center gap-1 uppercase tracking-wider px-1">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Mis Efectos ({filteredCustomItems.length})</span>
+            </div>
 
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-xs font-semibold text-slate-200 group-hover:text-amber-300 transition-colors">
-                        {item.name}
-                      </span>
-                      {item.emitsLight && (
-                        <span className="text-[9px] px-1.5 py-0.2 rounded font-medium bg-amber-950/80 border border-amber-600/60 text-amber-300 flex items-center gap-0.5">
-                          <Flame className="w-2.5 h-2.5 text-amber-400" />
-                          Luz
-                        </span>
+            {filteredCustomItems.map((asset) => {
+              const meta = parseCustomMetadata(asset);
+              const previewUrl = assetUrls.get(asset.id);
+              const isVideo = asset.type === 'video';
+
+              return (
+                <div
+                  key={asset.id}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData(
+                      'application/vtt-effect',
+                      JSON.stringify({
+                        preset: 'custom',
+                        assetId: asset.id,
+                        category: meta.category,
+                        name: asset.name,
+                        color: meta.color,
+                        scale: 1.0,
+                        emitsLight: meta.emitsLight,
+                        baseLightRadius: meta.baseLightRadius,
+                        flicker: meta.flicker
+                      })
+                    );
+                    e.dataTransfer.effectAllowed = 'copy';
+                  }}
+                  className="group p-2.5 bg-slate-800/90 hover:bg-slate-800 border border-amber-600/50 hover:border-amber-400 rounded-xl transition-all cursor-grab active:cursor-grabbing flex items-start justify-between gap-2.5 shadow-sm"
+                >
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    {/* Miniatura animada (vídeo, gif o imagen) */}
+                    <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-white/15 bg-slate-950 flex items-center justify-center">
+                      {previewUrl ? (
+                        isVideo ? (
+                          <video
+                            src={previewUrl}
+                            muted
+                            loop
+                            autoPlay
+                            playsInline
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <img
+                            src={previewUrl}
+                            alt={asset.name}
+                            className="w-full h-full object-cover"
+                          />
+                        )
+                      ) : (
+                        <ImageIcon className="w-5 h-5 text-slate-500" />
                       )}
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2 leading-relaxed">
-                      {item.description}
-                    </p>
+
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs font-semibold text-white group-hover:text-amber-300 transition-colors truncate max-w-[130px]">
+                          {asset.name}
+                        </span>
+                        <span className="text-[9px] px-1.5 py-0.2 rounded font-medium bg-amber-950/80 border border-amber-500/60 text-amber-300">
+                          {asset.type.toUpperCase()}
+                        </span>
+                        {meta.emitsLight && (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded font-medium bg-amber-950/80 border border-amber-600/60 text-amber-300 flex items-center gap-0.5">
+                            <Flame className="w-2.5 h-2.5 text-amber-400" />
+                            Luz
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-0.5 capitalize">
+                        Categoría: {meta.category === 'lights' ? 'Luces' : meta.category === 'fire' ? 'Fuego' : meta.category === 'smoke' ? 'Humo' : 'Arcano'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleAddCustomEffect(asset)}
+                      className="px-2 py-1 rounded bg-amber-600/90 hover:bg-amber-600 text-white transition-colors text-xs flex items-center gap-1 font-medium"
+                      title="Añadir al centro de la vista del mapa"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span className="text-[11px]">Añadir</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteCustomEffect(asset.id)}
+                      className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-slate-700 transition-colors"
+                      title="Eliminar de mi biblioteca"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleAddEffect(item)}
-                  className="px-2 py-1 rounded bg-slate-700/80 hover:bg-amber-600 border border-slate-600 hover:border-amber-500 text-slate-300 hover:text-white transition-colors shrink-0 text-xs flex items-center gap-1"
-                  title="Añadir al centro de la vista del mapa"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span className="text-[11px]">Añadir</span>
-                </button>
-              </div>
-            );
-          })
+              );
+            })}
+          </div>
         )}
+
+        {/* 2. SECCIÓN: Efectos Procedurales */}
+        <div className="space-y-1.5">
+          {filteredCustomItems.length > 0 && (
+            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-1 pt-1">
+              Catálogo Procedural
+            </div>
+          )}
+
+          {filteredProceduralItems.length === 0 && filteredCustomItems.length === 0 ? (
+            <div className="p-6 text-center text-slate-500 text-xs">
+              No se encontraron efectos con ese filtro.
+            </div>
+          ) : (
+            filteredProceduralItems.map((item) => {
+              const Icon = item.icon;
+              const isHidden = hiddenPresets.includes(item.id);
+
+              return (
+                <div
+                  key={item.id}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData(
+                      'application/vtt-effect',
+                      JSON.stringify({
+                        preset: item.id,
+                        name: item.name,
+                        color: item.defaultColor,
+                        scale: item.defaultScale,
+                        emitsLight: item.emitsLight,
+                        baseLightRadius: item.baseLightRadius
+                      })
+                    );
+                    e.dataTransfer.effectAllowed = 'copy';
+                  }}
+                  className={`group p-2.5 bg-slate-800/70 hover:bg-slate-800 border rounded-xl transition-all cursor-grab active:cursor-grabbing flex items-start justify-between gap-2.5 shadow-sm ${
+                    isHidden
+                      ? 'opacity-50 border-slate-700/40 bg-slate-900/60'
+                      : 'border-slate-700/80 hover:border-amber-500/60'
+                  }`}
+                >
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <div
+                      className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border border-white/10 shadow-inner"
+                      style={{ backgroundColor: `${item.defaultColor}25` }}
+                    >
+                      <Icon className="w-5 h-5" style={{ color: item.defaultColor }} />
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs font-semibold text-slate-200 group-hover:text-amber-300 transition-colors">
+                          {item.name}
+                        </span>
+                        {item.emitsLight && (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded font-medium bg-amber-950/80 border border-amber-600/60 text-amber-300 flex items-center gap-0.5">
+                            <Flame className="w-2.5 h-2.5 text-amber-400" />
+                            Luz
+                          </span>
+                        )}
+                        {isHidden && (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded font-medium bg-slate-800 border border-slate-600 text-slate-400">
+                            Oculto
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2 leading-relaxed">
+                        {item.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleAddProceduralEffect(item)}
+                      className="px-2 py-1 rounded bg-slate-700/80 hover:bg-amber-600 border border-slate-600 hover:border-amber-500 text-slate-300 hover:text-white transition-colors text-xs flex items-center gap-1"
+                      title="Añadir al centro de la vista del mapa"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span className="text-[11px]">Añadir</span>
+                    </button>
+
+                    {/* Botón Ocultar del catálogo */}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleHidePreset(item.id)}
+                      className={`p-1 rounded transition-colors ${
+                        isHidden
+                          ? 'text-amber-400 hover:bg-slate-700'
+                          : 'text-slate-500 hover:text-slate-300 hover:bg-slate-700/80 opacity-0 group-hover:opacity-100'
+                      }`}
+                      title={isHidden ? 'Mostrar en el catálogo' : 'Ocultar del catálogo'}
+                    >
+                      {isHidden ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
 
       {/* Pie recordatorio de arrastre */}
       <div className="p-2.5 bg-slate-900 border-t border-slate-700/80 text-[11px] text-slate-400 text-center">
         💡 Haz clic en <strong>Añadir</strong> o arrastra cualquier efecto directamente al tablero.
       </div>
+
+      {/* Modal: Añadir efecto propio */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl animate-fade-in">
+            <div className="flex items-center justify-between border-b border-slate-700/80 pb-3">
+              <span className="font-semibold text-sm text-white flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <span>Añadir Efecto Propio</span>
+              </span>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCustomEffect} className="space-y-3.5 text-xs">
+              {/* Selector de archivo */}
+              <div>
+                <label className="text-slate-300 font-medium block mb-1">
+                  Archivo animado o imagen
+                </label>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept=".gif,.mp4,.webm,.png,.jpg,.jpeg,.webp"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full py-3 px-3 bg-slate-800 hover:bg-slate-700/80 border border-dashed border-slate-600 rounded-lg text-center flex flex-col items-center justify-center gap-1 transition-colors"
+                >
+                  <Upload className="w-5 h-5 text-amber-400" />
+                  {modalFile ? (
+                    <span className="text-emerald-400 font-semibold truncate max-w-[280px]">
+                      ✓ {modalFile.name} ({(modalFile.size / (1024 * 1024)).toFixed(1)} MB)
+                    </span>
+                  ) : (
+                    <>
+                      <span className="text-slate-300 font-medium">
+                        Seleccionar GIF, vídeo (MP4/WebM) o PNG
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        Compatible con animaciones en bucle y fondos transparentes
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Nombre */}
+              <div>
+                <label className="text-slate-300 font-medium block mb-1">
+                  Nombre del efecto
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={modalName}
+                  onChange={(e) => setModalName(e.target.value)}
+                  placeholder="Ej: Fuego arcano, Aura sagrada, Niebla tóxica..."
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              {/* Categoría */}
+              <div>
+                <label className="text-slate-300 font-medium block mb-1.5">
+                  Categoría
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'lights', label: 'Luces', icon: Flame },
+                    { id: 'fire', label: 'Fuego', icon: Flame },
+                    { id: 'smoke', label: 'Humo / Niebla', icon: Cloud },
+                    { id: 'arcane', label: 'Arcano / Elemental', icon: Sparkles }
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setModalCategory(cat.id as any)}
+                      className={`p-2 rounded-lg border text-left flex items-center gap-2 transition-colors ${
+                        modalCategory === cat.id
+                          ? 'bg-amber-950/80 border-amber-500 text-amber-300'
+                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      <cat.icon className="w-4 h-4 text-amber-400" />
+                      <span className="font-medium text-[11px]">{cat.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Opciones de Iluminación */}
+              <div className="p-3 bg-slate-800/60 rounded-lg border border-slate-700/80 space-y-2.5">
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="font-semibold text-amber-400 flex items-center gap-1.5">
+                    <Flame className="w-3.5 h-3.5" />
+                    <span>Emite luz dinámica</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={modalEmitsLight}
+                    onChange={(e) => setModalEmitsLight(e.target.checked)}
+                    className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                  />
+                </label>
+
+                {modalEmitsLight && (
+                  <div className="space-y-2 pt-1 border-t border-slate-700/60">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Color de luz</span>
+                      <input
+                        type="color"
+                        value={modalLightColor}
+                        onChange={(e) => setModalLightColor(e.target.value)}
+                        className="w-7 h-7 rounded border border-slate-600 bg-transparent cursor-pointer"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-slate-400 mb-0.5">
+                        <span>Radio de luz claro</span>
+                        <span className="text-white font-mono">{modalLightRadius} casillas</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="1"
+                        max="15"
+                        value={modalLightRadius}
+                        onChange={(e) => setModalLightRadius(parseInt(e.target.value) || 4)}
+                        className="w-full accent-amber-500 cursor-pointer"
+                      />
+                    </div>
+
+                    <label className="flex items-center justify-between cursor-pointer pt-0.5">
+                      <span className="text-slate-400">Parpadeo de antorcha</span>
+                      <input
+                        type="checkbox"
+                        checked={modalFlicker}
+                        onChange={(e) => setModalFlicker(e.target.checked)}
+                        className="w-3.5 h-3.5 accent-amber-500 rounded cursor-pointer"
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* Botones de acción */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-700/80">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={!modalFile || !modalName.trim() || isSaving}
+                  className="px-4 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-white font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                >
+                  {isSaving ? 'Guardando...' : 'Guardar y usar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
