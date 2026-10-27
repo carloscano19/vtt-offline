@@ -46,9 +46,36 @@ export interface MapWall {
 export interface DoorState {
   isOpen: boolean;
   isLocked: boolean;
+  length?: number; // Largo total de la puerta en píxeles (fuente única de largo)
+  isHingeInverted?: boolean; // true si la bisagra está en el extremo opuesto
   p1: Point2D; // Bisagra o inicio del segmento de la puerta
   p2: Point2D; // Fin del segmento de la puerta
   openAngle?: number; // Ángulo de apertura en radianes (default Math.PI / 2)
+}
+
+/**
+ * Recalcula los extremos p1 (bisagra) y p2 (libre) a partir de posición, largo y rotación.
+ */
+export function recalculateDoorEndpoints(
+  x: number,
+  y: number,
+  rotation: number,
+  length: number,
+  isHingeInverted: boolean = false
+): { p1: Point2D; p2: Point2D } {
+  const halfL = length / 2;
+  const cosR = Math.cos(rotation);
+  const sinR = Math.sin(rotation);
+  if (isHingeInverted) {
+    return {
+      p1: { x: x + halfL * cosR, y: y + halfL * sinR },
+      p2: { x: x - halfL * cosR, y: y - halfL * sinR }
+    };
+  }
+  return {
+    p1: { x: x - halfL * cosR, y: y - halfL * sinR },
+    p2: { x: x + halfL * cosR, y: y + halfL * sinR }
+  };
 }
 
 export interface MapPortal {

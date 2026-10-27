@@ -3,7 +3,7 @@ import { PixiRenderer } from './PixiRenderer';
 import { useGameStore } from '../stores/useGameStore';
 import { useUIStore } from '../stores/useUIStore';
 import { screenToWorld, snapPointToGrid, snapPointToGridOrMidpoint, localToWorld, worldToLocal } from './utils/coordinates';
-import { Entity, Point2D } from '../types/entity';
+import { Entity, Point2D, recalculateDoorEndpoints } from '../types/entity';
 import { CameraState } from '../types/game';
 import { syncChannel } from '../modules/sync/syncChannel';
 import { getZoomSensitivity } from '../modules/settings/zoomSensitivity';
@@ -27,6 +27,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
   const setDoorLocked = useGameStore((s) => s.setDoorLocked);
 
   const activeTool = useUIStore((s) => s.activeTool);
+  const setActiveTool = useUIStore((s) => s.setActiveTool);
   const selectedEntityIds = useUIStore((s) => s.selectedEntityIds);
   const selectEntity = useUIStore((s) => s.selectEntity);
   const clearSelection = useUIStore((s) => s.clearSelection);
@@ -38,9 +39,8 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
   const isPlayerPreviewMode = useUIStore((s) => s.isPlayerPreviewMode);
   const showPlayerFrame = useUIStore((s) => s.showPlayerFrame);
 
-  // Estado para la herramienta de Paredes invisibles, Puertas y Niebla
+  // Estado para la herramienta de Paredes invisibles y Niebla
   const [draftWallPoints, setDraftWallPoints] = useState<Point2D[]>([]);
-  const [draftDoorPoint, setDraftDoorPoint] = useState<Point2D | null>(null);
   const [fogDragRect, setFogDragRect] = useState<{ start: Point2D; current: Point2D } | null>(null);
   const [hoverCursor, setHoverCursor] = useState<string>('default');
 
@@ -259,6 +259,46 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         return;
       }
 
+      // Rotación rápida con teclado R / Shift+R (90 grados para puertas, tokens y objetos seleccionados)
+      if (e.key.toLowerCase() === 'r' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (selectedEntityIds.length > 0) {
+          const selectedEntity = game.entities.find((ent) => selectedEntityIds.includes(ent.id) && !ent.locked);
+          if (selectedEntity) {
+            e.preventDefault();
+            const delta = e.shiftKey ? -Math.PI / 2 : Math.PI / 2;
+            let newRot = selectedEntity.rotation + delta;
+            newRot = (newRot % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+
+            if (selectedEntity.type === 'door' && selectedEntity.door) {
+              const { p1, p2 } = recalculateDoorEndpoints(
+                selectedEntity.x,
+                selectedEntity.y,
+                newRot,
+                selectedEntity.door.length ?? 70,
+                selectedEntity.door.isHingeInverted
+              );
+              updateEntity(
+                selectedEntity.id,
+                {
+                  rotation: newRot,
+                  scaleX: 1,
+                  scaleY: 1,
+                  door: {
+                    ...selectedEntity.door,
+                    p1,
+                    p2
+                  }
+                },
+                true
+              );
+            } else {
+              updateEntity(selectedEntity.id, { rotation: newRot }, true);
+            }
+          }
+        }
+        return;
+      }
+
       if (e.code === 'Space' && !e.repeat) {
         setIsSpacePressed(true);
       } else if (e.code === 'Enter') {
@@ -270,9 +310,6 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         if (activeTool === 'wall') {
           e.preventDefault();
           setDraftWallPoints([]);
-        } else if (activeTool === 'door') {
-          e.preventDefault();
-          setDraftDoorPoint(null);
         } else if (activeTool === 'fogReveal' || activeTool === 'fogHide') {
           e.preventDefault();
           setFogDragRect(null);
@@ -404,7 +441,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
     if (e.button !== 0) return; // Solo clic izquierdo para el resto de acciones
 
-    // Herramienta Puerta (crear segmento entre dos clics)
+    // Herramienta Puerta: un solo clic coloca una puerta de 1 casilla de largo, horizontal, centrada en la línea de cuadrícula más cercana
     if (activeTool === 'door') {
       const maps = game.entities.filter((ent) => ent.type === 'map');
       const containingMap = maps.find((m) => {
@@ -413,58 +450,64 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         return worldPos.x >= m.x && worldPos.x <= m.x + mW && worldPos.y >= m.y && worldPos.y <= m.y + mH;
       }) || (maps.length === 1 ? maps[0] : undefined);
 
+      const gridSize = containingMap?.mapData?.pixelsPerGrid ?? (game.grid.size > 0 ? game.grid.size : 70);
       const origin = containingMap ? { x: containingMap.x, y: containingMap.y } : { x: 0, y: 0 };
-      let pt = worldPos;
-      if (game.grid.snapToGrid && game.grid.size > 0 && !e.altKey) {
-        pt = snapPointToGridOrMidpoint(worldPos, game.grid.size, origin);
-      }
 
-      if (!draftDoorPoint) {
-        setDraftDoorPoint(pt);
-        rendererRef.current?.doorsLayer?.setDraftDoor(pt, pt);
-      } else {
-        const p1 = draftDoorPoint;
-        const p2 = pt;
-        if (Math.hypot(p2.x - p1.x, p2.y - p1.y) > 5) {
-          let localP1 = p1;
-          let localP2 = p2;
-          let mapId: string | undefined = undefined;
+      let localX: number;
+      let localY: number;
+      let localRot: number;
 
-          if (containingMap) {
-            mapId = containingMap.id;
-            const mapPos = { x: containingMap.x, y: containingMap.y };
-            localP1 = worldToLocal(p1, mapPos, containingMap.rotation, containingMap.scaleX, containingMap.scaleY);
-            localP2 = worldToLocal(p2, mapPos, containingMap.rotation, containingMap.scaleX, containingMap.scaleY);
-          }
-
-          const doorEntity: Entity = {
-            id: `door_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-            type: 'door',
-            name: `Puerta ${game.entities.filter((ent) => ent.type === 'door').length + 1}`,
-            x: containingMap ? containingMap.x : 0,
-            y: containingMap ? containingMap.y : 0,
-            rotation: 0,
-            scaleX: 1,
-            scaleY: 1,
-            zIndex: 40,
-            visibleToPlayers: true,
-            locked: false,
-            mapId,
-            door: {
-              isOpen: false,
-              isLocked: false,
-              p1: localP1,
-              p2: localP2,
-              openAngle: Math.PI / 2
-            }
-          };
-
-          addEntity(doorEntity);
-          selectEntity(doorEntity.id);
+      if (containingMap) {
+        const localPos = worldToLocal(worldPos, origin, containingMap.rotation, containingMap.scaleX, containingMap.scaleY);
+        if (game.grid.snapToGrid && !e.altKey) {
+          localY = Math.round(localPos.y / gridSize) * gridSize;
+          localX = Math.floor(localPos.x / gridSize) * gridSize + gridSize / 2;
+        } else {
+          localX = localPos.x;
+          localY = localPos.y;
         }
-        setDraftDoorPoint(null);
-        rendererRef.current?.doorsLayer?.setDraftDoor(null, null);
+        localRot = 0;
+      } else {
+        if (game.grid.snapToGrid && !e.altKey) {
+          localY = Math.round(worldPos.y / gridSize) * gridSize;
+          localX = Math.floor(worldPos.x / gridSize) * gridSize + gridSize / 2;
+        } else {
+          localX = worldPos.x;
+          localY = worldPos.y;
+        }
+        localRot = 0;
       }
+
+      const doorLength = gridSize;
+      const { p1, p2 } = recalculateDoorEndpoints(localX, localY, localRot, doorLength, false);
+
+      const doorEntity: Entity = {
+        id: `door_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        type: 'door',
+        name: `Puerta ${game.entities.filter((ent) => ent.type === 'door').length + 1}`,
+        x: localX,
+        y: localY,
+        rotation: localRot,
+        scaleX: 1,
+        scaleY: 1,
+        zIndex: 40,
+        visibleToPlayers: true,
+        locked: false,
+        mapId: containingMap ? containingMap.id : undefined,
+        door: {
+          isOpen: false,
+          isLocked: false,
+          length: doorLength,
+          isHingeInverted: false,
+          p1,
+          p2,
+          openAngle: Math.PI / 2
+        }
+      };
+
+      addEntity(doorEntity);
+      selectEntity(doorEntity.id);
+      setActiveTool('select');
       return;
     }
 
@@ -588,78 +631,20 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         }
       }
 
-      // 2. Interacción con Puertas: manijas en extremos (p1 y p2) y centro para mover
-      const doorEntities = game.entities.filter((ent) => ent.type === 'door' && ent.door);
-      for (const ent of doorEntities) {
-        const door = ent.door!;
-        const parentMap = ent.mapId ? game.entities.find((m) => m.id === ent.mapId) : undefined;
-        const transformPoint = (p: Point2D): Point2D => {
-          if (parentMap) {
-            return localToWorld(p, { x: parentMap.x, y: parentMap.y }, parentMap.rotation, parentMap.scaleX, parentMap.scaleY);
-          }
-          return p;
-        };
-
-        const p1 = transformPoint(door.p1);
-        const p2 = transformPoint(door.p2);
-        const isSelected = selectedEntityIds.includes(ent.id);
-
-        // Radio de interacción de las manijas de extremo (mínimo 18px en pantalla)
-        const handleRadius = Math.max(18 / camera.zoom, 18);
-        const hitP1 = isSelected && Math.hypot(worldPos.x - p1.x, worldPos.y - p1.y) <= handleRadius;
-        const hitP2 = isSelected && Math.hypot(worldPos.x - p2.x, worldPos.y - p2.y) <= handleRadius;
-
-        // Distancia al cuerpo de la puerta (hoja)
-        let hitLeaf = false;
-        const l2 = (p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2;
-        if (l2 > 0) {
-          let t = ((worldPos.x - p1.x) * (p2.x - p1.x) + (worldPos.y - p1.y) * (p2.y - p1.y)) / l2;
-          t = Math.max(0, Math.min(1, t));
-          const projX = p1.x + t * (p2.x - p1.x);
-          const projY = p1.y + t * (p2.y - p1.y);
-          hitLeaf = Math.hypot(worldPos.x - projX, worldPos.y - projY) <= Math.max(18 / camera.zoom, 18);
-        }
-
-        if (hitP1 || hitP2 || hitLeaf) {
-          selectEntity(ent.id, e.shiftKey);
-
-          if (hitP1) {
-            interactionState.current.isDraggingDoorHandle = 'p1';
-            interactionState.current.dragDoorEntityId = ent.id;
-            interactionState.current.startDoorP1 = { ...door.p1 };
-            interactionState.current.startDoorP2 = { ...door.p2 };
-            interactionState.current.startMouse = worldPos;
-            return;
-          }
-
-          if (hitP2) {
-            interactionState.current.isDraggingDoorHandle = 'p2';
-            interactionState.current.dragDoorEntityId = ent.id;
-            interactionState.current.startDoorP1 = { ...door.p1 };
-            interactionState.current.startDoorP2 = { ...door.p2 };
-            interactionState.current.startMouse = worldPos;
-            return;
-          }
-
-          // Arrastrar el cuerpo de la puerta la mueve entera
-          interactionState.current.isDraggingDoorHandle = 'body';
-          interactionState.current.dragDoorEntityId = ent.id;
-          interactionState.current.startDoorP1 = { ...door.p1 };
-          interactionState.current.startDoorP2 = { ...door.p2 };
-          interactionState.current.startMouse = worldPos;
-          return;
-        }
-      }
-
-      // 3. Si hay una entidad seleccionada y no bloqueada, comprobar manijas del Gizmo
+      // 2. Si hay una entidad seleccionada y no bloqueada, comprobar manijas del Gizmo (incluyendo Puertas)
       const selectedEntity = game.entities.find((ent) => selectedEntityIds.includes(ent.id) && !ent.locked);
-      if (selectedEntity && selectedEntity.type !== 'wall' && selectedEntity.type !== 'door') {
+      if (selectedEntity && selectedEntity.type !== 'wall') {
         let bW = 70;
         let bH = 70;
         let offX = -35;
         let offY = -35;
 
-        if (selectedEntity.type === 'map') {
+        if (selectedEntity.type === 'door') {
+          bW = selectedEntity.door?.length ?? 70;
+          bH = 20;
+          offX = -bW / 2;
+          offY = -bH / 2;
+        } else if (selectedEntity.type === 'map') {
           bW = (selectedEntity.mapData?.gridWidth ?? 10) * (selectedEntity.mapData?.pixelsPerGrid ?? 70);
           bH = (selectedEntity.mapData?.gridHeight ?? 10) * (selectedEntity.mapData?.pixelsPerGrid ?? 70);
           offX = 0;
@@ -682,15 +667,27 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           }
         }
 
-        const cosR = Math.cos(selectedEntity.rotation);
-        const sinR = Math.sin(selectedEntity.rotation);
+        const parentMap = selectedEntity.mapId ? game.entities.find((m) => m.id === selectedEntity.mapId) : undefined;
+        const worldCenter = parentMap
+          ? localToWorld(
+              { x: selectedEntity.x, y: selectedEntity.y },
+              { x: parentMap.x, y: parentMap.y },
+              parentMap.rotation,
+              parentMap.scaleX,
+              parentMap.scaleY
+            )
+          : { x: selectedEntity.x, y: selectedEntity.y };
+        const worldRotation = parentMap ? selectedEntity.rotation + parentMap.rotation : selectedEntity.rotation;
+
+        const cosR = Math.cos(worldRotation);
+        const sinR = Math.sin(worldRotation);
 
         const localToWorldPos = (lx: number, ly: number) => {
           const scaledX = lx * selectedEntity.scaleX;
           const scaledY = ly * selectedEntity.scaleY;
           return {
-            x: selectedEntity.x + (scaledX * cosR - scaledY * sinR),
-            y: selectedEntity.y + (scaledX * sinR + scaledY * cosR)
+            x: worldCenter.x + (scaledX * cosR - scaledY * sinR),
+            y: worldCenter.y + (scaledX * sinR + scaledY * cosR)
           };
         };
 
@@ -704,7 +701,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           interactionState.current.isTransforming = 'rotate';
           interactionState.current.dragEntityId = selectedEntity.id;
           interactionState.current.startMouse = localMouse;
-          interactionState.current.startEntityRotation = selectedEntity.rotation;
+          interactionState.current.startEntityRotation = worldRotation;
           return;
         }
 
@@ -779,6 +776,43 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           return false;
         }
 
+        if (ent.type === 'door' && ent.door) {
+          const parentMap = ent.mapId ? game.entities.find((m) => m.id === ent.mapId) : undefined;
+          const p1 = parentMap ? localToWorld(ent.door.p1, { x: parentMap.x, y: parentMap.y }, parentMap.rotation, parentMap.scaleX, parentMap.scaleY) : ent.door.p1;
+          const p2 = parentMap ? localToWorld(ent.door.p2, { x: parentMap.x, y: parentMap.y }, parentMap.rotation, parentMap.scaleX, parentMap.scaleY) : ent.door.p2;
+
+          const l2 = (p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2;
+          if (l2 > 0) {
+            let t = ((worldPos.x - p1.x) * (p2.x - p1.x) + (worldPos.y - p1.y) * (p2.y - p1.y)) / l2;
+            t = Math.max(0, Math.min(1, t));
+            const projX = p1.x + t * (p2.x - p1.x);
+            const projY = p1.y + t * (p2.y - p1.y);
+            if (Math.hypot(worldPos.x - projX, worldPos.y - projY) <= Math.max(16 / camera.zoom, 18)) {
+              return true;
+            }
+          }
+          if (ent.door.isOpen) {
+            const length = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+            const baseAngle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+            const currentAngle = baseAngle + (ent.door.openAngle ?? Math.PI / 2);
+            const leafEnd = {
+              x: p1.x + Math.cos(currentAngle) * length,
+              y: p1.y + Math.sin(currentAngle) * length
+            };
+            const leafL2 = (leafEnd.x - p1.x) ** 2 + (leafEnd.y - p1.y) ** 2;
+            if (leafL2 > 0) {
+              let t = ((worldPos.x - p1.x) * (leafEnd.x - p1.x) + (worldPos.y - p1.y) * (leafEnd.y - p1.y)) / leafL2;
+              t = Math.max(0, Math.min(1, t));
+              const projX = p1.x + t * (leafEnd.x - p1.x);
+              const projY = p1.y + t * (leafEnd.y - p1.y);
+              if (Math.hypot(worldPos.x - projX, worldPos.y - projY) <= Math.max(16 / camera.zoom, 18)) {
+                return true;
+              }
+            }
+          }
+          return false;
+        }
+
         if (ent.type === 'map') {
           const mapW = (ent.mapData?.gridWidth ?? 10) * (ent.mapData?.pixelsPerGrid ?? 70) * ent.scaleX;
           const mapH = (ent.mapData?.gridHeight ?? 10) * (ent.mapData?.pixelsPerGrid ?? 70) * ent.scaleY;
@@ -797,7 +831,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
       if (hitEntity) {
         selectEntity(hitEntity.id, e.shiftKey);
-        if (hitEntity.type !== 'wall' && hitEntity.type !== 'door') {
+        if (hitEntity.type !== 'wall') {
           interactionState.current.isDraggingEntity = true;
           interactionState.current.dragEntityId = hitEntity.id;
           interactionState.current.startMouse = worldPos;
@@ -872,8 +906,25 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     if (interactionState.current.isTransforming === 'rotate' && interactionState.current.dragEntityId) {
       const entity = game.entities.find((ent) => ent.id === interactionState.current.dragEntityId);
       if (entity) {
-        const angle = Math.atan2(worldPos.y - entity.y, worldPos.x - entity.x) + Math.PI / 2;
-        updateEntity(entity.id, { rotation: angle }, false);
+        const parentMap = entity.mapId ? game.entities.find((m) => m.id === entity.mapId) : undefined;
+        const worldCenter = parentMap
+          ? localToWorld({ x: entity.x, y: entity.y }, { x: parentMap.x, y: parentMap.y }, parentMap.rotation, parentMap.scaleX, parentMap.scaleY)
+          : { x: entity.x, y: entity.y };
+
+        let worldAngle = Math.atan2(worldPos.y - worldCenter.y, worldPos.x - worldCenter.x) + Math.PI / 2;
+        if (entity.type === 'door' && game.grid.snapToGrid && !e.altKey) {
+          const step = Math.PI / 4; // 45 grados
+          worldAngle = Math.round(worldAngle / step) * step;
+        }
+
+        const localRotation = parentMap ? worldAngle - parentMap.rotation : worldAngle;
+        if (entity.type === 'door' && entity.door) {
+          const length = entity.door.length ?? 70;
+          const { p1, p2 } = recalculateDoorEndpoints(entity.x, entity.y, localRotation, length, entity.door.isHingeInverted);
+          updateEntity(entity.id, { rotation: localRotation, door: { ...entity.door, p1, p2 } }, false);
+        } else {
+          updateEntity(entity.id, { rotation: localRotation }, false);
+        }
       }
       return;
     }
@@ -882,15 +933,44 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     if (interactionState.current.isTransforming === 'scale' && interactionState.current.dragEntityId) {
       const entity = game.entities.find((ent) => ent.id === interactionState.current.dragEntityId);
       if (entity) {
-        const currentDist = Math.hypot(worldPos.x - entity.x, worldPos.y - entity.y);
-        const startWorld = screenToWorld(interactionState.current.startMouse, camera, width, height);
-        const startDist = Math.hypot(startWorld.x - entity.x, startWorld.y - entity.y);
+        if (entity.type === 'door' && entity.door) {
+          const parentMap = entity.mapId ? game.entities.find((m) => m.id === entity.mapId) : undefined;
+          const worldCenter = parentMap
+            ? localToWorld({ x: entity.x, y: entity.y }, { x: parentMap.x, y: parentMap.y }, parentMap.rotation, parentMap.scaleX, parentMap.scaleY)
+            : { x: entity.x, y: entity.y };
+          const worldRot = parentMap ? entity.rotation + parentMap.rotation : entity.rotation;
 
-        if (startDist > 5) {
-          const ratio = Math.max(0.1, currentDist / startDist);
-          const newScaleX = parseFloat((interactionState.current.startEntityScale.x * ratio).toFixed(3));
-          const newScaleY = parseFloat((interactionState.current.startEntityScale.y * ratio).toFixed(3));
-          updateEntity(entity.id, { scaleX: newScaleX, scaleY: newScaleY }, false);
+          // Proyección del vector del ratón sobre el eje longitudinal de la puerta
+          const dx = worldPos.x - worldCenter.x;
+          const dy = worldPos.y - worldCenter.y;
+          const cosR = Math.cos(worldRot);
+          const sinR = Math.sin(worldRot);
+          const distAlongAxis = Math.abs(dx * cosR + dy * sinR);
+          const rawLength = distAlongAxis * 2;
+
+          let newLength = rawLength;
+          if (game.grid.snapToGrid && !e.altKey) {
+            const gridSize = parentMap?.mapData?.pixelsPerGrid ?? (game.grid.size > 0 ? game.grid.size : 70);
+            const halfGrid = gridSize / 2;
+            const snappedHalves = Math.max(1, Math.round(rawLength / halfGrid));
+            newLength = snappedHalves * halfGrid;
+          } else {
+            newLength = Math.max(10, rawLength);
+          }
+
+          const { p1, p2 } = recalculateDoorEndpoints(entity.x, entity.y, entity.rotation, newLength, entity.door.isHingeInverted);
+          updateEntity(entity.id, { scaleX: 1, scaleY: 1, door: { ...entity.door, length: newLength, p1, p2 } }, false);
+        } else {
+          const currentDist = Math.hypot(worldPos.x - entity.x, worldPos.y - entity.y);
+          const startWorld = screenToWorld(interactionState.current.startMouse, camera, width, height);
+          const startDist = Math.hypot(startWorld.x - entity.x, startWorld.y - entity.y);
+
+          if (startDist > 5) {
+            const ratio = Math.max(0.1, currentDist / startDist);
+            const newScaleX = parseFloat((interactionState.current.startEntityScale.x * ratio).toFixed(3));
+            const newScaleY = parseFloat((interactionState.current.startEntityScale.y * ratio).toFixed(3));
+            updateEntity(entity.id, { scaleX: newScaleX, scaleY: newScaleY }, false);
+          }
         }
       }
       return;
@@ -918,88 +998,36 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       return;
     }
 
-    // 8b. Arrastre de manijas o cuerpo de puerta
-    if (interactionState.current.isDraggingDoorHandle && interactionState.current.dragDoorEntityId) {
-      const doorEnt = game.entities.find((ent) => ent.id === interactionState.current.dragDoorEntityId);
-      if (doorEnt && doorEnt.door) {
-        const parentMap = doorEnt.mapId ? game.entities.find((m) => m.id === doorEnt.mapId) : undefined;
-        const origin = parentMap ? { x: parentMap.x, y: parentMap.y } : { x: 0, y: 0 };
+    // 9. Arrastre y movimiento de entidad (Tokens, Objetos, Efectos y Puertas)
+    if (interactionState.current.isDraggingEntity && interactionState.current.dragEntityId) {
+      const entity = game.entities.find((ent) => ent.id === interactionState.current.dragEntityId);
+      if (entity) {
+        const dx = worldPos.x - interactionState.current.startMouse.x;
+        const dy = worldPos.y - interactionState.current.startMouse.y;
 
-        let snappedWorld = worldPos;
-        if (game.grid.snapToGrid && game.grid.size > 0 && !e.altKey) {
-          snappedWorld = snapPointToGridOrMidpoint(worldPos, game.grid.size, origin);
-        }
-
-        const toLocal = (p: Point2D): Point2D => {
+        if (entity.type === 'door' && entity.door) {
+          const parentMap = entity.mapId ? game.entities.find((m) => m.id === entity.mapId) : undefined;
+          let localDx = dx;
+          let localDy = dy;
           if (parentMap) {
-            return worldToLocal(p, origin, parentMap.rotation, parentMap.scaleX, parentMap.scaleY);
+            const cosM = Math.cos(parentMap.rotation);
+            const sinM = Math.sin(parentMap.rotation);
+            localDx = (dx * cosM + dy * sinM) / parentMap.scaleX;
+            localDy = (-dx * sinM + dy * cosM) / parentMap.scaleY;
           }
-          return p;
-        };
-
-        const currentLocal = toLocal(snappedWorld);
-        const handle = interactionState.current.isDraggingDoorHandle;
-
-        if (handle === 'p1') {
-          updateEntity(doorEnt.id, { door: { ...doorEnt.door, p1: currentLocal } }, false);
-        } else if (handle === 'p2') {
-          updateEntity(doorEnt.id, { door: { ...doorEnt.door, p2: currentLocal } }, false);
-        } else if (handle === 'body') {
-          const startMouseLocal = toLocal(interactionState.current.startMouse);
-          const dx = currentLocal.x - startMouseLocal.x;
-          const dy = currentLocal.y - startMouseLocal.y;
-          const startP1 = interactionState.current.startDoorP1;
-          const startP2 = interactionState.current.startDoorP2;
-          updateEntity(
-            doorEnt.id,
-            {
-              door: {
-                ...doorEnt.door,
-                p1: { x: startP1.x + dx, y: startP1.y + dy },
-                p2: { x: startP2.x + dx, y: startP2.y + dy }
-              }
-            },
-            false
-          );
+          const newX = interactionState.current.startEntityPos.x + localDx;
+          const newY = interactionState.current.startEntityPos.y + localDy;
+          const { p1, p2 } = recalculateDoorEndpoints(newX, newY, entity.rotation, entity.door.length ?? 70, entity.door.isHingeInverted);
+          updateEntity(entity.id, { x: newX, y: newY, door: { ...entity.door, p1, p2 } }, false);
+        } else {
+          const newX = interactionState.current.startEntityPos.x + dx;
+          const newY = interactionState.current.startEntityPos.y + dy;
+          updateEntity(entity.id, { x: newX, y: newY }, false);
         }
       }
       return;
     }
 
-    // 8c. Vista previa visual en vivo al dibujar una puerta
-    if (activeTool === 'door' && draftDoorPoint) {
-      const maps = game.entities.filter((ent) => ent.type === 'map');
-      const containingMap = maps.find((m) => {
-        const mW = (m.mapData?.gridWidth ?? 10) * (m.mapData?.pixelsPerGrid ?? 70) * m.scaleX;
-        const mH = (m.mapData?.gridHeight ?? 10) * (m.mapData?.pixelsPerGrid ?? 70) * m.scaleY;
-        return worldPos.x >= m.x && worldPos.x <= m.x + mW && worldPos.y >= m.y && worldPos.y <= m.y + mH;
-      }) || (maps.length === 1 ? maps[0] : undefined);
-
-      const origin = containingMap ? { x: containingMap.x, y: containingMap.y } : { x: 0, y: 0 };
-      const livePt = (!e.altKey && game.grid.snapToGrid && game.grid.size > 0)
-        ? snapPointToGridOrMidpoint(worldPos, game.grid.size, origin)
-        : worldPos;
-
-      rendererRef.current?.doorsLayer?.setDraftDoor(draftDoorPoint, livePt);
-    }
-
-    // 9. Arrastre y movimiento de entidad
-    if (interactionState.current.isDraggingEntity && interactionState.current.dragEntityId) {
-      const dx = worldPos.x - interactionState.current.startMouse.x;
-      const dy = worldPos.y - interactionState.current.startMouse.y;
-      const newX = interactionState.current.startEntityPos.x + dx;
-      const newY = interactionState.current.startEntityPos.y + dy;
-
-      updateEntity(
-        interactionState.current.dragEntityId,
-        {
-          x: newX,
-          y: newY
-        },
-        false
-      );
-      return;
-    }
 
     // 10. Cálculo de cursor dinámico cuando no se está arrastrando nada
     if (activeTool === 'select') {
@@ -1050,47 +1078,9 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         }
       }
 
-      // Comprobar puertas y manijas
-      if (newCursor === 'default') {
-        const doorEntities = game.entities.filter((ent) => ent.type === 'door' && ent.door);
-        for (const ent of doorEntities) {
-          const door = ent.door!;
-          const parentMap = ent.mapId ? game.entities.find((m) => m.id === ent.mapId) : undefined;
-          const p1 = parentMap ? localToWorld(door.p1, { x: parentMap.x, y: parentMap.y }, parentMap.rotation, parentMap.scaleX, parentMap.scaleY) : door.p1;
-          const p2 = parentMap ? localToWorld(door.p2, { x: parentMap.x, y: parentMap.y }, parentMap.rotation, parentMap.scaleX, parentMap.scaleY) : door.p2;
-          const isSelected = selectedEntityIds.includes(ent.id);
-
-          // Si la puerta está seleccionada, comprobar manijas en los extremos p1 y p2
-          if (isSelected) {
-            const handleRadius = Math.max(18 / camera.zoom, 18);
-            if (Math.hypot(worldPos.x - p1.x, worldPos.y - p1.y) <= handleRadius) {
-              newCursor = 'crosshair';
-              break;
-            }
-            if (Math.hypot(worldPos.x - p2.x, worldPos.y - p2.y) <= handleRadius) {
-              newCursor = 'crosshair';
-              break;
-            }
-          }
-
-          // Comprobar cuerpo de la puerta (hoja)
-          const l2 = (p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2;
-          if (l2 > 0) {
-            let t = ((worldPos.x - p1.x) * (p2.x - p1.x) + (worldPos.y - p1.y) * (p2.y - p1.y)) / l2;
-            t = Math.max(0, Math.min(1, t));
-            const projX = p1.x + t * (p2.x - p1.x);
-            const projY = p1.y + t * (p2.y - p1.y);
-            if (Math.hypot(worldPos.x - projX, worldPos.y - projY) <= Math.max(14 / camera.zoom, 12)) {
-              newCursor = 'move';
-              break;
-            }
-          }
-        }
-      }
-
-      // Comprobar Gizmo de entidad seleccionada
+      // Comprobar Gizmo de entidad seleccionada (incluyendo puertas)
       const selectedEntity = game.entities.find((ent) => selectedEntityIds.includes(ent.id) && !ent.locked);
-      if (newCursor === 'default' && selectedEntity && selectedEntity.type !== 'wall' && selectedEntity.type !== 'door') {
+      if (newCursor === 'default' && selectedEntity && selectedEntity.type !== 'wall') {
         const handleHitRadius = Math.max(12 / camera.zoom, 14);
 
         let bW = 70;
@@ -1098,7 +1088,12 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         let offX = -35;
         let offY = -35;
 
-        if (selectedEntity.type === 'map') {
+        if (selectedEntity.type === 'door') {
+          bW = selectedEntity.door?.length ?? 70;
+          bH = 20;
+          offX = -bW / 2;
+          offY = -bH / 2;
+        } else if (selectedEntity.type === 'map') {
           bW = (selectedEntity.mapData?.gridWidth ?? 10) * (selectedEntity.mapData?.pixelsPerGrid ?? 70);
           bH = (selectedEntity.mapData?.gridHeight ?? 10) * (selectedEntity.mapData?.pixelsPerGrid ?? 70);
           offX = 0;
@@ -1121,15 +1116,27 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           }
         }
 
-        const cosR = Math.cos(selectedEntity.rotation);
-        const sinR = Math.sin(selectedEntity.rotation);
+        const parentMap = selectedEntity.mapId ? game.entities.find((m) => m.id === selectedEntity.mapId) : undefined;
+        const worldCenter = parentMap
+          ? localToWorld(
+              { x: selectedEntity.x, y: selectedEntity.y },
+              { x: parentMap.x, y: parentMap.y },
+              parentMap.rotation,
+              parentMap.scaleX,
+              parentMap.scaleY
+            )
+          : { x: selectedEntity.x, y: selectedEntity.y };
+        const worldRotation = parentMap ? selectedEntity.rotation + parentMap.rotation : selectedEntity.rotation;
+
+        const cosR = Math.cos(worldRotation);
+        const sinR = Math.sin(worldRotation);
 
         const localToWorldPos = (lx: number, ly: number) => {
           const scaledX = lx * selectedEntity.scaleX;
           const scaledY = ly * selectedEntity.scaleY;
           return {
-            x: selectedEntity.x + (scaledX * cosR - scaledY * sinR),
-            y: selectedEntity.y + (scaledX * sinR + scaledY * cosR)
+            x: worldCenter.x + (scaledX * cosR - scaledY * sinR),
+            y: worldCenter.y + (scaledX * sinR + scaledY * cosR)
           };
         };
 
@@ -1195,17 +1202,34 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         let finalX = entity.x;
         let finalY = entity.y;
 
-        if (game.grid.snapToGrid && game.grid.size > 0) {
+        if (game.grid.snapToGrid && game.grid.size > 0 && !e.altKey) {
           if (entity.type === 'map') {
             const snapped = snapPointToGrid({ x: entity.x, y: entity.y }, game.grid.size);
             finalX = snapped.x;
             finalY = snapped.y;
+          } else if (entity.type === 'door' && entity.door) {
+            const parentMap = entity.mapId ? game.entities.find((m) => m.id === entity.mapId) : undefined;
+            const gridSize = parentMap?.mapData?.pixelsPerGrid ?? (game.grid.size > 0 ? game.grid.size : 70);
+            const halfGrid = gridSize / 2;
+            finalX = Math.round(entity.x / halfGrid) * halfGrid;
+            finalY = Math.round(entity.y / halfGrid) * halfGrid;
+            const { p1, p2 } = recalculateDoorEndpoints(finalX, finalY, entity.rotation, entity.door.length ?? gridSize, entity.door.isHingeInverted);
+            updateEntity(entity.id, { x: finalX, y: finalY, scaleX: 1, scaleY: 1, door: { ...entity.door, p1, p2 } }, true);
+            interactionState.current.isDraggingEntity = false;
+            interactionState.current.dragEntityId = null;
+            return;
           } else {
             const halfGrid = game.grid.size / 2;
             const snapped = snapPointToGrid({ x: entity.x - halfGrid, y: entity.y - halfGrid }, game.grid.size);
             finalX = snapped.x + halfGrid;
             finalY = snapped.y + halfGrid;
           }
+        } else if (entity.type === 'door' && entity.door) {
+          const { p1, p2 } = recalculateDoorEndpoints(finalX, finalY, entity.rotation, entity.door.length ?? 70, entity.door.isHingeInverted);
+          updateEntity(entity.id, { x: finalX, y: finalY, scaleX: 1, scaleY: 1, door: { ...entity.door, p1, p2 } }, true);
+          interactionState.current.isDraggingEntity = false;
+          interactionState.current.dragEntityId = null;
+          return;
         }
 
         updateEntity(entity.id, { x: finalX, y: finalY }, true);
@@ -1220,31 +1244,14 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       }
     }
 
-    // Finalizar arrastre de manija o cuerpo de puerta
-    if (interactionState.current.isDraggingDoorHandle && interactionState.current.dragDoorEntityId) {
-      const doorId = interactionState.current.dragDoorEntityId;
-      const doorEnt = game.entities.find((ent) => ent.id === doorId);
-      const movedDist = Math.hypot(
-        worldPos.x - interactionState.current.startMouse.x,
-        worldPos.y - interactionState.current.startMouse.y
-      );
-
-      if (doorEnt && doorEnt.door) {
-        if (movedDist >= 3) {
-          // Registrar en historial tras arrastre
-          updateEntity(doorId, { door: { ...doorEnt.door } }, true);
-        }
-      }
-
-      interactionState.current.isDraggingDoorHandle = null;
-      interactionState.current.dragDoorEntityId = null;
-    }
-
     // Si estábamos transformando (rotación o escalado), registrar cambio definitivo en historial
     if (interactionState.current.isTransforming && interactionState.current.dragEntityId) {
       const entity = game.entities.find((ent) => ent.id === interactionState.current.dragEntityId);
       if (entity) {
-        if (interactionState.current.isTransforming === 'rotate') {
+        if (entity.type === 'door' && entity.door) {
+          const { p1, p2 } = recalculateDoorEndpoints(entity.x, entity.y, entity.rotation, entity.door.length ?? 70, entity.door.isHingeInverted);
+          updateEntity(entity.id, { rotation: entity.rotation, scaleX: 1, scaleY: 1, door: { ...entity.door, p1, p2 } }, true);
+        } else if (interactionState.current.isTransforming === 'rotate') {
           updateEntity(entity.id, { rotation: entity.rotation }, true);
         } else if (interactionState.current.isTransforming === 'scale') {
           updateEntity(entity.id, { scaleX: entity.scaleX, scaleY: entity.scaleY }, true);
@@ -1489,13 +1496,6 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       onDoubleClick={handleDoubleClick}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
-    >
-      {/* Vista previa visual de borrador de puerta */}
-      {draftDoorPoint && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-amber-950/90 text-amber-300 border border-amber-600/80 px-3 py-1 rounded text-xs shadow-lg pointer-events-none z-20">
-          Haz clic en el punto final de la puerta (Esc para cancelar)
-        </div>
-      )}
-    </div>
+    />
   );
 };

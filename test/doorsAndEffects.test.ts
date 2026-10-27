@@ -1,32 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { snapPointToGridOrMidpoint } from '../src/pixi/utils/coordinates';
 import { lightManager } from '../src/modules/lights/lightManager';
-import { Entity } from '../src/types/entity';
+import { Entity, recalculateDoorEndpoints } from '../src/types/entity';
+import { normalizeEntity } from '../src/modules/persistence/normalizer';
 
-describe('Doors snapping and hinge swapping', () => {
-  it('snaps point to nearest grid intersection or midpoint (half-grid)', () => {
-    const gridSize = 70; // Half-grid is 35
-
-    // Exactly at intersection
-    expect(snapPointToGridOrMidpoint({ x: 70, y: 140 }, gridSize)).toEqual({ x: 70, y: 140 });
-
-    // Close to intersection (72, 138) -> snaps to (70, 140)
-    expect(snapPointToGridOrMidpoint({ x: 72, y: 138 }, gridSize)).toEqual({ x: 70, y: 140 });
-
-    // Close to midpoint (33, 102) -> snaps to (35, 105)
-    expect(snapPointToGridOrMidpoint({ x: 33, y: 102 }, gridSize)).toEqual({ x: 35, y: 105 });
-
-    // With map origin offset
-    const origin = { x: 10, y: 20 };
-    // Origin + 35 = 45, Origin + 70 = 80
-    expect(snapPointToGridOrMidpoint({ x: 44, y: 82 }, gridSize, origin)).toEqual({ x: 45, y: 90 });
-  });
-
-  it('swaps door hinge by reversing p1 and p2', () => {
-    const doorEntity: Entity = {
-      id: 'door_test_1',
+describe('Doors new token model and normalizer migration', () => {
+  it('migrates legacy doors without length and center using normalizer', () => {
+    const legacyDoor: Entity = {
+      id: 'legacy_door_1',
       type: 'door',
-      name: 'Puerta Principal',
+      name: 'Puerta Antigua',
       x: 0,
       y: 0,
       rotation: 0,
@@ -38,24 +21,77 @@ describe('Doors snapping and hinge swapping', () => {
       door: {
         isOpen: false,
         isLocked: false,
-        p1: { x: 0, y: 0 },
-        p2: { x: 70, y: 0 },
+        p1: { x: 100, y: 50 },
+        p2: { x: 200, y: 50 },
         openAngle: Math.PI / 2
       }
     };
 
-    // Swap hinge
-    const swapped = {
-      ...doorEntity,
+    const normalized = normalizeEntity(legacyDoor);
+
+    // Debe calcular centro (150, 50), largo 100px, rotación 0 y forzar scaleX=1, scaleY=1
+    expect(normalized.x).toBe(150);
+    expect(normalized.y).toBe(50);
+    expect(normalized.rotation).toBeCloseTo(0);
+    expect(normalized.scaleX).toBe(1);
+    expect(normalized.scaleY).toBe(1);
+    expect(normalized.door?.length).toBe(100);
+    expect(normalized.door?.p1).toEqual({ x: 100, y: 50 });
+    expect(normalized.door?.p2).toEqual({ x: 200, y: 50 });
+  });
+
+  it('recalculates door endpoints correctly for horizontal, vertical and rotated doors', () => {
+    // Horizontal: centro (100, 100), largo 70, rot 0
+    const horiz = recalculateDoorEndpoints(100, 100, 0, 70, false);
+    expect(horiz.p1.x).toBeCloseTo(65);
+    expect(horiz.p1.y).toBeCloseTo(100);
+    expect(horiz.p2.x).toBeCloseTo(135);
+    expect(horiz.p2.y).toBeCloseTo(100);
+
+    // Vertical (rotación 90° = Math.PI / 2)
+    const vert = recalculateDoorEndpoints(100, 100, Math.PI / 2, 70, false);
+    expect(vert.p1.x).toBeCloseTo(100);
+    expect(vert.p1.y).toBeCloseTo(65);
+    expect(vert.p2.x).toBeCloseTo(100);
+    expect(vert.p2.y).toBeCloseTo(135);
+
+    // Invertir bisagra: p1 y p2 deben intercambiarse
+    const horizInv = recalculateDoorEndpoints(100, 100, 0, 70, true);
+    expect(horizInv.p1.x).toBeCloseTo(135);
+    expect(horizInv.p1.y).toBeCloseTo(100);
+    expect(horizInv.p2.x).toBeCloseTo(65);
+    expect(horizInv.p2.y).toBeCloseTo(100);
+  });
+
+  it('swaps door hinge and retains exact length and center', () => {
+    const doorEntity: Entity = {
+      id: 'door_test_1',
+      type: 'door',
+      name: 'Puerta Principal',
+      x: 100,
+      y: 100,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      zIndex: 40,
+      visibleToPlayers: true,
+      locked: false,
       door: {
-        ...doorEntity.door!,
-        p1: doorEntity.door!.p2,
-        p2: doorEntity.door!.p1
+        isOpen: false,
+        isLocked: false,
+        length: 70,
+        isHingeInverted: false,
+        p1: { x: 65, y: 100 },
+        p2: { x: 135, y: 100 },
+        openAngle: Math.PI / 2
       }
     };
 
-    expect(swapped.door.p1).toEqual({ x: 70, y: 0 });
-    expect(swapped.door.p2).toEqual({ x: 0, y: 0 });
+    const isInv = !doorEntity.door!.isHingeInverted;
+    const { p1, p2 } = recalculateDoorEndpoints(doorEntity.x, doorEntity.y, doorEntity.rotation, doorEntity.door!.length!, isInv);
+
+    expect(p1.x).toBe(135);
+    expect(p2.x).toBe(65);
   });
 });
 

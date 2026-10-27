@@ -111,6 +111,41 @@ export function normalizeEntity(entity: Entity): Entity {
       }
     };
   }
+
+  // Normalizar puertas (migración de puertas antiguas sin length ni centro)
+  if (entity.type === 'door' && entity.door) {
+    const door = entity.door;
+    let length = door.length;
+    let x = entity.x;
+    let y = entity.y;
+    let rot = entity.rotation ?? 0;
+
+    if (length === undefined || length <= 0) {
+      const p1 = door.p1 || { x: -35, y: 0 };
+      const p2 = door.p2 || { x: 35, y: 0 };
+      length = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      rot = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+      x = (p1.x + p2.x) / 2;
+      y = (p1.y + p2.y) / 2;
+    }
+
+    return {
+      ...entity,
+      x,
+      y,
+      rotation: rot,
+      scaleX: 1,
+      scaleY: 1,
+      door: {
+        ...door,
+        length: Math.max(1, length),
+        isOpen: door.isOpen ?? false,
+        isLocked: door.isLocked ?? false,
+        openAngle: door.openAngle ?? Math.PI / 2
+      }
+    };
+  }
+
   return entity;
 }
 

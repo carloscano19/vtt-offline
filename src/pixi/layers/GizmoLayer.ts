@@ -1,5 +1,6 @@
 import { Container, Graphics } from 'pixi.js';
 import { Entity } from '../../types/entity';
+import { localToWorld } from '../utils/coordinates';
 
 export interface GizmoBounds {
   x: number;
@@ -15,6 +16,7 @@ export class GizmoLayer extends Container {
   private graphics: Graphics;
   private isMaster: boolean;
   private tokensLayer?: any;
+  private allEntities: Entity[] = [];
 
   constructor(isMaster: boolean) {
     super();
@@ -27,8 +29,9 @@ export class GizmoLayer extends Container {
     this.tokensLayer = layer;
   }
 
-  public update(selectedEntities: Entity[]) {
+  public update(selectedEntities: Entity[], allEntities: Entity[] = []) {
     this.graphics.clear();
+    this.allEntities = allEntities;
 
     if (!this.isMaster || selectedEntities.length === 0) {
       return;
@@ -46,6 +49,17 @@ export class GizmoLayer extends Container {
   }
 
   public getEntityLocalBounds(entity: Entity) {
+    if (entity.type === 'door') {
+      const w = entity.door?.length ?? 70;
+      const h = 20;
+      return {
+        offsetX: -w / 2,
+        offsetY: -h / 2,
+        width: w,
+        height: h
+      };
+    }
+
     if (entity.type === 'map') {
       const w = (entity.mapData?.gridWidth ?? 10) * (entity.mapData?.pixelsPerGrid ?? 70);
       const h = (entity.mapData?.gridHeight ?? 10) * (entity.mapData?.pixelsPerGrid ?? 70);
@@ -79,9 +93,29 @@ export class GizmoLayer extends Container {
   private drawTransformGizmo(entity: Entity) {
     const bounds = this.getEntityLocalBounds(entity);
 
+    let posX = entity.x;
+    let posY = entity.y;
+    let rotation = entity.rotation;
+
+    if (entity.type === 'door' && entity.mapId && this.allEntities.length > 0) {
+      const parentMap = this.allEntities.find((e) => e.id === entity.mapId);
+      if (parentMap) {
+        const wp = localToWorld(
+          { x: entity.x, y: entity.y },
+          { x: parentMap.x, y: parentMap.y },
+          parentMap.rotation,
+          parentMap.scaleX,
+          parentMap.scaleY
+        );
+        posX = wp.x;
+        posY = wp.y;
+        rotation = entity.rotation + parentMap.rotation;
+      }
+    }
+
     // Guardar contexto gráfico mediante transformaciones relativas
-    this.graphics.position.set(entity.x, entity.y);
-    this.graphics.rotation = entity.rotation;
+    this.graphics.position.set(posX, posY);
+    this.graphics.rotation = rotation;
     this.graphics.scale.set(entity.scaleX, entity.scaleY);
 
     const { offsetX, offsetY, width, height } = bounds;
@@ -121,8 +155,29 @@ export class GizmoLayer extends Container {
 
   private drawLockedOutline(entity: Entity) {
     const bounds = this.getEntityLocalBounds(entity);
-    this.graphics.position.set(entity.x, entity.y);
-    this.graphics.rotation = entity.rotation;
+
+    let posX = entity.x;
+    let posY = entity.y;
+    let rotation = entity.rotation;
+
+    if (entity.type === 'door' && entity.mapId && this.allEntities.length > 0) {
+      const parentMap = this.allEntities.find((e) => e.id === entity.mapId);
+      if (parentMap) {
+        const wp = localToWorld(
+          { x: entity.x, y: entity.y },
+          { x: parentMap.x, y: parentMap.y },
+          parentMap.rotation,
+          parentMap.scaleX,
+          parentMap.scaleY
+        );
+        posX = wp.x;
+        posY = wp.y;
+        rotation = entity.rotation + parentMap.rotation;
+      }
+    }
+
+    this.graphics.position.set(posX, posY);
+    this.graphics.rotation = rotation;
     this.graphics.scale.set(entity.scaleX, entity.scaleY);
 
     this.graphics.rect(bounds.offsetX, bounds.offsetY, bounds.width, bounds.height);

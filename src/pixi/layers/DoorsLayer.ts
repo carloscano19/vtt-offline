@@ -13,14 +13,6 @@ export class DoorsLayer extends Container {
     this.addChild(this.graphics);
   }
 
-  private draftP1: Point2D | null = null;
-  private draftP2: Point2D | null = null;
-
-  public setDraftDoor(p1: Point2D | null, p2: Point2D | null) {
-    this.draftP1 = p1;
-    this.draftP2 = p2;
-  }
-
   public update(entities: Entity[], selectedIds: string[] = []) {
     this.graphics.clear();
 
@@ -60,11 +52,11 @@ export class DoorsLayer extends Container {
         y: p1.y + Math.sin(currentAngle) * doorLength
       };
 
-      // Si está seleccionada, dibujar línea de referencia cerrada tenue si está abierta
-      if (isSelected && this.isMaster && door.isOpen) {
+      // Si está abierta, dibujar línea de referencia cerrada tenue
+      if (door.isOpen) {
         this.graphics.moveTo(p1.x, p1.y);
         this.graphics.lineTo(p2.x, p2.y);
-        this.graphics.stroke({ width: 2, color: 0x38bdf8, alpha: 0.4 });
+        this.graphics.stroke({ width: 2, color: 0x38bdf8, alpha: isSelected ? 0.6 : 0.25 });
       }
 
       // 1. Dibujar bisagra (círculo)
@@ -78,7 +70,7 @@ export class DoorsLayer extends Container {
       this.graphics.lineTo(leafEnd.x, leafEnd.y);
       this.graphics.stroke({ width: 6, color: leafColor, alpha: door.isOpen ? 0.85 : 1 });
 
-      // 3. Marcadores y Manijas (solo Máster)
+      // 3. Marcadores (solo Máster)
       if (this.isMaster) {
         // Marcador visual no interactivo de la bisagra en p1
         this.graphics.circle(p1.x, p1.y, 3.5);
@@ -93,41 +85,7 @@ export class DoorsLayer extends Container {
           this.graphics.fill({ color: 0xef4444 });
           this.graphics.stroke({ width: 1.5, color: 0xffffff });
         }
-
-        // Si la puerta está seleccionada: EXACTAMENTE DOS manijas (una en cada extremo)
-        if (isSelected) {
-          // Manija extremo p1 (bisagra / redimensionar y mover extremo)
-          this.graphics.circle(p1.x, p1.y, 9);
-          this.graphics.fill({ color: 0x0284c7 });
-          this.graphics.stroke({ width: 2.5, color: 0xffffff });
-          this.graphics.circle(p1.x, p1.y, 3);
-          this.graphics.fill({ color: 0xffffff });
-
-          // Manija extremo p2 (extremo libre / redimensionar y rotar)
-          this.graphics.circle(p2.x, p2.y, 9);
-          this.graphics.fill({ color: 0x0284c7 });
-          this.graphics.stroke({ width: 2.5, color: 0xffffff });
-          this.graphics.circle(p2.x, p2.y, 3);
-          this.graphics.fill({ color: 0xffffff });
-        }
       }
-    }
-
-    // 4. Dibujar borrador de puerta en progreso (solo Máster)
-    if (this.isMaster && this.draftP1 && this.draftP2) {
-      this.graphics.moveTo(this.draftP1.x, this.draftP1.y);
-      this.graphics.lineTo(this.draftP2.x, this.draftP2.y);
-      this.graphics.stroke({ width: 4, color: 0xf59e0b, alpha: 0.75 });
-
-      // Círculo bisagra p1
-      this.graphics.circle(this.draftP1.x, this.draftP1.y, 6);
-      this.graphics.fill({ color: 0xf59e0b });
-      this.graphics.stroke({ width: 2, color: 0xffffff });
-
-      // Círculo extremo p2
-      this.graphics.circle(this.draftP2.x, this.draftP2.y, 6);
-      this.graphics.fill({ color: 0x38bdf8 });
-      this.graphics.stroke({ width: 2, color: 0xffffff });
     }
   }
 }

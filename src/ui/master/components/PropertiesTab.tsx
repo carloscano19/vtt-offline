@@ -21,7 +21,7 @@ import {
   RefreshCcw,
   Sparkles
 } from 'lucide-react';
-import { TokenSide } from '../../../types/entity';
+import { TokenSide, recalculateDoorEndpoints } from '../../../types/entity';
 
 const EFFECT_PRESET_NAMES: Record<string, string> = {
   torch: 'Antorcha de pared',
@@ -444,14 +444,65 @@ export const PropertiesTab: React.FC = () => {
             </button>
           </div>
 
+          {/* Largo (casillas) */}
+          <div className="pt-2 border-t border-slate-700/80 space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-300 font-medium">Largo (casillas)</span>
+              {(() => {
+                const parentMap = selectedEntity.mapId ? game.entities.find((m) => m.id === selectedEntity.mapId) : undefined;
+                const gridSize = parentMap?.mapData?.pixelsPerGrid ?? (game.grid.size > 0 ? game.grid.size : 70);
+                const currentPx = selectedEntity.door.length ?? Math.hypot(selectedEntity.door.p2.x - selectedEntity.door.p1.x, selectedEntity.door.p2.y - selectedEntity.door.p1.y);
+                const currentSquares = parseFloat((currentPx / gridSize).toFixed(2));
+                return (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      max="20"
+                      value={currentSquares}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        if (isNaN(val) || val <= 0) return;
+                        const newPx = Math.max(10, val * gridSize);
+                        const isInv = selectedEntity.door?.isHingeInverted ?? false;
+                        const { p1, p2 } = recalculateDoorEndpoints(
+                          selectedEntity.x,
+                          selectedEntity.y,
+                          selectedEntity.rotation,
+                          newPx,
+                          isInv
+                        );
+                        handleUpdate({
+                          scaleX: 1,
+                          scaleY: 1,
+                          door: {
+                            ...selectedEntity.door!,
+                            length: newPx,
+                            p1,
+                            p2
+                          }
+                        });
+                      }}
+                      className="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-right text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                    />
+                    <span className="text-slate-400 text-[11px]">sq</span>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+
           {/* Cambiar bisagra de extremo */}
           <div className="pt-2 border-t border-slate-700/80">
             <button
               onClick={() => {
                 if (!selectedEntity.door) return;
+                const isInv = !selectedEntity.door.isHingeInverted;
                 handleUpdate({
                   door: {
                     ...selectedEntity.door,
+                    isHingeInverted: isInv,
                     p1: selectedEntity.door.p2,
                     p2: selectedEntity.door.p1
                   }

@@ -207,13 +207,20 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
             for (let pIdx = 0; pIdx < parsed.mapData.portals.length; pIdx++) {
               const portal = parsed.mapData.portals[pIdx];
               if (portal.bounds && portal.bounds.length >= 2) {
+                const b0 = portal.bounds[0];
+                const b1 = portal.bounds[1];
+                const length = Math.hypot(b1.x - b0.x, b1.y - b0.y);
+                const rot = Math.atan2(b1.y - b0.y, b1.x - b0.x);
+                const centerX = (b0.x + b1.x) / 2;
+                const centerY = (b0.y + b1.y) / 2;
+
                 const doorEntity: Entity = {
                   id: `door_${Date.now()}_${pIdx}_${Math.random().toString(36).substring(2, 6)}`,
                   type: 'door',
                   name: `Puerta ${pIdx + 1}`,
-                  x: mapX,
-                  y: mapY,
-                  rotation: 0,
+                  x: centerX,
+                  y: centerY,
+                  rotation: rot,
                   scaleX: 1,
                   scaleY: 1,
                   zIndex: 40,
@@ -223,8 +230,9 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
                   door: {
                     isOpen: !portal.closed,
                     isLocked: !!portal.locked,
-                    p1: portal.bounds[0],
-                    p2: portal.bounds[1],
+                    length: length,
+                    p1: b0,
+                    p2: b1,
                     openAngle: Math.PI / 2
                   }
                 };
