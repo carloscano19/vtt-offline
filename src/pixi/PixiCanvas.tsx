@@ -8,6 +8,9 @@ import { CameraState } from '../types/game';
 import { syncChannel } from '../modules/sync/syncChannel';
 import { getZoomSensitivity } from '../modules/settings/zoomSensitivity';
 import { isMovementBlockedByWall } from '../modules/walls/wallManager';
+import { getAsset, db } from '../db/dexie';
+import { cloudSync } from '../modules/sync/cloudSync';
+import { getMediaDimensions } from '../utils/mediaDimensions';
 
 interface PixiCanvasProps {
   isMaster: boolean;
@@ -1287,7 +1290,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     e.dataTransfer.dropEffect = 'copy';
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     if (!isMaster) return;
     e.preventDefault();
 
@@ -1306,6 +1309,36 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           worldPos = snapPointToGrid(worldPos, currentGridSize);
         }
 
+        let effectScale = item.scale || 1;
+        if (item.assetId) {
+          const asset = await getAsset(item.assetId);
+          if (asset) {
+            let w = asset.width;
+            let h = asset.height;
+            if ((!w || !h) && asset.blob) {
+              try {
+                const dims = await getMediaDimensions(asset.blob);
+                if (dims.width > 0 && dims.height > 0) {
+                  w = dims.width;
+                  h = dims.height;
+                  asset.width = w;
+                  asset.height = h;
+                  await db.assets.update(asset.id, { width: w, height: h });
+                  if (cloudSync.isCloudEligible(asset.type)) {
+                    cloudSync.enqueueUpload(asset.id);
+                  }
+                }
+              } catch (dimErr) {
+                console.warn('Error calculando dimensiones al soltar efecto:', dimErr);
+              }
+            }
+            const maxDim = Math.max(w || 0, h || 0);
+            if (maxDim > 0) {
+              effectScale = parseFloat((currentGridSize / maxDim).toFixed(3));
+            }
+          }
+        }
+
         const newEffectEntity: Entity = {
           id: `effect_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
           type: 'effect',
@@ -1314,8 +1347,8 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           x: worldPos.x,
           y: worldPos.y,
           rotation: 0,
-          scaleX: item.scale || 1,
-          scaleY: item.scale || 1,
+          scaleX: effectScale,
+          scaleY: effectScale,
           zIndex: 25,
           visibleToPlayers: true,
           locked: false,
@@ -1332,8 +1365,8 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
             ? {
                 color: item.color || '#ff7700',
                 intensity: item.intensity ?? 80,
-                brightRadiusInSquares: (item.baseLightRadius ?? 3) * (item.scale || 1),
-                dimRadiusInSquares: 2 * (item.scale || 1),
+                brightRadiusInSquares: (item.baseLightRadius ?? 3) * effectScale,
+                dimRadiusInSquares: 2 * effectScale,
                 edgeHardness: 0.5,
                 flicker:
                   item.flicker ??

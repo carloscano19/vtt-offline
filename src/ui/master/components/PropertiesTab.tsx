@@ -22,6 +22,9 @@ import {
   Sparkles
 } from 'lucide-react';
 import { TokenSide, recalculateDoorEndpoints } from '../../../types/entity';
+import { getAsset, db } from '../../../db/dexie';
+import { cloudSync } from '../../../modules/sync/cloudSync';
+import { getMediaDimensions } from '../../../utils/mediaDimensions';
 
 const EFFECT_PRESET_NAMES: Record<string, string> = {
   torch: 'Antorcha de pared',
@@ -52,6 +55,36 @@ export const PropertiesTab: React.FC = () => {
   const clearSelection = useUIStore((s) => s.clearSelection);
 
   const selectedEntity = game.entities.find((e) => selectedEntityIds.includes(e.id));
+
+  const [assetDims, setAssetDims] = React.useState<{ width: number; height: number } | null>(null);
+
+  React.useEffect(() => {
+    let isCancelled = false;
+    if (selectedEntity?.assetId) {
+      getAsset(selectedEntity.assetId).then(async (asset) => {
+        if (!asset || isCancelled) return;
+        if (asset.width && asset.height) {
+          setAssetDims({ width: asset.width, height: asset.height });
+        } else if (asset.blob) {
+          try {
+            const dims = await getMediaDimensions(asset.blob);
+            if (!isCancelled && dims.width > 0 && dims.height > 0) {
+              setAssetDims(dims);
+              await db.assets.update(asset.id, { width: dims.width, height: dims.height });
+              if (cloudSync.isCloudEligible(asset.type)) {
+                cloudSync.enqueueUpload(asset.id);
+              }
+            }
+          } catch {}
+        }
+      });
+    } else {
+      setAssetDims(null);
+    }
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedEntity?.assetId]);
 
   if (!selectedEntity) {
     return (
@@ -808,38 +841,56 @@ export const PropertiesTab: React.FC = () => {
           <div>
             <span className="text-[11px] text-slate-400 block mb-1">Tamaño en el tablero</span>
             <div className="grid grid-cols-4 gap-1.5">
-              {[
-                { label: '0.5x0.5', val: 0.5 },
-                { label: '1x1', val: 1 },
-                { label: '2x2', val: 2 },
-                { label: '3x3', val: 3 }
-              ].map((sz) => (
-                <button
-                  key={sz.val}
-                  type="button"
-                  onClick={() => {
-                    const upd: any = {
-                      scaleX: sz.val,
-                      scaleY: sz.val
-                    };
-                    if (selectedEntity.effect?.emitsLight && selectedEntity.light) {
-                      upd.light = {
-                        ...selectedEntity.light,
-                        brightRadiusInSquares: (selectedEntity.effect.baseLightRadius || 3) * sz.val,
-                        dimRadiusInSquares: 2 * sz.val
-                      };
-                    }
-                    handleUpdate(upd);
-                  }}
-                  className={`py-1 text-center rounded text-[11px] font-medium border transition-colors ${
-                    Math.abs(selectedEntity.scaleX - sz.val) < 0.05
-                      ? 'bg-amber-600 border-amber-400 text-white'
-                      : 'bg-slate-700/60 border-slate-600 text-slate-300 hover:text-white hover:bg-slate-700'
-                  }`}
-                >
-                  {sz.label}
-                </button>
-              ))}
+              {(() => {
+                const isCustomWithAsset = selectedEntity.effect?.preset === 'custom' && selectedEntity.assetId;
+                const maxDim = assetDims ? Math.max(assetDims.width, assetDims.height) : 0;
+                const gridSize = game.grid.size > 0 ? game.grid.size : 70;
+
+                const getScaleForCells = (cells: number) => {
+                  if (isCustomWithAsset && maxDim > 0) {
+                    return parseFloat(((cells * gridSize) / maxDim).toFixed(3));
+                  }
+                  return cells;
+                };
+
+                return [
+                  { label: '0.5x0.5', val: 0.5 },
+                  { label: '1x1', val: 1 },
+                  { label: '2x2', val: 2 },
+                  { label: '3x3', val: 3 }
+                ].map((sz) => {
+                  const targetScale = getScaleForCells(sz.val);
+                  const isCurrent = Math.abs(selectedEntity.scaleX - targetScale) < 0.05;
+
+                  return (
+                    <button
+                      key={sz.val}
+                      type="button"
+                      onClick={() => {
+                        const upd: any = {
+                          scaleX: targetScale,
+                          scaleY: targetScale
+                        };
+                        if (selectedEntity.effect?.emitsLight && selectedEntity.light) {
+                          upd.light = {
+                            ...selectedEntity.light,
+                            brightRadiusInSquares: (selectedEntity.effect.baseLightRadius || 3) * sz.val,
+                            dimRadiusInSquares: 2 * sz.val
+                          };
+                        }
+                        handleUpdate(upd);
+                      }}
+                      className={`py-1 text-center rounded text-[11px] font-medium border transition-colors ${
+                        isCurrent
+                          ? 'bg-amber-600 border-amber-400 text-white'
+                          : 'bg-slate-700/60 border-slate-600 text-slate-300 hover:text-white hover:bg-slate-700'
+                      }`}
+                    >
+                      {sz.label}
+                    </button>
+                  );
+                });
+              })()}
             </div>
           </div>
 

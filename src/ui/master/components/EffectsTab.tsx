@@ -3,7 +3,7 @@ import { useGameStore } from '../../../stores/useGameStore';
 import { useUIStore } from '../../../stores/useUIStore';
 import { Entity, EffectPresetId } from '../../../types/entity';
 import { AssetItem } from '../../../types/game';
-import { getAllAssets, saveAsset } from '../../../db/dexie';
+import { getAllAssets, saveAsset, db } from '../../../db/dexie';
 import { cloudSync } from '../../../modules/sync/cloudSync';
 import { getMediaDimensions } from '../../../utils/mediaDimensions';
 import {
@@ -274,6 +274,24 @@ export const EffectsTab: React.FC = () => {
     );
     setCustomAssets(effects);
 
+    // Calcular dimensiones en segundo plano para efectos legados sin width/height
+    for (const a of effects) {
+      if ((!a.width || !a.height) && a.blob) {
+        getMediaDimensions(a.blob)
+          .then(async (dims) => {
+            if (dims.width > 0 && dims.height > 0) {
+              a.width = dims.width;
+              a.height = dims.height;
+              await db.assets.update(a.id, { width: dims.width, height: dims.height });
+              if (cloudSync.isCloudEligible(a.type)) {
+                cloudSync.enqueueUpload(a.id);
+              }
+            }
+          })
+          .catch(() => {});
+      }
+    }
+
     // Generar object URLs para las miniaturas
     const urls = new Map<string, string>();
     effects.forEach((a) => {
@@ -488,12 +506,33 @@ export const EffectsTab: React.FC = () => {
     setActiveSidebarTab('properties');
   };
 
-  const handleAddCustomEffect = (asset: AssetItem) => {
+  const handleAddCustomEffect = async (asset: AssetItem) => {
+    let w = asset.width;
+    let h = asset.height;
+
+    if ((!w || !h) && asset.blob) {
+      try {
+        const dims = await getMediaDimensions(asset.blob);
+        if (dims.width > 0 && dims.height > 0) {
+          w = dims.width;
+          h = dims.height;
+          asset.width = w;
+          asset.height = h;
+          await db.assets.update(asset.id, { width: w, height: h });
+          if (cloudSync.isCloudEligible(asset.type)) {
+            cloudSync.enqueueUpload(asset.id);
+          }
+        }
+      } catch (err) {
+        console.warn('No se pudieron obtener dimensiones del asset:', err);
+      }
+    }
+
     const camera = game.masterCamera;
     const gridSize = game.grid.size || 70;
     const posX = Math.round(camera.x / gridSize) * gridSize;
     const posY = Math.round(camera.y / gridSize) * gridSize;
-    const maxDim = Math.max(asset.width || 0, asset.height || 0);
+    const maxDim = Math.max(w || 0, h || 0);
     const initialScale = maxDim > 0 ? parseFloat((gridSize / maxDim).toFixed(3)) : 1.0;
     const meta = parseCustomMetadata(asset);
 

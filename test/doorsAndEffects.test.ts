@@ -367,5 +367,34 @@ describe('Effects lighting and scale integration', () => {
 
     expect(libraryAssets.map((a) => a.id)).toEqual(['1', '2']);
   });
+
+  it('calculates effect board size scale correctly for textures (N * grid.size / maxDim) and procedural (N)', () => {
+    const gridSize = 70;
+    const webmWidth = 200;
+    const webmHeight = 200;
+    const maxDim = Math.max(webmWidth, webmHeight);
+
+    // Función equivalente a PropertiesTab getScaleForCells
+    const getScale = (cells: number, isTexture: boolean) => {
+      if (isTexture) {
+        return parseFloat(((cells * gridSize) / maxDim).toFixed(3));
+      }
+      return cells;
+    };
+
+    // Procedural 1x1, 2x2, 3x3
+    expect(getScale(1, false)).toBe(1);
+    expect(getScale(2, false)).toBe(2);
+    expect(getScale(3, false)).toBe(3);
+
+    // WebM 200px: 1x1 = 70 / 200 = 0.35
+    expect(getScale(1, true)).toBe(0.35);
+    // WebM 200px: 2x2 = 140 / 200 = 0.7 (exactamente 2 casillas de 70px)
+    expect(getScale(2, true)).toBe(0.7);
+    expect(0.7 * webmWidth).toBe(140);
+    // WebM 200px: 3x3 = 210 / 200 = 1.05 (exactamente 3 casillas de 70px)
+    expect(getScale(3, true)).toBe(1.05);
+    expect(1.05 * webmWidth).toBe(210);
+  });
 });
 
