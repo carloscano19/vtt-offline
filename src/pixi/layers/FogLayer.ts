@@ -18,7 +18,11 @@ export class FogLayer extends Container {
 
   private unexploredGfx = new Graphics();
   private exploredDarkGfx = new Graphics();
-  private dimDarkGfx = new Graphics();
+
+  // Contenedor con máscara stencil para degradado radial suave de visión tenue
+  private dimContainer = new Container();
+  private dimMaskGfx = new Graphics();
+  private dimRingsGfx = new Graphics();
 
   private lastKey = '';
 
@@ -28,7 +32,11 @@ export class FogLayer extends Container {
 
     this.addChild(this.unexploredGfx);
     this.addChild(this.exploredDarkGfx);
-    this.addChild(this.dimDarkGfx);
+
+    this.dimContainer.mask = this.dimMaskGfx;
+    this.dimContainer.addChild(this.dimMaskGfx);
+    this.dimContainer.addChild(this.dimRingsGfx);
+    this.addChild(this.dimContainer);
   }
 
   private renderMultiPolygon(graphics: Graphics, multi: ExploredMultiPolygon, color: number, alpha: number) {
@@ -108,8 +116,47 @@ export class FogLayer extends Container {
     this.exploredDarkGfx.clear();
     this.renderMultiPolygon(this.exploredDarkGfx, regions.exploradoNoVisible, FOG_COLOR, EXPLORED_ALPHA);
 
-    // 3. Dibuja visibleDim (zona tenue de tokens) con negro al 50%
-    this.dimDarkGfx.clear();
-    this.renderMultiPolygon(this.dimDarkGfx, regions.visibleDim, FOG_COLOR, DIM_ALPHA);
+    // 3. Dibuja visibleDim (zona tenue de tokens y luces) con degradado radial suave
+    this.dimMaskGfx.clear();
+    this.dimRingsGfx.clear();
+
+    if (regions.visibleDim.length > 0) {
+      // Máscara stencil recortada por visibleDim (paredes y huecos claros cortan en seco)
+      this.renderMultiPolygon(this.dimMaskGfx, regions.visibleDim, 0xffffff, 1.0);
+
+      // Base suave para evitar huecos no cubiertos
+      this.renderMultiPolygon(this.dimRingsGfx, regions.visibleDim, FOG_COLOR, 0.12);
+
+      const sources: { center: { x: number; y: number }; rBright: number; rTotal: number }[] = [];
+      for (const v of visibilities) {
+        if (v.center && v.totalRangePx > 0) {
+          sources.push({ center: v.center, rBright: v.brightRangePx || 0, rTotal: v.totalRangePx });
+        }
+      }
+      for (const l of lights) {
+        if (l.center && l.totalRangePx > 0) {
+          sources.push({ center: l.center, rBright: l.brightRangePx || 0, rTotal: l.totalRangePx });
+        }
+      }
+
+      const STEPS = 16;
+      for (const src of sources) {
+        const rBright = src.rBright || 0;
+        const rTotal = src.rTotal || 0;
+        if (rTotal <= rBright) continue;
+
+        const w = rTotal - rBright;
+        const stepW = w / STEPS;
+
+        for (let i = 0; i < STEPS; i++) {
+          const t = (i + 0.5) / STEPS;
+          const r = rBright + w * t;
+          // De 0.05 a 0.65 (oscuridad tenue suave a total en borde exterior)
+          const alpha = 0.05 + 0.60 * Math.pow(t, 1.3);
+          this.dimRingsGfx.circle(src.center.x, src.center.y, r);
+          this.dimRingsGfx.stroke({ width: stepW + 1.5, color: FOG_COLOR, alpha });
+        }
+      }
+    }
   }
 }

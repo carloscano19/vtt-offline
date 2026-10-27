@@ -33,6 +33,16 @@ export class AmbientLayer extends Container {
   private darknessGfx = new Graphics();
   private lightsTintGfx = new Graphics();
 
+  // Contenedor con máscara stencil para degradado radial suave de oscuridad en zona tenue
+  private dimContainer = new Container();
+  private dimMaskGfx = new Graphics();
+  private dimRingsGfx = new Graphics();
+
+  // Contenedor con máscara stencil para degradado radial suave de tinte en zona tenue
+  private tintDimContainer = new Container();
+  private tintDimMaskGfx = new Graphics();
+  private tintDimRingsGfx = new Graphics();
+
   // Estado para la transición suave de 2 segundos
   private currentR = 255;
   private currentG = 255;
@@ -57,8 +67,23 @@ export class AmbientLayer extends Container {
     super();
     this.isMaster = isMaster;
 
+    // 1. Oscuridad completa fuera de las luces
     this.addChild(this.darknessGfx);
+
+    // 2. Degradado suave de oscuridad en zona tenue
+    this.dimContainer.mask = this.dimMaskGfx;
+    this.dimContainer.addChild(this.dimMaskGfx);
+    this.dimContainer.addChild(this.dimRingsGfx);
+    this.addChild(this.dimContainer);
+
+    // 3. Tinte de luz claro
     this.addChild(this.lightsTintGfx);
+
+    // 4. Degradado suave de tinte en zona tenue
+    this.tintDimContainer.mask = this.tintDimMaskGfx;
+    this.tintDimContainer.addChild(this.tintDimMaskGfx);
+    this.tintDimContainer.addChild(this.tintDimRingsGfx);
+    this.addChild(this.tintDimContainer);
   }
 
   private renderMulti(gfx: Graphics, multi: ExploredMultiPolygon, color: number, alpha: number) {
@@ -162,29 +187,50 @@ export class AmbientLayer extends Container {
 
     const { outsideMulti, dimMulti, brightMulti } = this.cachedRegions;
 
-    // 4. Dibujar oscuridad ambiental reducida en luces
+    // 4. Dibujar oscuridad ambiental con degradado radial suave
     this.darknessGfx.clear();
+    this.dimMaskGfx.clear();
+    this.dimRingsGfx.clear();
     const darkColorHex = rgbToHex(this.currentR * 0.15, this.currentG * 0.15, this.currentB * 0.25);
 
     if (currentDarkness > 0.01) {
       // Oscuridad completa fuera de las luces
       this.renderMulti(this.darknessGfx, outsideMulti, darkColorHex, currentDarkness * 0.95);
 
-      // Oscuridad reducida a la mitad en la zona tenue de cada luz
+      // Zona tenue de las luces: degradado radial suave hasta oscuridad total en el borde exterior
       if (dimMulti.length > 0) {
-        this.renderMulti(this.darknessGfx, dimMulti, darkColorHex, currentDarkness * 0.45);
-      }
+        // Máscara stencil recortada por dimMulti (paredes y corte claro en seco)
+        this.renderMulti(this.dimMaskGfx, dimMulti, 0xffffff, 1.0);
 
-      // Zona clara de las luces: sin oscuridad (0% alpha)
+        // Base tenue uniforme
+        this.renderMulti(this.dimRingsGfx, dimMulti, darkColorHex, currentDarkness * 0.15);
+
+        const STEPS = 16;
+        for (const light of lights) {
+          const rBright = light.brightRangePx || 0;
+          const rTotal = light.totalRangePx || 0;
+          if (rTotal <= rBright || !light.center) continue;
+
+          const w = rTotal - rBright;
+          const stepW = w / STEPS;
+
+          for (let i = 0; i < STEPS; i++) {
+            const t = (i + 0.5) / STEPS;
+            const r = rBright + w * t;
+            // Desde 0 oscuridad en rBright hasta oscuridad total en rTotal
+            const ringAlpha = currentDarkness * 0.95 * Math.pow(t, 1.3);
+            this.dimRingsGfx.circle(light.center.x, light.center.y, r);
+            this.dimRingsGfx.stroke({ width: stepW + 1.5, color: darkColorHex, alpha: ringAlpha });
+          }
+        }
+      }
     }
 
     // 5. Dibujar tinte de color de cada luz dinámica (brillo suave y aditivo, modulado por la oscuridad del ambiente)
     this.lightsTintGfx.clear();
-    // Escalar con la oscuridad del ambiente:
-    // - Mediodía (darkness ~0.0): escala muy baja (~0.05), prácticamente imperceptible sin tapar el mapa
-    // - Atardecer (darkness ~0.35): escala notable (~0.45)
-    // - Noche (darkness ~0.85): escala fuerte (~0.90 - 1.0)
-    // Alpha máximo del centro ~0.25 (definido como 0.25 * darknessFactor)
+    this.tintDimMaskGfx.clear();
+    this.tintDimRingsGfx.clear();
+
     const darknessFactor = 0.05 + 0.95 * Math.pow(Math.min(1.0, currentDarkness / 0.85), 1.5);
 
     for (const light of lights) {
@@ -200,15 +246,35 @@ export class AmbientLayer extends Container {
       // Brillo suave y aditivo: alpha máximo en el centro de ~0.25
       const baseAlpha = light.intensity * 0.25 * darknessFactor * flickerMod;
 
+      // Zona clara iluminada hasta su radio (recortada con su polígono de luz clara)
       if (light.brightPolygon && light.brightPolygon.length >= 3) {
         this.lightsTintGfx.poly(light.brightPolygon.map((p) => [p.x, p.y]).flat());
         this.lightsTintGfx.fill({ color: colorNum, alpha: baseAlpha });
       }
 
-      // Zona tenue: degradado hacia el borde con intensidad reducida
+      // Zona tenue: degradado radial suave hasta apagarse en el borde exterior
       if (light.totalPolygon && light.totalPolygon.length >= 3) {
-        this.lightsTintGfx.poly(light.totalPolygon.map((p) => [p.x, p.y]).flat());
-        this.lightsTintGfx.fill({ color: colorNum, alpha: baseAlpha * 0.40 });
+        const rBright = light.brightRangePx || 0;
+        const rTotal = light.totalRangePx || 0;
+
+        if (rTotal > rBright && light.center) {
+          // Máscara stencil con el polígono total (paredes cortan en seco)
+          this.tintDimMaskGfx.poly(light.totalPolygon.map((p) => [p.x, p.y]).flat());
+          this.tintDimMaskGfx.fill({ color: 0xffffff, alpha: 1.0 });
+
+          const STEPS = 16;
+          const w = rTotal - rBright;
+          const stepW = w / STEPS;
+
+          for (let i = 0; i < STEPS; i++) {
+            const t = (i + 0.5) / STEPS;
+            const r = rBright + w * t;
+            // Tinte desciende suavemente de baseAlpha a 0 en el borde
+            const tintAlpha = baseAlpha * Math.cos(t * Math.PI * 0.5);
+            this.tintDimRingsGfx.circle(light.center.x, light.center.y, r);
+            this.tintDimRingsGfx.stroke({ width: stepW + 1.5, color: colorNum, alpha: tintAlpha });
+          }
+        }
       }
     }
   }
