@@ -11,6 +11,7 @@ import { SaveLoadModal } from './components/SaveLoadModal';
 import { DisplaysModal } from './components/DisplaysModal';
 import { AuthModal } from './components/AuthModal';
 import { LockScreen } from './components/LockScreen';
+import { CreditsModal } from './components/CreditsModal';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { saveAutoSaveToDb, loadAutoSaveFromDb } from '../../modules/persistence/saveManager';
 import { syncChannel } from '../../modules/sync/syncChannel';
@@ -30,6 +31,8 @@ export const MasterApp: React.FC = () => {
   const ruler = useUIStore((s) => s.ruler);
   const showAuthModal = useUIStore((s) => s.showAuthModal);
   const setShowAuthModal = useUIStore((s) => s.setShowAuthModal);
+  const showCreditsModal = useUIStore((s) => s.showCreditsModal);
+  const setShowCreditsModal = useUIStore((s) => s.setShowCreditsModal);
 
   const [isGridModalOpen, setIsGridModalOpen] = useState(false);
   const [isRulerModalOpen, setIsRulerModalOpen] = useState(false);
@@ -201,14 +204,17 @@ export const MasterApp: React.FC = () => {
       <SaveLoadModal />
       <DisplaysModal />
       <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
+      <CreditsModal isOpen={showCreditsModal} onClose={() => setShowCreditsModal(false)} />
 
-      {/* Indicador discreto de versión en esquina inferior izquierda */}
-      <div
-        className="fixed bottom-2 left-2 z-20 pointer-events-auto text-[10px] text-slate-500 hover:text-slate-300 font-mono select-none px-1.5 py-0.5 rounded bg-slate-950/70 backdrop-blur-xs border border-slate-800/40 transition-colors cursor-default"
-        title={`Versión: ${__APP_VERSION__} (Compilación: ${__BUILD_TIME__})`}
+      {/* Indicador discreto de versión en esquina inferior izquierda (abre créditos al pulsar) */}
+      <button
+        type="button"
+        onClick={() => setShowCreditsModal(true)}
+        className="fixed bottom-2 left-2 z-20 pointer-events-auto text-[10px] text-slate-500 hover:text-slate-300 font-mono select-none px-1.5 py-0.5 rounded bg-slate-950/70 backdrop-blur-xs border border-slate-800/40 hover:border-slate-700 transition-colors cursor-pointer"
+        title={`Versión: ${__APP_VERSION__} (Compilación: ${__BUILD_TIME__}) · Clic para ver créditos y licencias`}
       >
-        v{__APP_VERSION__}
-      </div>
+        v{__APP_VERSION__} · Créditos
+      </button>
 
       {/* Aviso a pantalla completa si hay otra pestaña máster activa */}
       {hasConflict && (

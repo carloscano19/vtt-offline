@@ -23,6 +23,7 @@ interface UIStoreState {
   showDisplaysModal: boolean;
   showResetFogConfirm: boolean;
   showAuthModal: boolean;
+  showCreditsModal: boolean;
 
   // Acciones
   setActiveTool: (tool: ActiveTool) => void;
@@ -46,6 +47,7 @@ interface UIStoreState {
   setShowSaveLoadModal: (show: boolean) => void;
   setShowDisplaysModal: (show: boolean) => void;
   setShowAuthModal: (show: boolean) => void;
+  setShowCreditsModal: (show: boolean) => void;
 }
 
 export const useUIStore = create<UIStoreState>((set) => ({
@@ -57,6 +59,7 @@ export const useUIStore = create<UIStoreState>((set) => ({
   showPlayerFrame: true,
   showResetFogConfirm: false,
   showAuthModal: false,
+  showCreditsModal: false,
 
   ruler: {
     active: false,
@@ -164,6 +167,7 @@ export const useUIStore = create<UIStoreState>((set) => ({
   setShowSaveLoadModal: (show) => set({ showSaveLoadModal: show }),
   setShowDisplaysModal: (show) => set({ showDisplaysModal: show }),
   setShowAuthModal: (show) => set({ showAuthModal: show }),
+  setShowCreditsModal: (show) => set({ showCreditsModal: show }),
   setShowResetFogConfirm: (show) => set({ showResetFogConfirm: show }),
   setIsPlayerPreviewMode: (isPlayerPreviewMode) => set({ isPlayerPreviewMode }),
   setShowPlayerFrame: (showPlayerFrame) => set({ showPlayerFrame })

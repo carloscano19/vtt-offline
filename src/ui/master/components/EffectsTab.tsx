@@ -22,8 +22,10 @@ import {
   X,
   Film,
   Image as ImageIcon,
-  Check
+  Check,
+  Package
 } from 'lucide-react';
+import { ZipPackModal } from './ZipPackModal';
 
 interface EffectCatalogItem {
   id: EffectPresetId;
@@ -217,6 +219,7 @@ export const EffectsTab: React.FC = () => {
   const addEntity = useGameStore((s) => s.addEntity);
   const selectEntity = useUIStore((s) => s.selectEntity);
   const setActiveSidebarTab = useUIStore((s) => s.setActiveSidebarTab);
+  const setShowCreditsModal = useUIStore((s) => s.setShowCreditsModal);
 
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -236,7 +239,7 @@ export const EffectsTab: React.FC = () => {
   });
   const [showHidden, setShowHidden] = useState(false);
 
-  // Modal para añadir efecto propio
+  // Modal para añadir efecto propio individual
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalFile, setModalFile] = useState<File | null>(null);
   const [modalName, setModalName] = useState('');
@@ -247,6 +250,21 @@ export const EffectsTab: React.FC = () => {
   const [modalFlicker, setModalFlicker] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Modal para importar pack (ZIP)
+  const [isZipModalOpen, setIsZipModalOpen] = useState(false);
+  const [zipFile, setZipFile] = useState<File | null>(null);
+  const zipInputRef = useRef<HTMLInputElement>(null);
+
+  const handleZipSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setZipFile(file);
+    setIsZipModalOpen(true);
+    if (zipInputRef.current) {
+      zipInputRef.current.value = '';
+    }
+  };
 
   const loadCustomAssets = async () => {
     const all = await getAllAssets();
@@ -389,7 +407,9 @@ export const EffectsTab: React.FC = () => {
     const radTag = tags.find((t) => t.startsWith('light_radius:'));
     const baseLightRadius = radTag ? parseInt(radTag.replace('light_radius:', '')) || 4 : 4;
     const flicker = tags.includes('flicker') || category === 'lights' || category === 'fire';
-    return { category, emitsLight, color, baseLightRadius, flicker };
+    const originTag = tags.find((t) => t.startsWith('source:'));
+    const origin = originTag ? originTag.replace('source:', '') : null;
+    return { category, emitsLight, color, baseLightRadius, flicker, origin };
   };
 
   // Filtrado de procedurales
@@ -510,14 +530,34 @@ export const EffectsTab: React.FC = () => {
     <div className="flex flex-col h-full text-slate-200 select-none">
       {/* Cabecera y acciones */}
       <div className="p-3 border-b border-slate-700/80 space-y-2 bg-slate-900/90">
-        {/* Botón principal: Añadir efecto propio */}
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="w-full py-2 px-3 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white rounded-lg font-medium text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-950/40 transition-all border border-amber-400/30"
-        >
-          <Upload className="w-3.5 h-3.5" />
-          <span>Añadir efecto propio (GIF / Vídeo / PNG)</span>
-        </button>
+        {/* Botones de añadir individual o importar pack ZIP */}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="py-2 px-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white rounded-lg font-medium text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-950/40 transition-all border border-amber-400/30 truncate"
+            title="Añadir un efecto propio individual (GIF, Vídeo o PNG)"
+          >
+            <Upload className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">Añadir efecto</span>
+          </button>
+
+          <button
+            onClick={() => zipInputRef.current?.click()}
+            className="py-2 px-2 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg font-medium text-xs flex items-center justify-center gap-1.5 shadow-md border border-amber-500/30 transition-all truncate"
+            title="Importar pack de efectos desde un archivo ZIP (ej. JB2A) sin descomprimir"
+          >
+            <Package className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+            <span className="truncate">Importar pack (ZIP)</span>
+          </button>
+        </div>
+
+        <input
+          ref={zipInputRef}
+          type="file"
+          accept=".zip,application/zip"
+          className="hidden"
+          onChange={handleZipSelect}
+        />
 
         {/* Buscador */}
         <div className="relative">
@@ -653,6 +693,14 @@ export const EffectsTab: React.FC = () => {
                           <span className="text-[9px] px-1.5 py-0.2 rounded font-medium bg-amber-950/80 border border-amber-600/60 text-amber-300 flex items-center gap-0.5">
                             <Flame className="w-2.5 h-2.5 text-amber-400" />
                             Luz
+                          </span>
+                        )}
+                        {meta.origin && (
+                          <span
+                            className="text-[9px] px-1.5 py-0.2 rounded font-medium bg-sky-950/80 border border-sky-500/60 text-sky-300 font-mono"
+                            title={`Origen: ${meta.origin}`}
+                          >
+                            {meta.origin}
                           </span>
                         )}
                       </div>
@@ -969,6 +1017,34 @@ export const EffectsTab: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Pie con enlace a créditos */}
+      <div className="p-2.5 border-t border-slate-800 text-[11px] text-slate-500 flex items-center justify-between bg-slate-950/60 shrink-0">
+        <span className="truncate">Efectos animados para rol</span>
+        <button
+          type="button"
+          onClick={() => setShowCreditsModal(true)}
+          className="text-amber-400/90 hover:text-amber-300 underline transition-colors shrink-0 font-medium"
+        >
+          Créditos: JB2A (CC BY-NC-SA 4.0)
+        </button>
+      </div>
+
+      {/* Modal para importar pack (ZIP) */}
+      <ZipPackModal
+        isOpen={isZipModalOpen}
+        file={zipFile}
+        onClose={() => {
+          setIsZipModalOpen(false);
+          setZipFile(null);
+        }}
+        onImportSuccess={() => {
+          loadCustomAssets();
+        }}
+        onOpenCredits={() => {
+          setShowCreditsModal(true);
+        }}
+      />
     </div>
   );
 };
