@@ -33,7 +33,8 @@ import {
   Wind,
   AlertTriangle,
   ChevronDown,
-  PanelRight
+  PanelRight,
+  KeyRound
 } from 'lucide-react';
 import { useUIStore, ActiveTool } from '../../../stores/useUIStore';
 import { useGameStore } from '../../../stores/useGameStore';
@@ -43,6 +44,7 @@ import { AssetItem, AmbientPreset } from '../../../types/game';
 import { Entity } from '../../../types/entity';
 import { videoManager } from '../../../modules/media/videoManager';
 import { cloudSync } from '../../../modules/sync/cloudSync';
+import { authManager } from '../../../modules/auth/authManager';
 import { parseColor, colorToHex } from '../../../utils/color';
 import { fitMapInViewport } from '../../../modules/camera/cameraUtils';
 import { syncChannel } from '../../../modules/sync/syncChannel';
@@ -63,12 +65,20 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
   const setShowDebugVttOverlay = useUIStore((s) => s.setShowDebugVttOverlay);
   const setShowSaveLoadModal = useUIStore((s) => s.setShowSaveLoadModal);
   const setShowDisplaysModal = useUIStore((s) => s.setShowDisplaysModal);
+  const setShowAuthModal = useUIStore((s) => s.setShowAuthModal);
   const isPlayerPreviewMode = useUIStore((s) => s.isPlayerPreviewMode);
   const setIsPlayerPreviewMode = useUIStore((s) => s.setIsPlayerPreviewMode);
   const showPlayerFrame = useUIStore((s) => s.showPlayerFrame);
   const setShowPlayerFrame = useUIStore((s) => s.setShowPlayerFrame);
   const showResetFogConfirm = useUIStore((s) => s.showResetFogConfirm);
   const setShowResetFogConfirm = useUIStore((s) => s.setShowResetFogConfirm);
+
+  const [isCloudConnected, setIsCloudConnected] = useState(authManager.isAuthenticated());
+  useEffect(() => {
+    return authManager.onAuthStateChange((user) => {
+      setIsCloudConnected(!!user);
+    });
+  }, []);
 
   const game = useGameStore((s) => s.game);
   const addEntity = useGameStore((s) => s.addEntity);
@@ -494,6 +504,20 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           title="Guardar / Cargar Partida (Cmd/Ctrl+S): guardar en navegador o descargar archivo .vttsave"
         >
           <Save className="w-5 h-5" />
+        </button>
+
+        <button
+          onClick={() => setShowAuthModal(true)}
+          className={`btn-icon transition-colors ${
+            isCloudConnected ? 'text-sky-400 hover:text-sky-300' : 'text-slate-400 hover:text-white'
+          }`}
+          title={
+            isCloudConnected
+              ? 'Mesa conectada a la nube (clic para ver estado o cambiar clave)'
+              : 'Clave de la mesa: Conectar partida y biblioteca a la nube'
+          }
+        >
+          {isCloudConnected ? <Cloud className="w-5 h-5" /> : <KeyRound className="w-5 h-5" />}
         </button>
 
         <div className="w-[1px] h-6 bg-slate-700 mx-1" />

@@ -1,28 +1,45 @@
 import React, { useState, useEffect } from 'react';
 import { authManager } from '../../../modules/auth/authManager';
-import { X, LogIn, Mail, Lock, Sparkles, CheckCircle, AlertCircle, LogOut } from 'lucide-react';
+import { cloudSync, formatStorageBytes } from '../../../modules/sync/cloudSync';
+import { X, Lock, KeyRound, Eye, EyeOff, LogOut, CheckCircle, AlertCircle, Cloud, HardDrive } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-type AuthMode = 'signin' | 'signup' | 'magiclink';
-
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
-  const [mode, setMode] = useState<AuthMode>('signin');
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState(authManager.getUser());
+  const [storageUsage, setStorageUsage] = useState<{ usedBytes: number; totalBytes: number; percentage: number }>({
+    usedBytes: 0,
+    totalBytes: 1024 * 1024 * 1024,
+    percentage: 0
+  });
 
   useEffect(() => {
     return authManager.onAuthStateChange((user) => {
       setCurrentUser(user);
+      if (user) {
+        cloudSync.getStorageUsage().then(setStorageUsage);
+      }
     });
   }, []);
+
+  useEffect(() => {
+    if (isOpen && currentUser) {
+      cloudSync.getStorageUsage().then(setStorageUsage);
+    }
+    if (isOpen) {
+      setErrorMessage(null);
+      setSuccessMessage(null);
+      setPassword('');
+    }
+  }, [isOpen, currentUser]);
 
   if (!isOpen) return null;
 
@@ -31,51 +48,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail) {
-      setErrorMessage('Por favor introduce tu dirección de correo electrónico.');
+    if (!password) {
+      setErrorMessage('Por favor introduce la clave de la mesa.');
       return;
     }
 
     setLoading(true);
 
     try {
-      if (mode === 'magiclink') {
-        const { error } = await authManager.signInWithMagicLink(trimmedEmail);
-        if (error) {
-          setErrorMessage(error.message);
-        } else {
-          setSuccessMessage('¡Enlace mágico enviado! Revisa tu bandeja de entrada o spam para acceder.');
-        }
-      } else if (mode === 'signup') {
-        if (!password || password.length < 6) {
-          setErrorMessage('La contraseña debe tener al menos 6 caracteres.');
-          setLoading(false);
-          return;
-        }
-        const { error, needsEmailConfirmation } = await authManager.signUpWithPassword(trimmedEmail, password);
-        if (error) {
-          setErrorMessage(error.message);
-        } else if (needsEmailConfirmation) {
-          setSuccessMessage('¡Cuenta creada! Se ha enviado un enlace de confirmación a tu correo.');
-        } else {
-          setSuccessMessage('¡Sesión iniciada correctamente!');
-          setTimeout(() => onClose(), 1200);
-        }
+      const { error } = await authManager.signInWithSharedPassword(password);
+      if (error) {
+        setErrorMessage(
+          error.message.includes('Invalid login credentials')
+            ? 'Clave incorrecta. Verifica la contraseña de la mesa.'
+            : error.message
+        );
       } else {
-        // signin
-        if (!password) {
-          setErrorMessage('Por favor introduce tu contraseña.');
-          setLoading(false);
-          return;
-        }
-        const { error } = await authManager.signInWithPassword(trimmedEmail, password);
-        if (error) {
-          setErrorMessage(error.message);
-        } else {
-          setSuccessMessage('¡Bienvenido! Sesión iniciada correctamente.');
-          setTimeout(() => onClose(), 1000);
-        }
+        setSuccessMessage('¡Clave correcta! Conectado a la nube.');
+        const usage = await cloudSync.getStorageUsage();
+        setStorageUsage(usage);
+        setTimeout(() => onClose(), 1000);
       }
     } finally {
       setLoading(false);
@@ -86,11 +78,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     setLoading(true);
     await authManager.signOut();
     setLoading(false);
-    setSuccessMessage('Sesión cerrada correctamente.');
+    setSuccessMessage('Sesión cerrada.');
     setTimeout(() => {
       setSuccessMessage(null);
       onClose();
-    }, 1000);
+    }, 800);
   };
 
   return (
@@ -100,11 +92,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400">
-              <LogIn className="w-4 h-4" />
+              <KeyRound className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">Biblioteca en la Nube</h2>
-              <p className="text-[11px] text-slate-400">Guarda y sincroniza tus tokens, objetos y música</p>
+              <h2 className="text-base font-bold text-white">
+                {currentUser ? 'Mesa Conectada a la Nube' : 'Clave de la Mesa'}
+              </h2>
+              <p className="text-[11px] text-slate-400">
+                {currentUser
+                  ? 'Partida y biblioteca compartidas sincronizadas'
+                  : 'Introduce la clave para acceder a la nube'}
+              </p>
             </div>
           </div>
           <button
@@ -115,21 +113,60 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
 
+        {/* Mensajes de error / éxito */}
+        {errorMessage && (
+          <div className="p-2.5 bg-rose-950/70 border border-rose-500/80 rounded text-xs text-rose-200 flex items-start gap-2 animate-fade-in">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="p-2.5 bg-emerald-950/70 border border-emerald-500/80 rounded text-xs text-emerald-200 flex items-start gap-2 animate-fade-in">
+            <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <span>{successMessage}</span>
+          </div>
+        )}
+
         {/* Si ya hay usuario conectado */}
         {currentUser ? (
-          <div className="space-y-4 py-2">
-            <div className="p-3 bg-slate-800/80 border border-slate-700 rounded-lg flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-bold text-sm">
-                {currentUser.email ? currentUser.email[0].toUpperCase() : 'U'}
+          <div className="space-y-4 py-1">
+            <div className="p-3 bg-slate-800/80 border border-slate-700 rounded-lg space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-400 flex items-center gap-1.5">
+                  <Cloud className="w-3.5 h-3.5 text-sky-400" />
+                  Estado de sincronización
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950 text-emerald-300 border border-emerald-600/40">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Activo
+                </span>
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-xs text-slate-400">Sesión iniciada como:</div>
-                <div className="text-sm font-semibold text-white truncate">{currentUser.email}</div>
-              </div>
+              <p className="text-xs text-slate-300">
+                Tu partida y todos los elementos de la biblioteca se sincronizan automáticamente con la nube.
+              </p>
             </div>
 
-            <div className="text-xs text-slate-300 leading-relaxed bg-slate-800/40 p-3 rounded border border-slate-700/50">
-              Tu biblioteca de tokens, objetos y efectos se sincroniza automáticamente con tu cuenta en la nube. Los mapas y partidas se mantienen seguros en tu almacenamiento local.
+            {/* Almacenamiento consumido */}
+            <div className="p-3 bg-slate-800/50 border border-slate-700/60 rounded-lg space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400 flex items-center gap-1.5">
+                  <HardDrive className="w-3.5 h-3.5 text-slate-400" />
+                  Almacenamiento en la nube
+                </span>
+                <span className="font-semibold text-slate-200">
+                  {formatStorageBytes(storageUsage.usedBytes)} / {formatStorageBytes(storageUsage.totalBytes)} ({storageUsage.percentage}%)
+                </span>
+              </div>
+              <div className="w-full bg-slate-700/60 h-2 rounded-full overflow-hidden">
+                <div
+                  className="bg-sky-500 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${Math.max(2, Math.min(100, storageUsage.percentage))}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Límite gratuito de Supabase: 1 GB de Storage.
+              </p>
             </div>
 
             <div className="flex items-center justify-between pt-2">
@@ -152,126 +189,49 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             </div>
           </div>
         ) : (
-          /* Formulario de autenticación */
-          <div className="space-y-4">
-            {/* Pestañas de modo */}
-            <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700 text-xs font-medium">
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('signin');
-                  setErrorMessage(null);
-                  setSuccessMessage(null);
-                }}
-                className={`flex-1 py-1.5 rounded transition-all ${
-                  mode === 'signin' ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Iniciar sesión
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('signup');
-                  setErrorMessage(null);
-                  setSuccessMessage(null);
-                }}
-                className={`flex-1 py-1.5 rounded transition-all ${
-                  mode === 'signup' ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Registrarse
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('magiclink');
-                  setErrorMessage(null);
-                  setSuccessMessage(null);
-                }}
-                className={`flex-1 py-1.5 rounded transition-all flex items-center justify-center gap-1 ${
-                  mode === 'magiclink' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Sparkles className="w-3 h-3 text-purple-300" />
-                <span>Enlace mágico</span>
-              </button>
+          /* Formulario limpio: clave de la mesa */
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-300 block">
+                Clave de acceso
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Introduce la contraseña de la mesa..."
+                  autoFocus
+                  required
+                  className="w-full pl-9 pr-10 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200"
+                  title={showPassword ? 'Ocultar clave' : 'Mostrar clave'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
-            {/* Mensajes de error / éxito */}
-            {errorMessage && (
-              <div className="p-2.5 bg-rose-950/70 border border-rose-500/80 rounded text-xs text-rose-200 flex items-start gap-2 animate-fade-in">
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                <span>{errorMessage}</span>
-              </div>
-            )}
+            <p className="text-[11px] text-slate-400 leading-relaxed bg-slate-800/40 p-2.5 rounded border border-slate-700/50">
+              Con esta única clave accederás a la partida guardada y a toda tu biblioteca de mapas, tokens, efectos y música compartida en la nube.
+            </p>
 
-            {successMessage && (
-              <div className="p-2.5 bg-emerald-950/70 border border-emerald-500/80 rounded text-xs text-emerald-200 flex items-start gap-2 animate-fade-in">
-                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <span>{successMessage}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-3.5">
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-300 block">Correo electrónico</label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="aventurero@ejemplo.com"
-                    required
-                    className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
-                  />
-                </div>
-              </div>
-
-              {mode !== 'magiclink' && (
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-300 block">Contraseña</label>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      required
-                      minLength={6}
-                      className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {mode === 'magiclink' && (
-                <p className="text-[11px] text-slate-400 leading-relaxed bg-slate-800/40 p-2.5 rounded border border-slate-700/50">
-                  Te enviaremos un enlace a tu correo. Al pulsar sobre él, iniciarás sesión inmediatamente en esta app sin necesidad de recordar contraseñas.
-                </p>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading}
-                className={`w-full py-2.5 rounded-lg text-xs font-semibold text-white shadow-md transition-all flex items-center justify-center gap-2 ${
-                  loading ? 'opacity-60 cursor-wait' : ''
-                } ${mode === 'magiclink' ? 'bg-purple-600 hover:bg-purple-500' : 'bg-sky-600 hover:bg-sky-500'}`}
-              >
-                {loading ? (
-                  <span>Procesando...</span>
-                ) : mode === 'signup' ? (
-                  <span>Crear cuenta y sincronizar</span>
-                ) : mode === 'magiclink' ? (
-                  <span>Enviar enlace mágico</span>
-                ) : (
-                  <span>Iniciar sesión</span>
-                )}
-              </button>
-            </form>
-          </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className={`w-full py-2.5 rounded-lg text-xs font-semibold text-white shadow-md transition-all flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-500 ${
+                loading ? 'opacity-60 cursor-wait' : ''
+              }`}
+            >
+              <KeyRound className="w-4 h-4" />
+              <span>{loading ? 'Verificando clave...' : 'Entrar a la mesa'}</span>
+            </button>
+          </form>
         )}
       </div>
     </div>

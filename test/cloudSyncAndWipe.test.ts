@@ -1,31 +1,50 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { cloudSync } from '../src/modules/sync/cloudSync';
+import { cloudSync, formatStorageBytes } from '../src/modules/sync/cloudSync';
+import { cloudGameSync } from '../src/modules/persistence/cloudGameSync';
+import { authManager, SHARED_EMAIL } from '../src/modules/auth/authManager';
 import { clearAdventure } from '../src/modules/persistence/adventureManager';
 import { db, saveAsset } from '../src/db/dexie';
 import { useGameStore } from '../src/stores/useGameStore';
 import { AssetItem } from '../src/types/game';
 
-describe('Cloud Sync & Adventure Wipe', () => {
+describe('Cloud Sync & Adventure Wipe (Tarea 2)', () => {
   beforeEach(async () => {
     await db.assets.clear();
     await db.savedGames.clear();
     await db.autoSave.clear();
+    useGameStore.getState().resetGame();
   });
 
-  it('correctly filters cloud eligibility: maps never go to cloud, tokens and media do', () => {
-    // Maps MUST NEVER go to cloud
-    expect(cloudSync.isCloudEligible('map')).toBe(false);
+  it('uses mesa@vtt.local as default shared email and configures cloud eligibility', () => {
+    // Default shared email
+    expect(SHARED_EMAIL).toBe('mesa@vtt.local');
 
-    // Reusable library assets MUST go to cloud
+    // All library assets (including maps, tokens, effects, audio) are now cloud eligible
+    expect(cloudSync.isCloudEligible('map')).toBe(true);
+    expect(cloudSync.isCloudEligible('token')).toBe(true);
     expect(cloudSync.isCloudEligible('image')).toBe(true);
     expect(cloudSync.isCloudEligible('gif')).toBe(true);
     expect(cloudSync.isCloudEligible('video')).toBe(true);
     expect(cloudSync.isCloudEligible('audio')).toBe(true);
+    expect(cloudSync.isCloudEligible('effect')).toBe(true);
+  });
+
+  it('calculates and formats cloud storage usage accurately with 1 GB ceiling', async () => {
+    // Empty usage
+    const usage = await cloudSync.getStorageUsage();
+    expect(usage.totalBytes).toBe(1024 * 1024 * 1024); // 1 GB
+    expect(usage.percentage).toBeGreaterThanOrEqual(0);
+    expect(usage.percentage).toBeLessThanOrEqual(100);
+
+    // Format helper
+    expect(formatStorageBytes(500)).toBe('500 B');
+    expect(formatStorageBytes(1024 * 50)).toBe('50.0 KB');
+    expect(formatStorageBytes(1024 * 1024 * 42)).toBe('42.0 MB');
+    expect(formatStorageBytes(1024 * 1024 * 1024)).toBe('1.00 GB');
   });
 
   it('enqueueUpload buffers asset IDs and avoids duplicates', () => {
-    const statusBefore = cloudSync.getStatus();
     cloudSync.enqueueUpload('test_asset_1');
     cloudSync.enqueueUpload('test_asset_2');
     cloudSync.enqueueUpload('test_asset_1'); // Duplicate

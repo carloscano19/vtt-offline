@@ -9,6 +9,7 @@ import { GridModal } from './components/GridModal';
 import { RulerModal } from './components/RulerModal';
 import { SaveLoadModal } from './components/SaveLoadModal';
 import { DisplaysModal } from './components/DisplaysModal';
+import { AuthModal } from './components/AuthModal';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { saveAutoSaveToDb, loadAutoSaveFromDb } from '../../modules/persistence/saveManager';
 import { syncChannel } from '../../modules/sync/syncChannel';
@@ -16,6 +17,8 @@ import { visionManager } from '../../modules/vision/visionManager';
 import { unionExplored } from '../../modules/vision/fogMemory';
 import { TokenVisibility } from '../../modules/vision/visibilityPolygon';
 import { audioManager } from '../../modules/audio/audioManager';
+import { cloudGameSync } from '../../modules/persistence/cloudGameSync';
+import { authManager } from '../../modules/auth/authManager';
 import { ShieldAlert } from 'lucide-react';
 
 export const MasterApp: React.FC = () => {
@@ -24,6 +27,8 @@ export const MasterApp: React.FC = () => {
   const game = useGameStore((s) => s.game);
   const setGame = useGameStore((s) => s.setGame);
   const ruler = useUIStore((s) => s.ruler);
+  const showAuthModal = useUIStore((s) => s.showAuthModal);
+  const setShowAuthModal = useUIStore((s) => s.setShowAuthModal);
 
   const [isGridModalOpen, setIsGridModalOpen] = useState(false);
   const [isRulerModalOpen, setIsRulerModalOpen] = useState(false);
@@ -44,31 +49,45 @@ export const MasterApp: React.FC = () => {
   const hasControlRef = useRef(hasControl);
   hasControlRef.current = hasControl;
 
-  // 1. Restaurar último autoguardado al arrancar si existe
+  // 1. Restaurar último autoguardado al arrancar si existe y sincronizar con la nube
   useEffect(() => {
-    loadAutoSaveFromDb().then((auto) => {
+    loadAutoSaveFromDb().then(async (auto) => {
       if (auto && auto.entities && auto.entities.length > 0) {
         setGame(auto);
       }
+      await cloudGameSync.syncOnStartupOrLogin();
     });
+
+    const cleanupAuth = authManager.onAuthStateChange((user) => {
+      if (user) {
+        cloudGameSync.syncOnStartupOrLogin();
+      }
+    });
+    return cleanupAuth;
   }, [setGame]);
 
-  // 2. Autoguardado periódico cada 60 segundos (solo si esta pestaña tiene el control)
+  // 2. Autoguardado periódico cada 60 segundos y autoguardado a la nube con debounce tras cada cambio
   useEffect(() => {
     if (!hasControl) return;
+    cloudGameSync.scheduleAutoSave(game);
+
     const timer = setInterval(() => {
       if (hasControlRef.current) {
-        saveAutoSaveToDb(useGameStore.getState().game);
+        const curr = useGameStore.getState().game;
+        saveAutoSaveToDb(curr);
+        cloudGameSync.saveGameToCloud(curr);
       }
     }, 60000);
     return () => clearInterval(timer);
-  }, [hasControl]);
+  }, [game, hasControl]);
 
   // 3. Autoguardado web en beforeunload y pagehide (solo si esta pestaña tiene el control)
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (hasControlRef.current) {
-        saveAutoSaveToDb(useGameStore.getState().game);
+        const curr = useGameStore.getState().game;
+        saveAutoSaveToDb(curr);
+        cloudGameSync.saveImmediate(curr);
       }
     };
 
@@ -162,6 +181,7 @@ export const MasterApp: React.FC = () => {
       <RulerModal isOpen={isRulerModalOpen} onClose={() => setIsRulerModalOpen(false)} />
       <SaveLoadModal />
       <DisplaysModal />
+      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
 
       {/* Indicador discreto de versión en esquina inferior izquierda */}
       <div

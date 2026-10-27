@@ -7,6 +7,8 @@ import { EffectsTab } from './EffectsTab';
 import { MusicTab } from './MusicTab';
 import { X, Sliders, Layers, FolderOpen, Music, Sparkles } from 'lucide-react';
 
+import { StorageIndicator } from './StorageIndicator';
+
 export const Sidebar: React.FC = () => {
   const activeSidebarTab = useUIStore((s) => s.activeSidebarTab);
   const setActiveSidebarTab = useUIStore((s) => s.setActiveSidebarTab);
@@ -106,6 +108,11 @@ export const Sidebar: React.FC = () => {
         {activeSidebarTab === 'effects' && <EffectsTab />}
         {activeSidebarTab === 'library' && <LibraryTab />}
         {activeSidebarTab === 'music' && <MusicTab />}
+      </div>
+
+      {/* Pie discreto con uso de almacenamiento en la nube */}
+      <div className="p-2 border-t border-slate-800 bg-slate-900/90">
+        <StorageIndicator compact />
       </div>
     </aside>
   );

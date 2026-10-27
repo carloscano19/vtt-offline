@@ -10,6 +10,8 @@ import {
 } from '../../../modules/persistence/saveManager';
 import { exportVttSave, importVttSave } from '../../../modules/persistence/exporter';
 import { clearAdventure } from '../../../modules/persistence/adventureManager';
+import { cloudGameSync } from '../../../modules/persistence/cloudGameSync';
+import { cloudSync } from '../../../modules/sync/cloudSync';
 import { StoredGame } from '../../../db/dexie';
 import { X, Save, FilePlus, Download, Upload, Trash2, RotateCcw, Clock, Check, Copy, AlertCircle, AlertTriangle } from 'lucide-react';
 
@@ -221,7 +223,10 @@ export const SaveLoadModal: React.FC = () => {
       setGame(importedGame);
       setGameName(importedGame.name);
       await refreshList();
-      showStatus('¡Partida importada y cargada con éxito!');
+      // Pasa a ser la aventura actual y se sube de inmediato a la nube
+      cloudGameSync.saveImmediate(importedGame);
+      cloudSync.processQueue();
+      showStatus('¡Partida importada, cargada y sincronizada con la nube!');
       setShowSaveLoadModal(false);
     } catch (err) {
       console.error('Error al importar:', err);
@@ -480,11 +485,11 @@ export const SaveLoadModal: React.FC = () => {
 
             <div className="space-y-3 text-xs text-slate-300 leading-relaxed">
               <p>
-                Se eliminarán permanentemente de este navegador:
+                Se eliminarán permanentemente de este navegador y de la nube:
               </p>
               <ul className="list-disc pl-5 space-y-1 text-slate-400">
-                <li>Todos los <strong className="text-white">mapas</strong> importados en el tablero.</li>
-                <li>La <strong className="text-white">partida actual</strong> y todas las <strong className="text-white">partidas guardadas</strong>.</li>
+                <li>Todos los <strong className="text-white">mapas</strong> importados en el tablero y sus archivos en la nube.</li>
+                <li>La <strong className="text-white">partida actual</strong> en la nube y en local.</li>
                 <li>Toda la <strong className="text-white">niebla de guerra</strong> explorada y revelada.</li>
                 <li>La copia de <strong className="text-white">autoguardado</strong>.</li>
               </ul>

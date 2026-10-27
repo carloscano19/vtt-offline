@@ -2,26 +2,35 @@ import { db } from '../../db/dexie';
 import { useGameStore } from '../../stores/useGameStore';
 import { syncChannel } from '../sync/syncChannel';
 import { GameState } from '../../types/game';
+import { cloudGameSync } from './cloudGameSync';
 
 /**
  * Borra por completo la aventura de la aplicación:
+ * - Borra de la nube la partida (vtt.games) y los mapas (vtt.library_assets y archivos en vtt-assets).
  * - Borra todos los mapas de la base de datos local (db.assets donde type === 'map').
  * - Borra todas las partidas guardadas en el navegador (db.savedGames).
  * - Borra la copia de autoguardado (db.autoSave).
  * - Reinicia la partida actual a un estado nuevo y limpio (sin mapas, tokens, paredes ni niebla).
  * - Sincroniza el nuevo estado con la ventana de jugadores.
  *
- * PRESERVA INTACTA LA BIBLIOTECA:
+ * PRESERVA INTACTA LA BIBLIOTECA REUTILIZABLE:
  * - Todos los tokens, objetos, efectos y audios de música se mantienen tanto en IndexedDB local como en Supabase.
  */
 export async function clearAdventure(): Promise<void> {
-  // 1. Borrar todas las partidas guardadas
+  // 1. Borrar de la nube la partida y los mapas de la aventura
+  try {
+    await cloudGameSync.clearCloudAdventure();
+  } catch (err) {
+    console.warn('[adventureManager] Error al limpiar aventura de la nube:', err);
+  }
+
+  // 2. Borrar todas las partidas guardadas locales
   await db.savedGames.clear();
 
-  // 2. Borrar el autoguardado
+  // 3. Borrar el autoguardado local
   await db.autoSave.clear();
 
-  // 3. Borrar solo los mapas de la biblioteca de assets (dejando intactos tokens, objetos, audios, etc.)
+  // 4. Borrar solo los mapas de la biblioteca de assets local (dejando intactos tokens, objetos, audios, etc.)
   const mapAssets = await db.assets.where('type').equals('map').toArray();
   for (const m of mapAssets) {
     await db.assets.delete(m.id);

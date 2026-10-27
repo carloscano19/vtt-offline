@@ -1,6 +1,8 @@
 import { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../supabase/supabaseClient';
 
+export const SHARED_EMAIL = (import.meta.env.VITE_VTT_SHARED_EMAIL as string)?.trim() || 'mesa@vtt.local';
+
 export type AuthListener = (user: User | null, session: Session | null) => void;
 
 class AuthManager {
@@ -69,6 +71,13 @@ class AuthManager {
         console.error('[authManager] Error en listener de auth:', err);
       }
     }
+  }
+
+  /**
+   * Iniciar sesión con la clave compartida de la mesa
+   */
+  public async signInWithSharedPassword(password: string): Promise<{ error: Error | null }> {
+    return this.signInWithPassword(SHARED_EMAIL, password);
   }
 
   /**

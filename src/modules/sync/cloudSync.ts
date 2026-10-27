@@ -125,11 +125,10 @@ class CloudSyncManager {
 
   /**
    * Determina si un tipo de asset debe subirse a la nube.
-   * REGLA: Los mapas NUNCA van a la nube (solo local).
-   * Tokens, objetos, efectos y música SÍ van a la nube.
+   * Todos los assets de la biblioteca (mapas, tokens, objetos, efectos y audio) se sincronizan a la nube.
    */
-  public isCloudEligible(type: AssetType): boolean {
-    return type !== 'map';
+  public isCloudEligible(_type: AssetType): boolean {
+    return true;
   }
 
   /**
@@ -188,16 +187,9 @@ class CloudSyncManager {
           continue;
         }
 
-        if (!this.isCloudEligible(asset.type)) {
-          // Los mapas nunca suben a la nube
-          this.uploadQueue.shift();
-          this.saveQueueToStorage();
-          continue;
-        }
-
-        // Subir archivo al bucket vtt-assets
+        // Subir archivo al bucket vtt-assets bajo ruta compartida
         const fileExt = asset.mimeType?.split('/')[1] || 'bin';
-        const storagePath = `${user.id}/${asset.id}.${fileExt}`;
+        const storagePath = `shared/${asset.type}/${asset.id}.${fileExt}`;
 
         // Subir blob a Storage
         const { error: storageError } = await supabase.storage
@@ -266,11 +258,10 @@ class CloudSyncManager {
     this.updateStatus('syncing', 0, 'Descargando biblioteca de la nube...');
 
     try {
-      // 1. Obtener lista de assets en la nube
+      // 1. Obtener lista de todos los assets en la biblioteca compartida
       const { data: cloudAssets, error } = await supabase
         .from('library_assets')
-        .select('*')
-        .eq('user_id', user.id);
+        .select('*');
 
       if (error) {
         throw error;
@@ -320,7 +311,7 @@ class CloudSyncManager {
         }
       }
 
-      // 3. Encolar los elementos locales que no están en la nube (siempre que no sean mapas)
+      // 3. Encolar los elementos locales que no están en la nube
       const cloudIds = new Set(cloudList.map((c) => c.id));
       for (const local of localAssets) {
         if (this.isCloudEligible(local.type) && !cloudIds.has(local.id)) {
@@ -357,32 +348,73 @@ class CloudSyncManager {
     // 3. Si hay sesión activa en Supabase, borrar de la nube
     if (supabase && authManager.isAuthenticated()) {
       try {
-        const user = authManager.getUser();
-        if (user) {
-          // Obtener storage_path antes de borrar metadatos o calcularlo
-          const { data } = await supabase
-            .from('library_assets')
-            .select('storage_path')
-            .eq('id', assetId)
-            .eq('user_id', user.id)
-            .maybeSingle();
+        const { data } = await supabase
+          .from('library_assets')
+          .select('storage_path')
+          .eq('id', assetId)
+          .maybeSingle();
 
-          if (data?.storage_path) {
-            await supabase.storage.from('vtt-assets').remove([data.storage_path]);
-          }
-
-          // Borrar registro en base de datos
-          await supabase
-            .from('library_assets')
-            .delete()
-            .eq('id', assetId)
-            .eq('user_id', user.id);
+        if (data?.storage_path) {
+          await supabase.storage.from('vtt-assets').remove([data.storage_path]);
         }
+
+        // Borrar registro en base de datos
+        await supabase
+          .from('library_assets')
+          .delete()
+          .eq('id', assetId);
       } catch (cloudErr) {
         console.warn(`[cloudSync] Error al borrar de la nube el asset ${assetId}:`, cloudErr);
       }
     }
   }
+
+  /**
+   * Consulta el almacenamiento total consumido en la nube (límite 1 GB en tier gratuito de Supabase)
+   */
+  public async getStorageUsage(): Promise<{ usedBytes: number; totalBytes: number; percentage: number }> {
+    const totalBytes = 1024 * 1024 * 1024; // 1 GB
+    let usedBytes = 0;
+
+    if (supabase && authManager.isAuthenticated()) {
+      try {
+        const { data, error } = await supabase.rpc('get_storage_usage');
+        if (!error && typeof data === 'number') {
+          usedBytes = data;
+        } else {
+          const { data: assets } = await supabase.from('library_assets').select('size');
+          if (assets) {
+            usedBytes = assets.reduce((acc: number, curr: any) => acc + (curr.size || 0), 0);
+          }
+        }
+      } catch (err) {
+        console.warn('[cloudSync] Error al obtener uso de almacenamiento:', err);
+      }
+    }
+
+    if (usedBytes === 0) {
+      try {
+        const localAssets = await getAllAssets();
+        usedBytes = localAssets.reduce((acc, curr) => acc + (curr.blob?.size || 0), 0);
+      } catch {
+        // fallback
+      }
+    }
+
+    const percentage = Math.min(100, Math.round((usedBytes / totalBytes) * 1000) / 10);
+    return {
+      usedBytes,
+      totalBytes,
+      percentage
+    };
+  }
+}
+
+export function formatStorageBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 export const cloudSync = new CloudSyncManager();

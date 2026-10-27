@@ -22,6 +22,7 @@ interface UIStoreState {
   showSaveLoadModal: boolean;
   showDisplaysModal: boolean;
   showResetFogConfirm: boolean;
+  showAuthModal: boolean;
 
   // Acciones
   setActiveTool: (tool: ActiveTool) => void;
@@ -44,6 +45,7 @@ interface UIStoreState {
   setShowDebugVttOverlay: (show: boolean) => void;
   setShowSaveLoadModal: (show: boolean) => void;
   setShowDisplaysModal: (show: boolean) => void;
+  setShowAuthModal: (show: boolean) => void;
 }
 
 export const useUIStore = create<UIStoreState>((set) => ({
@@ -54,6 +56,7 @@ export const useUIStore = create<UIStoreState>((set) => ({
   isPlayerPreviewMode: false,
   showPlayerFrame: true,
   showResetFogConfirm: false,
+  showAuthModal: false,
 
   ruler: {
     active: false,
@@ -160,6 +163,7 @@ export const useUIStore = create<UIStoreState>((set) => ({
   setShowDebugVttOverlay: (show) => set({ showDebugVttOverlay: show }),
   setShowSaveLoadModal: (show) => set({ showSaveLoadModal: show }),
   setShowDisplaysModal: (show) => set({ showDisplaysModal: show }),
+  setShowAuthModal: (show) => set({ showAuthModal: show }),
   setShowResetFogConfirm: (show) => set({ showResetFogConfirm: show }),
   setIsPlayerPreviewMode: (isPlayerPreviewMode) => set({ isPlayerPreviewMode }),
   setShowPlayerFrame: (showPlayerFrame) => set({ showPlayerFrame })
