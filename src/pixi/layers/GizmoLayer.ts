@@ -189,6 +189,9 @@ export class GizmoLayer extends Container {
       this.graphics.fill({ color: 0xffffff });
       this.graphics.stroke({ width: cornerStroke, color: 0x0284c7 });
     }
+
+    // Botón de visibilidad (ojo) en la esquina superior derecha
+    this.drawEyeButton(entity, bounds);
   }
 
   private drawLockedOutline(entity: Entity) {
@@ -223,5 +226,94 @@ export class GizmoLayer extends Container {
     const lockedStroke = 2 / (zoom * sx);
     this.graphics.rect(bounds.offsetX, bounds.offsetY, bounds.width, bounds.height);
     this.graphics.stroke({ width: lockedStroke, color: 0xef4444, alpha: 0.75 });
+
+    // Botón de visibilidad (ojo) también en entidades bloqueadas seleccionadas
+    this.drawEyeButton(entity, bounds);
+  }
+
+  private drawEyeButton(entity: Entity, bounds: { offsetX: number; offsetY: number; width: number; height: number }) {
+    const zoom = this.cameraZoom;
+    const sx = Math.max(0.001, Math.abs(entity.scaleX || 1));
+    const sy = Math.max(0.001, Math.abs(entity.scaleY || 1));
+    const { offsetX, offsetY, width } = bounds;
+
+    const eyeBtnOffsetScreen = 14;
+    const cx = offsetX + width + eyeBtnOffsetScreen / (zoom * sx);
+    const cy = offsetY - eyeBtnOffsetScreen / (zoom * sy);
+    const r = 11 / (zoom * sx);
+    const strokeW = 1.5 / (zoom * sx);
+    const isVisible = entity.visibleToPlayers !== false;
+
+    // Fondo del botón
+    this.graphics.circle(cx, cy, r);
+    this.graphics.fill({ color: 0x0f172a, alpha: 0.95 });
+    this.graphics.stroke({ width: strokeW, color: isVisible ? 0x38bdf8 : 0xef4444 });
+
+    // Icono del ojo
+    const eyeW = r * 0.65;
+    const eyeH = r * 0.42;
+    const iconStroke = 1.2 / (zoom * sx);
+
+    // Contorno del ojo (dos curvas suaves)
+    this.graphics.moveTo(cx - eyeW, cy);
+    this.graphics.quadraticCurveTo(cx, cy - eyeH, cx + eyeW, cy);
+    this.graphics.quadraticCurveTo(cx, cy + eyeH, cx - eyeW, cy);
+    this.graphics.stroke({ width: iconStroke, color: isVisible ? 0xffffff : 0x94a3b8 });
+
+    // Pupila central
+    this.graphics.circle(cx, cy, r * 0.22);
+    this.graphics.fill({ color: isVisible ? 0x38bdf8 : 0x94a3b8 });
+
+    // Si está oculto, dibujar línea diagonal tachada
+    if (!isVisible) {
+      const slash = r * 0.65;
+      this.graphics.moveTo(cx - slash, cy - slash);
+      this.graphics.lineTo(cx + slash, cy + slash);
+      this.graphics.stroke({ width: 1.5 / (zoom * sx), color: 0xef4444 });
+    }
+  }
+
+  public getEyeButtonWorldPos(entity: Entity): Point2D {
+    const bounds = this.getEntityLocalBounds(entity);
+    const zoom = this.cameraZoom;
+    const sx = Math.max(0.001, Math.abs(entity.scaleX || 1));
+    const sy = Math.max(0.001, Math.abs(entity.scaleY || 1));
+    const eyeBtnOffsetScreen = 14;
+
+    const localX = bounds.offsetX + bounds.width + eyeBtnOffsetScreen / (zoom * sx);
+    const localY = bounds.offsetY - eyeBtnOffsetScreen / (zoom * sy);
+
+    let posX = entity.x;
+    let posY = entity.y;
+    let rotation = entity.rotation;
+
+    if (entity.type === 'door' && entity.mapId && this.allEntities.length > 0) {
+      const parentMap = this.allEntities.find((e) => e.id === entity.mapId);
+      if (parentMap) {
+        const wp = localToWorld(
+          { x: entity.x, y: entity.y },
+          { x: parentMap.x, y: parentMap.y },
+          parentMap.rotation,
+          parentMap.scaleX,
+          parentMap.scaleY
+        );
+        posX = wp.x;
+        posY = wp.y;
+        rotation = entity.rotation + parentMap.rotation;
+      }
+    }
+
+    const cosR = Math.cos(rotation);
+    const sinR = Math.sin(rotation);
+    const scX = entity.scaleX || 1;
+    const scY = entity.scaleY || 1;
+
+    const worldDx = localX * scX * cosR - localY * scY * sinR;
+    const worldDy = localX * scX * sinR + localY * scY * cosR;
+
+    return {
+      x: posX + worldDx,
+      y: posY + worldDy
+    };
   }
 }

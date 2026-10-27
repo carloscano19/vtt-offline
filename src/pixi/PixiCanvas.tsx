@@ -660,6 +660,21 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         }
       }
 
+      // 1b. Comprobar botón del ojo (mostrar/ocultar a jugadores) en la entidad seleccionada
+      if (selectedEntityIds.length === 1 && rendererRef.current?.gizmoLayer) {
+        const entForEye = game.entities.find((e) => e.id === selectedEntityIds[0]);
+        if (entForEye && entForEye.type !== 'wall') {
+          const eyeWorldPos = rendererRef.current.gizmoLayer.getEyeButtonWorldPos(entForEye);
+          const hitRadius = Math.max(14 / camera.zoom, 14);
+          if (Math.hypot(worldPos.x - eyeWorldPos.x, worldPos.y - eyeWorldPos.y) <= hitRadius) {
+            e.preventDefault();
+            const currentVis = entForEye.visibleToPlayers !== false;
+            updateEntity(entForEye.id, { visibleToPlayers: !currentVis }, true);
+            return;
+          }
+        }
+      }
+
       // 2. Si hay una entidad seleccionada y no bloqueada, comprobar manijas del Gizmo (incluyendo Puertas)
       const selectedEntity = game.entities.find((ent) => selectedEntityIds.includes(ent.id) && !ent.locked);
       if (selectedEntity && selectedEntity.type !== 'wall') {
@@ -1127,6 +1142,17 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
       // Comprobar Gizmo de entidad seleccionada (incluyendo puertas)
       const selectedEntity = game.entities.find((ent) => selectedEntityIds.includes(ent.id) && !ent.locked);
+      if (newCursor === 'default' && selectedEntityIds.length === 1 && rendererRef.current?.gizmoLayer) {
+        const entForEye = game.entities.find((e) => e.id === selectedEntityIds[0]);
+        if (entForEye && entForEye.type !== 'wall') {
+          const eyeWorldPos = rendererRef.current.gizmoLayer.getEyeButtonWorldPos(entForEye);
+          const hitRadius = Math.max(14 / camera.zoom, 14);
+          if (Math.hypot(worldPos.x - eyeWorldPos.x, worldPos.y - eyeWorldPos.y) <= hitRadius) {
+            newCursor = 'pointer';
+          }
+        }
+      }
+
       if (newCursor === 'default' && selectedEntity && selectedEntity.type !== 'wall') {
         const handleHitRadius = 12 / camera.zoom;
 

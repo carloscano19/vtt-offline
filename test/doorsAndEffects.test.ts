@@ -460,5 +460,29 @@ describe('Effects lighting and scale integration', () => {
     expect(normalizeEntity(character).snapToGrid).toBe(true);
     expect(normalizeEntity(chest).snapToGrid).toBe(false);
   });
+
+  it('toggles visibleToPlayers correctly when eye button is clicked', () => {
+    const token: Entity = {
+      id: 't_eye',
+      type: 'token',
+      name: 'Rogue',
+      x: 100,
+      y: 100,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      zIndex: 10,
+      visibleToPlayers: true,
+      locked: false
+    };
+
+    // Toggle 1: visible -> oculto
+    const toggled1 = { ...token, visibleToPlayers: !token.visibleToPlayers };
+    expect(toggled1.visibleToPlayers).toBe(false);
+
+    // Toggle 2: oculto -> visible
+    const toggled2 = { ...toggled1, visibleToPlayers: !toggled1.visibleToPlayers };
+    expect(toggled2.visibleToPlayers).toBe(true);
+  });
 });
 
