@@ -138,6 +138,22 @@ export const GridModal: React.FC<GridModalProps> = ({ isOpen, onClose }) => {
           </label>
         </div>
 
+        {/* Casilla: Las paredes bloquean el movimiento */}
+        <div className="pt-1">
+          <label className="flex items-center justify-between text-xs cursor-pointer p-1.5 rounded hover:bg-slate-800/40">
+            <div>
+              <span className="text-slate-300 font-medium block">Las paredes bloquean el movimiento</span>
+              <span className="text-[10px] text-slate-500 block">Impide atravesar muros con flechas o al arrastrar (desactivado por defecto)</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={grid.wallsBlockMovement ?? false}
+              onChange={(e) => setGridConfig({ wallsBlockMovement: e.target.checked })}
+              className="w-4 h-4 accent-sky-500 cursor-pointer ml-3 shrink-0"
+            />
+          </label>
+        </div>
+
         {/* Sensibilidad del zoom */}
         <div className="space-y-1.5 pt-2 border-t border-slate-700/80">
           <div className="flex justify-between text-xs">

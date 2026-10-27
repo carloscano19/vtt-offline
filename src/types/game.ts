@@ -6,6 +6,7 @@ export interface GridConfig {
   opacity: number; // 0.0 a 1.0
   visible: boolean;
   snapToGrid: boolean;
+  wallsBlockMovement?: boolean; // false por defecto (los tokens pueden atravesar paredes libremente)
 }
 
 export type RulerMode = 'straight' | 'radial';

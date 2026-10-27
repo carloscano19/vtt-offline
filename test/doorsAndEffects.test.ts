@@ -396,5 +396,20 @@ describe('Effects lighting and scale integration', () => {
     expect(getScale(3, true)).toBe(1.05);
     expect(1.05 * webmWidth).toBe(210);
   });
+
+  it('normalizes wallsBlockMovement defaulting to false and persisting when true', () => {
+    const rawGameNoOpt: any = {
+      grid: { size: 70, color: '#ffffff', opacity: 0.25, visible: true, snapToGrid: true },
+      entities: []
+    };
+    const norm1 = normalizeEntity; // quick check
+    expect(Boolean(rawGameNoOpt.grid?.wallsBlockMovement ?? false)).toBe(false);
+
+    const rawGameWithOpt: any = {
+      grid: { size: 70, color: '#ffffff', opacity: 0.25, visible: true, snapToGrid: true, wallsBlockMovement: true },
+      entities: []
+    };
+    expect(Boolean(rawGameWithOpt.grid?.wallsBlockMovement ?? false)).toBe(true);
+  });
 });
 

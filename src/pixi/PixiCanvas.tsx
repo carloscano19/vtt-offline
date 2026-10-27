@@ -253,11 +253,12 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         const fromPt: Point2D = { x: selectedToken.x, y: selectedToken.y };
         const toPt: Point2D = { x: targetX, y: targetY };
 
-        if (!isMovementBlockedByWall(fromPt, toPt, game.entities)) {
+        const wallsBlock = Boolean(game.grid.wallsBlockMovement);
+        if (!wallsBlock || !isMovementBlockedByWall(fromPt, toPt, game.entities)) {
           e.preventDefault();
           updateEntity(selectedToken.id, { x: targetX, y: targetY }, true);
         } else {
-          e.preventDefault(); // Bloqueado por pared o puerta cerrada
+          e.preventDefault(); // Bloqueado por pared o puerta cerrada (solo si la opción está activada)
         }
         return;
       }
@@ -1241,6 +1242,13 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           interactionState.current.isDraggingEntity = false;
           interactionState.current.dragEntityId = null;
           return;
+        }
+
+        if (game.grid.wallsBlockMovement && interactionState.current.startEntityPos && entity.type === 'token') {
+          if (isMovementBlockedByWall(interactionState.current.startEntityPos, { x: finalX, y: finalY }, game.entities)) {
+            finalX = interactionState.current.startEntityPos.x;
+            finalY = interactionState.current.startEntityPos.y;
+          }
         }
 
         updateEntity(entity.id, { x: finalX, y: finalY }, true);

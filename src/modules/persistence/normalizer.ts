@@ -256,13 +256,15 @@ export function normalizeGameState(game: GameState): GameState {
       },
       grid: game.grid ? {
         ...game.grid,
-        color: colorToHex(parseColor(game.grid.color, 0xffffff).rgb)
+        color: colorToHex(parseColor(game.grid.color, 0xffffff).rgb),
+        wallsBlockMovement: Boolean(game.grid.wallsBlockMovement ?? false)
       } : {
         size: 70,
         color: '#ffffff',
         opacity: 0.25,
         visible: true,
-        snapToGrid: true
+        snapToGrid: true,
+        wallsBlockMovement: false
       },
       weather: game.weather ?? {
         rain: { enabled: false, intensity: 50, direction: 90 },

@@ -77,7 +77,8 @@ function createDefaultGame(): GameState {
       color: '#ffffff',
       opacity: 0.25,
       visible: true,
-      snapToGrid: true
+      snapToGrid: true,
+      wallsBlockMovement: false
     },
     entities: [],
     masterCamera: { x: 0, y: 0, zoom: 1 },
