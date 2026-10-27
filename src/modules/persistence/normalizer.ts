@@ -188,70 +188,84 @@ export function normalizeEntity(entity: Entity): Entity {
  * - Normaliza todas las entidades (tokens sin vision reciben vision adecuada, luces reciben lightConfig).
  */
 export function normalizeGameState(game: GameState): GameState {
+  const currentGridSize = (game.grid?.size && game.grid.size > 0) ? game.grid.size : 70;
   return {
-    ...game,
-    fog: {
-      enabled: game.fog?.enabled ?? true,
-      rememberExplored: game.fog?.rememberExplored ?? false,
-      explored: (() => {
-        const exp = game.fog?.explored;
-        if (!exp || !Array.isArray(exp)) return [];
-        if (!safeClip.validate(exp)) {
-          const sanitized = safeClip.sanitize(exp);
-          if (safeClip.validate(sanitized)) {
-            console.warn('[normalizer] game.fog.explored corrupto fue reparado.');
-            return sanitized;
+      ...game,
+      fog: {
+        enabled: game.fog?.enabled ?? true,
+        rememberExplored: game.fog?.rememberExplored ?? false,
+        explored: (() => {
+          const exp = game.fog?.explored;
+          if (!exp || !Array.isArray(exp)) return [];
+          if (!safeClip.validate(exp)) {
+            const sanitized = safeClip.sanitize(exp);
+            if (safeClip.validate(sanitized)) {
+              console.warn('[normalizer] game.fog.explored corrupto fue reparado.');
+              return sanitized;
+            }
+            console.warn('[normalizer] game.fog.explored corrupto e irrecuperable. Se reinicia a vacío.');
+            return [];
           }
-          console.warn('[normalizer] game.fog.explored corrupto e irrecuperable. Se reinicia a vacío.');
-          return [];
-        }
-        return exp;
-      })(),
-      revealed: (() => {
-        const rev = game.fog?.revealed;
-        if (!rev || !Array.isArray(rev)) return [];
-        if (!safeClip.validate(rev)) {
-          const sanitized = safeClip.sanitize(rev);
-          if (safeClip.validate(sanitized)) {
-            console.warn('[normalizer] game.fog.revealed corrupto fue reparado.');
-            return sanitized;
+          return exp;
+        })(),
+        revealed: (() => {
+          const rev = game.fog?.revealed;
+          if (!rev || !Array.isArray(rev)) return [];
+          if (!safeClip.validate(rev)) {
+            const sanitized = safeClip.sanitize(rev);
+            if (safeClip.validate(sanitized)) {
+              console.warn('[normalizer] game.fog.revealed corrupto fue reparado.');
+              return sanitized;
+            }
+            console.warn('[normalizer] game.fog.revealed corrupto e irrecuperable. Se reinicia a vacío.');
+            return [];
           }
-          console.warn('[normalizer] game.fog.revealed corrupto e irrecuperable. Se reinicia a vacío.');
-          return [];
+          return rev;
+        })()
+      },
+      ambient: game.ambient ? {
+        ...game.ambient,
+        color: colorToHex(parseColor(game.ambient.color, 0xffffff).rgb)
+      } : {
+        preset: 'noon',
+        color: '#ffffff',
+        intensity: 1.0
+      },
+      grid: game.grid ? {
+        ...game.grid,
+        color: colorToHex(parseColor(game.grid.color, 0xffffff).rgb)
+      } : {
+        size: 70,
+        color: '#ffffff',
+        opacity: 0.25,
+        visible: true,
+        snapToGrid: true
+      },
+      weather: game.weather ?? {
+        rain: { enabled: false, intensity: 50, direction: 90 },
+        snow: { enabled: false, intensity: 50 },
+        wind: { enabled: false, intensity: 50, direction: 0 }
+      },
+      music: {
+        playlist: game.music?.playlist ?? [],
+        currentTrackId: game.music?.currentTrackId ?? null,
+        isPlaying: false, // Siempre pausado al iniciar
+        volume: game.music?.volume ?? 0.8,
+        loopTrack: game.music?.loopTrack ?? false
+      },
+      entities: (game.entities || []).map((ent) => {
+        let nEnt = normalizeEntity(ent);
+        if (nEnt.type === 'map' && nEnt.mapData?.pixelsPerGrid && nEnt.mapData.pixelsPerGrid > 0) {
+          const expectedScale = currentGridSize / nEnt.mapData.pixelsPerGrid;
+          if (Math.abs(nEnt.scaleX - expectedScale) > 0.001 || Math.abs(nEnt.scaleY - expectedScale) > 0.001) {
+            nEnt = {
+              ...nEnt,
+              scaleX: expectedScale,
+              scaleY: expectedScale
+            };
+          }
         }
-        return rev;
-      })()
-    },
-    ambient: game.ambient ? {
-      ...game.ambient,
-      color: colorToHex(parseColor(game.ambient.color, 0xffffff).rgb)
-    } : {
-      preset: 'noon',
-      color: '#ffffff',
-      intensity: 1.0
-    },
-    grid: game.grid ? {
-      ...game.grid,
-      color: colorToHex(parseColor(game.grid.color, 0xffffff).rgb)
-    } : {
-      size: 70,
-      color: '#ffffff',
-      opacity: 0.25,
-      visible: true,
-      snapToGrid: true
-    },
-    weather: game.weather ?? {
-      rain: { enabled: false, intensity: 50, direction: 90 },
-      snow: { enabled: false, intensity: 50 },
-      wind: { enabled: false, intensity: 50, direction: 0 }
-    },
-    music: {
-      playlist: game.music?.playlist ?? [],
-      currentTrackId: game.music?.currentTrackId ?? null,
-      isPlaying: false, // Siempre pausado al iniciar
-      volume: game.music?.volume ?? 0.8,
-      loopTrack: game.music?.loopTrack ?? false
-    },
-    entities: (game.entities || []).map(normalizeEntity)
-  };
+        return nEnt;
+      })
+    };
 }

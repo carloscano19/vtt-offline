@@ -154,16 +154,20 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
 
           // Posicionamiento de mapa nuevo:
           // Colocar en el centro de la vista actual del máster
-          const currentGridSize = game.grid.size || parsed.pixelsPerGrid || 70;
-          const scale = currentGridSize / parsed.pixelsPerGrid;
+          const existingMaps = game.entities.filter((e) => e.type === 'map');
+          const currentGridSize = existingMaps.length === 0 ? parsed.pixelsPerGrid : (game.grid.size || parsed.pixelsPerGrid || 70);
+          const scale = existingMaps.length === 0 ? 1 : (currentGridSize / parsed.pixelsPerGrid);
           const mapW = parsed.widthPx * scale;
           const mapH = parsed.heightPx * scale;
 
           let mapX = game.masterCamera.x - mapW / 2;
           let mapY = game.masterCamera.y - mapH / 2;
+          if (game.grid.snapToGrid && currentGridSize > 0) {
+            mapX = Math.round(mapX / currentGridSize) * currentGridSize;
+            mapY = Math.round(mapY / currentGridSize) * currentGridSize;
+          }
 
           // Si se solapa con algún mapa existente, desplazar a la derecha del mapa más a la derecha + 2 casillas
-          const existingMaps = game.entities.filter((e) => e.type === 'map');
           const isOverlapping = existingMaps.some((m) => {
             const mW = (m.mapData?.gridWidth ?? 10) * (m.mapData?.pixelsPerGrid ?? 70) * m.scaleX;
             const mH = (m.mapData?.gridHeight ?? 10) * (m.mapData?.pixelsPerGrid ?? 70) * m.scaleY;
@@ -463,10 +467,13 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
 
         <button
           onClick={onOpenGridModal}
-          className="btn-icon text-slate-300 hover:text-white"
-          title="Ajustes de cuadrícula (G): tamaño de casilla, color, opacidad, snap y sensibilidad del zoom"
+          className={`btn-icon relative ${game.grid.snapToGrid ? 'text-sky-400 bg-slate-800/60' : 'text-slate-300 hover:text-white'}`}
+          title={`Ajustes de cuadrícula (G): ${game.grid.snapToGrid ? 'Snap ACTIVO (Mantén Alt para soltar libre)' : 'Snap DESACTIVADO'}`}
         >
           <GridIcon className="w-5 h-5" />
+          {game.grid.snapToGrid && (
+            <span className="absolute bottom-1 right-1 w-1.5 h-1.5 rounded-full bg-sky-400 ring-1 ring-slate-900" />
+          )}
         </button>
 
         <button

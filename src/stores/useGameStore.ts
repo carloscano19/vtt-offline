@@ -12,9 +12,57 @@ import {
   AmbientConfig,
   WeatherConfig
 } from '../types/game';
-import { Entity } from '../types/entity';
+import { Entity, recalculateDoorEndpoints } from '../types/entity';
 import { revealRect, hideRect } from '../modules/vision/fogMemory';
 import { normalizeEntity, normalizeGameState } from '../modules/persistence/normalizer';
+
+/**
+ * Reescala proporcionalmente las entidades existentes cuando cambia el tamaño de la cuadrícula.
+ */
+export function rescaleEntitiesForGridChange(entities: Entity[], oldSize: number, newSize: number): Entity[] {
+  if (oldSize <= 0 || newSize <= 0 || oldSize === newSize) return entities;
+  const gridRatio = newSize / oldSize;
+  return entities.map((entity) => {
+    if (entity.type === 'map' && entity.mapData && entity.mapData.pixelsPerGrid > 0) {
+      const newScale = newSize / entity.mapData.pixelsPerGrid;
+      return {
+        ...entity,
+        scaleX: newScale,
+        scaleY: newScale
+      };
+    } else if (entity.type === 'token' || entity.type === 'object' || entity.type === 'effect') {
+      return {
+        ...entity,
+        scaleX: entity.scaleX * gridRatio,
+        scaleY: entity.scaleY * gridRatio
+      };
+    } else if (entity.type === 'door' && entity.door && !entity.mapId) {
+      const newLength = (entity.door.length ?? oldSize) * gridRatio;
+      const { p1, p2 } = recalculateDoorEndpoints(
+        entity.x,
+        entity.y,
+        entity.rotation,
+        newLength,
+        entity.door.isHingeInverted
+      );
+      return {
+        ...entity,
+        door: {
+          ...entity.door,
+          length: newLength,
+          p1,
+          p2
+        }
+      };
+    } else if (entity.type === 'wall' && entity.points && !entity.mapId) {
+      return {
+        ...entity,
+        points: entity.points.map((p) => ({ x: p.x * gridRatio, y: p.y * gridRatio }))
+      };
+    }
+    return entity;
+  });
+}
 
 function createDefaultGame(): GameState {
   const now = Date.now();
@@ -156,27 +204,9 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
 
       let updatedEntities = state.game.entities;
 
-      // Si cambia el tamaño de la cuadrícula, reescalar proporcionalmente mapas y tokens para seguir alineados
+      // Si cambia el tamaño de la cuadrícula, reescalar proporcionalmente entidades existentes
       if (partial.size && partial.size !== oldGrid.size && oldGrid.size > 0) {
-        const newSize = partial.size;
-        const gridRatio = newSize / oldGrid.size;
-        updatedEntities = state.game.entities.map((entity) => {
-          if (entity.type === 'map' && entity.mapData && entity.mapData.pixelsPerGrid > 0) {
-            const newScale = newSize / entity.mapData.pixelsPerGrid;
-            return {
-              ...entity,
-              scaleX: newScale,
-              scaleY: newScale
-            };
-          } else if (entity.type === 'token' || entity.type === 'object') {
-            return {
-              ...entity,
-              scaleX: entity.scaleX * gridRatio,
-              scaleY: entity.scaleY * gridRatio
-            };
-          }
-          return entity;
-        });
+        updatedEntities = rescaleEntitiesForGridChange(state.game.entities, oldGrid.size, partial.size);
       }
 
       return {
@@ -194,18 +224,33 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
     const normalizedEntity = normalizeEntity(entity);
     set((state) => {
       const past = [...state.past, state.game.entities];
-      const entities = [...state.game.entities, normalizedEntity];
-
-      // Si es el primer mapa y el tablero estaba vacío, ajustar grid.size al pixelsPerGrid del mapa
       let grid = state.game.grid;
-      if (normalizedEntity.type === 'map' && state.game.entities.filter((e) => e.type === 'map').length === 0) {
-        if (normalizedEntity.mapData?.pixelsPerGrid) {
+      let existingEntities = state.game.entities;
+      let finalEntity = normalizedEntity;
+
+      // Si es el primer mapa y el tablero no tenía mapas, ajustar grid.size al pixelsPerGrid del mapa
+      if (finalEntity.type === 'map' && state.game.entities.filter((e) => e.type === 'map').length === 0) {
+        if (finalEntity.mapData?.pixelsPerGrid) {
+          const newSize = finalEntity.mapData.pixelsPerGrid;
+          const oldGridSize = state.game.grid.size || 70;
           grid = {
             ...grid,
-            size: normalizedEntity.mapData.pixelsPerGrid
+            size: newSize
           };
+          // La escala del primer mapa queda exactamente en 1 (grid.size / pixelsPerGrid = 1)
+          finalEntity = {
+            ...finalEntity,
+            scaleX: 1,
+            scaleY: 1
+          };
+          // Reescalar en proporción el resto de entidades existentes
+          if (oldGridSize > 0 && oldGridSize !== newSize) {
+            existingEntities = rescaleEntitiesForGridChange(existingEntities, oldGridSize, newSize);
+          }
         }
       }
+
+      const entities = [...existingEntities, finalEntity];
 
       return {
         game: {

@@ -303,7 +303,7 @@ export class PixiRenderer {
     this.rulerLayer.update(ruler, game.grid.size);
 
     const selectedEntities = game.entities.filter((e) => selectedIds.includes(e.id));
-    this.gizmoLayer.update(isPlayerPreview ? [] : selectedEntities, game.entities);
+    this.gizmoLayer.update(isPlayerPreview ? [] : selectedEntities, game.entities, camera.zoom);
 
     // Marco verde de la pantalla de jugadores
     this.playerFrameLayout.update(game.playerCamera, game.playerViewport, showPlayerFrame && !isPlayerPreview);

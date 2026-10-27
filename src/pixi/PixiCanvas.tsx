@@ -580,7 +580,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
     // Herramienta Seleccionar
     if (activeTool === 'select') {
-      const handleHitRadius = Math.max(12 / camera.zoom, 14);
+      const handleHitRadius = 12 / camera.zoom;
 
       // 1. Interacción con el marco verde de pantalla de jugadores (TV)
       if (showPlayerFrame && !isPlayerPreviewMode) {
@@ -692,7 +692,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         };
 
         // Manija de rotación (arriba de la caja)
-        const rotDistLocal = 25 / Math.abs(selectedEntity.scaleY || 1);
+        const rotDistLocal = 26 / (camera.zoom * Math.abs(selectedEntity.scaleY || 1));
         const rotLocalX = offX + bW / 2;
         const rotLocalY = offY - rotDistLocal;
         const rotWorld = localToWorldPos(rotLocalX, rotLocalY);
@@ -1081,7 +1081,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       // Comprobar Gizmo de entidad seleccionada (incluyendo puertas)
       const selectedEntity = game.entities.find((ent) => selectedEntityIds.includes(ent.id) && !ent.locked);
       if (newCursor === 'default' && selectedEntity && selectedEntity.type !== 'wall') {
-        const handleHitRadius = Math.max(12 / camera.zoom, 14);
+        const handleHitRadius = 12 / camera.zoom;
 
         let bW = 70;
         let bH = 70;
@@ -1140,7 +1140,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           };
         };
 
-        const rotDistLocal = 25 / Math.abs(selectedEntity.scaleY || 1);
+        const rotDistLocal = 26 / (camera.zoom * Math.abs(selectedEntity.scaleY || 1));
         const rotWorld = localToWorldPos(offX + bW / 2, offY - rotDistLocal);
         if (Math.hypot(worldPos.x - rotWorld.x, worldPos.y - rotWorld.y) <= handleHitRadius) {
           newCursor = 'grab';
@@ -1368,8 +1368,13 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       let finalY = worldPos.y;
 
       if (entityType === 'map') {
+        const existingMaps = game.entities.filter((e) => e.type === 'map');
         const ppg = asset.mapData?.pixelsPerGrid || (asset.width ? asset.width / 10 : 70);
-        scale = currentGridSize / ppg;
+        scale = existingMaps.length === 0 ? 1 : currentGridSize / ppg;
+        if (game.grid.snapToGrid && currentGridSize > 0) {
+          finalX = Math.round(finalX / currentGridSize) * currentGridSize;
+          finalY = Math.round(finalY / currentGridSize) * currentGridSize;
+        }
       } else {
         const maxDim = Math.max(asset.width || 70, asset.height || 70);
         scale = maxDim > 0 ? currentGridSize / maxDim : 1;

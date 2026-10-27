@@ -17,6 +17,7 @@ export class GizmoLayer extends Container {
   private isMaster: boolean;
   private tokensLayer?: any;
   private allEntities: Entity[] = [];
+  private cameraZoom: number = 1;
 
   constructor(isMaster: boolean) {
     super();
@@ -29,9 +30,10 @@ export class GizmoLayer extends Container {
     this.tokensLayer = layer;
   }
 
-  public update(selectedEntities: Entity[], allEntities: Entity[] = []) {
+  public update(selectedEntities: Entity[], allEntities: Entity[] = [], cameraZoom: number = 1) {
     this.graphics.clear();
     this.allEntities = allEntities;
+    this.cameraZoom = Math.max(0.05, cameraZoom || 1);
 
     if (!this.isMaster || selectedEntities.length === 0) {
       return;
@@ -118,27 +120,37 @@ export class GizmoLayer extends Container {
     this.graphics.rotation = rotation;
     this.graphics.scale.set(entity.scaleX, entity.scaleY);
 
+    const zoom = this.cameraZoom;
+    const sx = Math.max(0.001, Math.abs(entity.scaleX || 1));
+    const sy = Math.max(0.001, Math.abs(entity.scaleY || 1));
     const { offsetX, offsetY, width, height } = bounds;
 
-    // Caja delimitadora
+    // Caja delimitadora (borde constante de aprox 2px en pantalla)
+    const boxStroke = 2 / (zoom * sx);
     this.graphics.rect(offsetX, offsetY, width, height);
-    this.graphics.stroke({ width: 2 / Math.abs(entity.scaleX || 1), color: 0x38bdf8, alpha: 0.9 });
+    this.graphics.stroke({ width: boxStroke, color: 0x38bdf8, alpha: 0.9 });
 
-    // Manija de rotación superior
-    const handleDist = 25 / Math.abs(entity.scaleY || 1);
+    // Manija de rotación superior (distancia constante de 26px en pantalla)
+    const handleDist = 26 / (zoom * sy);
     const rotHandleY = offsetY - handleDist;
     const centerX = offsetX + width / 2;
 
+    const rotLineWidth = 1.5 / (zoom * sx);
     this.graphics.moveTo(centerX, offsetY);
     this.graphics.lineTo(centerX, rotHandleY);
-    this.graphics.stroke({ width: 1.5 / Math.abs(entity.scaleX || 1), color: 0x38bdf8, alpha: 0.8 });
+    this.graphics.stroke({ width: rotLineWidth, color: 0x38bdf8, alpha: 0.8 });
 
-    this.graphics.circle(centerX, rotHandleY, 6 / Math.abs(entity.scaleX || 1));
+    // Círculo de rotación (radio de 5px en pantalla, diámetro aprox 10px)
+    const rotRadius = 5 / (zoom * sx);
+    const rotStroke = 1.5 / (zoom * sx);
+    this.graphics.circle(centerX, rotHandleY, rotRadius);
     this.graphics.fill({ color: 0x38bdf8 });
-    this.graphics.stroke({ width: 1.5, color: 0xffffff });
+    this.graphics.stroke({ width: rotStroke, color: 0xffffff });
 
-    // Manijas de esquina para escalado
-    const handleSize = 8 / Math.abs(entity.scaleX || 1);
+    // Manijas de esquina para escalado (cuadrados de aprox 10px en pantalla)
+    const handleSizeX = 10 / (zoom * sx);
+    const handleSizeY = 10 / (zoom * sy);
+    const cornerStroke = 1.5 / (zoom * sx);
     const corners = [
       { x: offsetX, y: offsetY },
       { x: offsetX + width, y: offsetY },
@@ -147,9 +159,9 @@ export class GizmoLayer extends Container {
     ];
 
     for (const c of corners) {
-      this.graphics.rect(c.x - handleSize / 2, c.y - handleSize / 2, handleSize, handleSize);
+      this.graphics.rect(c.x - handleSizeX / 2, c.y - handleSizeY / 2, handleSizeX, handleSizeY);
       this.graphics.fill({ color: 0xffffff });
-      this.graphics.stroke({ width: 1.5, color: 0x0284c7 });
+      this.graphics.stroke({ width: cornerStroke, color: 0x0284c7 });
     }
   }
 
@@ -180,7 +192,10 @@ export class GizmoLayer extends Container {
     this.graphics.rotation = rotation;
     this.graphics.scale.set(entity.scaleX, entity.scaleY);
 
+    const zoom = this.cameraZoom;
+    const sx = Math.max(0.001, Math.abs(entity.scaleX || 1));
+    const lockedStroke = 2 / (zoom * sx);
     this.graphics.rect(bounds.offsetX, bounds.offsetY, bounds.width, bounds.height);
-    this.graphics.stroke({ width: 2 / Math.abs(entity.scaleX || 1), color: 0xef4444, alpha: 0.75 });
+    this.graphics.stroke({ width: lockedStroke, color: 0xef4444, alpha: 0.75 });
   }
 }

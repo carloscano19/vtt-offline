@@ -85,24 +85,54 @@ export const GridModal: React.FC<GridModalProps> = ({ isOpen, onClose }) => {
           </div>
         </div>
 
-        {/* Interruptores */}
-        <div className="space-y-2 pt-2 border-t border-slate-700/80">
-          <label className="flex items-center justify-between text-xs cursor-pointer">
+        {/* Interruptor destacado de Ajuste a Cuadrícula (Snap) */}
+        <div className={`p-3 rounded-lg border transition-all ${
+          grid.snapToGrid 
+            ? 'bg-sky-950/40 border-sky-500/50 shadow-sm shadow-sky-950/30' 
+            : 'bg-slate-800/40 border-slate-700/60'
+        }`}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-white">Ajustar a la cuadrícula (Snap)</span>
+                <span className={`px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider rounded ${
+                  grid.snapToGrid 
+                    ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30' 
+                    : 'bg-slate-700/60 text-slate-400 border border-slate-600/40'
+                }`}>
+                  {grid.snapToGrid ? 'Activo' : 'Desactivado'}
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1 leading-snug">
+                Alinea fichas y puertas al soltar. Mantén <span className="font-semibold text-sky-300 bg-slate-800 px-1 py-0.5 rounded border border-slate-600/60">Alt</span> al soltar para colocar sin ajuste.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={grid.snapToGrid}
+              onClick={() => setGridConfig({ snapToGrid: !grid.snapToGrid })}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                grid.snapToGrid ? 'bg-sky-500' : 'bg-slate-700'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  grid.snapToGrid ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
+        {/* Interruptor Visibilidad de Líneas */}
+        <div className="pt-1">
+          <label className="flex items-center justify-between text-xs cursor-pointer p-1.5 rounded hover:bg-slate-800/40">
             <span className="text-slate-300">Mostrar líneas de cuadrícula</span>
             <input
               type="checkbox"
               checked={grid.visible}
               onChange={(e) => setGridConfig({ visible: e.target.checked })}
-              className="w-4 h-4 accent-sky-500 cursor-pointer"
-            />
-          </label>
-
-          <label className="flex items-center justify-between text-xs cursor-pointer">
-            <span className="text-slate-300">Ajuste magnético a cuadrícula (Snap)</span>
-            <input
-              type="checkbox"
-              checked={grid.snapToGrid}
-              onChange={(e) => setGridConfig({ snapToGrid: e.target.checked })}
               className="w-4 h-4 accent-sky-500 cursor-pointer"
             />
           </label>

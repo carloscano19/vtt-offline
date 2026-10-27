@@ -85,15 +85,20 @@ export const LibraryTab: React.FC = () => {
     let scale = 1;
 
     if (isMap) {
+      const existingMaps = game.entities.filter((e) => e.type === 'map');
       const ppg = (asset as any).mapData?.pixelsPerGrid || (asset.width ? asset.width / 10 : 70);
-      scale = currentGridSize / ppg;
+      const effectiveGridSize = existingMaps.length === 0 ? ppg : currentGridSize;
+      scale = existingMaps.length === 0 ? 1 : effectiveGridSize / ppg;
       const mapW = (asset.width || 1000) * scale;
       const mapH = (asset.height || 1000) * scale;
 
       posX = game.masterCamera.x - mapW / 2;
       posY = game.masterCamera.y - mapH / 2;
+      if (game.grid.snapToGrid && effectiveGridSize > 0) {
+        posX = Math.round(posX / effectiveGridSize) * effectiveGridSize;
+        posY = Math.round(posY / effectiveGridSize) * effectiveGridSize;
+      }
 
-      const existingMaps = game.entities.filter((e) => e.type === 'map');
       const isOverlapping = existingMaps.some((m) => {
         const mW = (m.mapData?.gridWidth ?? 10) * (m.mapData?.pixelsPerGrid ?? 70) * m.scaleX;
         const mH = (m.mapData?.gridHeight ?? 10) * (m.mapData?.pixelsPerGrid ?? 70) * m.scaleY;
