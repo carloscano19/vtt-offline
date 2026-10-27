@@ -1,4 +1,4 @@
-import { Entity } from '../../types/entity';
+import { Entity, getDefaultSnapToGrid } from '../../types/entity';
 import { GameState } from '../../types/game';
 import { safeClip } from '../vision/safeClip';
 import { parseColor, colorToHex } from '../../utils/color';
@@ -162,7 +162,7 @@ export function normalizeEntity(entity: Entity): Entity {
       y = (p1.y + p2.y) / 2;
     }
 
-    return {
+    entity = {
       ...entity,
       x,
       y,
@@ -183,7 +183,8 @@ export function normalizeEntity(entity: Entity): Entity {
   const rawOpacity = typeof entity.opacity === 'number' && Number.isFinite(entity.opacity) ? entity.opacity : 1.0;
   entity = {
     ...entity,
-    opacity: Math.max(0, Math.min(1, rawOpacity))
+    opacity: Math.max(0, Math.min(1, rawOpacity)),
+    snapToGrid: getDefaultSnapToGrid(entity)
   };
 
   return entity;

@@ -238,6 +238,7 @@ export interface Entity {
   visibleToPlayers: boolean;
   locked: boolean;
   opacity?: number; // 0.0 a 1.0 (1.0 = 100% opaco por defecto)
+  snapToGrid?: boolean; // Ajuste individual a la cuadrícula (true para personajes, false para objetos/luces/efectos)
 
   // Datos específicos de mapa (coordenadas relativas locales)
   mapData?: MapData;
@@ -266,4 +267,19 @@ export interface Entity {
   side?: TokenSide;
   statuses?: TokenStatus[];
   hp?: TokenHp;
+}
+
+/**
+ * Determina si una entidad debe ajustarse a la cuadrícula por defecto:
+ * - Tokens con bando ('jugador', 'enemigo', 'neutral'): true
+ * - Objetos (type 'object' o tokens sin bando), efectos y luces: false
+ */
+export function getDefaultSnapToGrid(entity: { type?: string; side?: string; snapToGrid?: boolean }): boolean {
+  if (typeof entity.snapToGrid === 'boolean') {
+    return entity.snapToGrid;
+  }
+  if (entity.type === 'token' && (entity.side === 'jugador' || entity.side === 'enemigo' || entity.side === 'neutral')) {
+    return true;
+  }
+  return false;
 }

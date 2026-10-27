@@ -21,7 +21,7 @@ import {
   RefreshCcw,
   Sparkles
 } from 'lucide-react';
-import { TokenSide, recalculateDoorEndpoints } from '../../../types/entity';
+import { TokenSide, recalculateDoorEndpoints, getDefaultSnapToGrid } from '../../../types/entity';
 import { getAsset, db } from '../../../db/dexie';
 import { cloudSync } from '../../../modules/sync/cloudSync';
 import { getMediaDimensions } from '../../../utils/mediaDimensions';
@@ -205,6 +205,26 @@ export const PropertiesTab: React.FC = () => {
           }
           className="w-full accent-sky-500 cursor-pointer"
         />
+      </div>
+
+      {/* Ajustar a la cuadrícula por entidad */}
+      <div className="bg-slate-800/60 p-2.5 rounded border border-slate-700">
+        <label className="flex items-center justify-between text-xs cursor-pointer">
+          <div>
+            <span className="text-slate-300 font-medium block">Ajustar a la cuadrícula</span>
+            <span className="text-[10px] text-slate-500 block">
+              {getDefaultSnapToGrid(selectedEntity)
+                ? 'Alineado al centro de la casilla'
+                : 'Posicionamiento libre (flechas mueven 1/4 casilla)'}
+            </span>
+          </div>
+          <input
+            type="checkbox"
+            checked={getDefaultSnapToGrid(selectedEntity)}
+            onChange={(e) => handleUpdate({ snapToGrid: e.target.checked })}
+            className="w-4 h-4 accent-sky-500 cursor-pointer ml-3 shrink-0"
+          />
+        </label>
       </div>
 
       {/* Selector de bando para tokens */}

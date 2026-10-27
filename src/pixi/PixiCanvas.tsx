@@ -3,7 +3,7 @@ import { PixiRenderer } from './PixiRenderer';
 import { useGameStore } from '../stores/useGameStore';
 import { useUIStore } from '../stores/useUIStore';
 import { screenToWorld, snapPointToGrid, snapPointToGridOrMidpoint, localToWorld, worldToLocal } from './utils/coordinates';
-import { Entity, Point2D, recalculateDoorEndpoints, rotateDoorAroundHinge } from '../types/entity';
+import { Entity, Point2D, recalculateDoorEndpoints, rotateDoorAroundHinge, getDefaultSnapToGrid } from '../types/entity';
 import { CameraState } from '../types/game';
 import { syncChannel } from '../modules/sync/syncChannel';
 import { getZoomSensitivity } from '../modules/settings/zoomSensitivity';
@@ -245,10 +245,23 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         else if (e.key === 'ArrowRight') dx = 1;
 
         const gridSize = game.grid.size > 0 ? game.grid.size : 70;
-        const currCellX = Math.floor(selectedToken.x / gridSize) * gridSize + gridSize / 2;
-        const currCellY = Math.floor(selectedToken.y / gridSize) * gridSize + gridSize / 2;
-        const targetX = currCellX + dx * gridSize;
-        const targetY = currCellY + dy * gridSize;
+        const entitySnap = getDefaultSnapToGrid(selectedToken);
+        const shouldSnap = game.grid.snapToGrid && entitySnap && !e.altKey;
+
+        let targetX = selectedToken.x;
+        let targetY = selectedToken.y;
+
+        if (shouldSnap) {
+          const currCellX = Math.floor(selectedToken.x / gridSize) * gridSize + gridSize / 2;
+          const currCellY = Math.floor(selectedToken.y / gridSize) * gridSize + gridSize / 2;
+          targetX = currCellX + dx * gridSize;
+          targetY = currCellY + dy * gridSize;
+        } else {
+          // Entidad libre o snap desactivado: pasos de 1/4 de casilla
+          const quarterGrid = gridSize / 4;
+          targetX = selectedToken.x + dx * quarterGrid;
+          targetY = selectedToken.y + dy * quarterGrid;
+        }
 
         const fromPt: Point2D = { x: selectedToken.x, y: selectedToken.y };
         const toPt: Point2D = { x: targetX, y: targetY };
@@ -1214,34 +1227,35 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         let finalX = entity.x;
         let finalY = entity.y;
 
-        if (game.grid.snapToGrid && game.grid.size > 0 && !e.altKey) {
-          if (entity.type === 'map') {
-            const snapped = snapPointToGrid({ x: entity.x, y: entity.y }, game.grid.size);
-            finalX = snapped.x;
-            finalY = snapped.y;
-          } else if (entity.type === 'door' && entity.door) {
+        if (entity.type === 'door' && entity.door) {
+          if (game.grid.snapToGrid && !e.altKey) {
             const parentMap = entity.mapId ? game.entities.find((m) => m.id === entity.mapId) : undefined;
             const gridSize = parentMap?.mapData?.pixelsPerGrid ?? (game.grid.size > 0 ? game.grid.size : 70);
             const halfGrid = gridSize / 2;
             finalX = Math.round(entity.x / halfGrid) * halfGrid;
             finalY = Math.round(entity.y / halfGrid) * halfGrid;
-            const { p1, p2 } = recalculateDoorEndpoints(finalX, finalY, entity.rotation, entity.door.length ?? gridSize, entity.door.isHingeInverted);
-            updateEntity(entity.id, { x: finalX, y: finalY, scaleX: 1, scaleY: 1, door: { ...entity.door, p1, p2 } }, true);
-            interactionState.current.isDraggingEntity = false;
-            interactionState.current.dragEntityId = null;
-            return;
+          }
+          const { p1, p2 } = recalculateDoorEndpoints(finalX, finalY, entity.rotation, entity.door.length ?? 70, entity.door.isHingeInverted);
+          updateEntity(entity.id, { x: finalX, y: finalY, scaleX: 1, scaleY: 1, door: { ...entity.door, p1, p2 } }, true);
+          interactionState.current.isDraggingEntity = false;
+          interactionState.current.dragEntityId = null;
+          return;
+        }
+
+        const entitySnap = getDefaultSnapToGrid(entity);
+        const shouldSnap = game.grid.snapToGrid && entitySnap && !e.altKey;
+
+        if (shouldSnap && game.grid.size > 0) {
+          if (entity.type === 'map') {
+            const snapped = snapPointToGrid({ x: entity.x, y: entity.y }, game.grid.size);
+            finalX = snapped.x;
+            finalY = snapped.y;
           } else {
             const halfGrid = game.grid.size / 2;
             const snapped = snapPointToGrid({ x: entity.x - halfGrid, y: entity.y - halfGrid }, game.grid.size);
             finalX = snapped.x + halfGrid;
             finalY = snapped.y + halfGrid;
           }
-        } else if (entity.type === 'door' && entity.door) {
-          const { p1, p2 } = recalculateDoorEndpoints(finalX, finalY, entity.rotation, entity.door.length ?? 70, entity.door.isHingeInverted);
-          updateEntity(entity.id, { x: finalX, y: finalY, scaleX: 1, scaleY: 1, door: { ...entity.door, p1, p2 } }, true);
-          interactionState.current.isDraggingEntity = false;
-          interactionState.current.dragEntityId = null;
-          return;
         }
 
         if (game.grid.wallsBlockMovement && interactionState.current.startEntityPos && entity.type === 'token') {

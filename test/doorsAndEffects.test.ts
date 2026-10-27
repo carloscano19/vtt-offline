@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { snapPointToGridOrMidpoint } from '../src/pixi/utils/coordinates';
 import { lightManager } from '../src/modules/lights/lightManager';
-import { Entity, recalculateDoorEndpoints, rotateDoorAroundHinge } from '../src/types/entity';
+import { Entity, recalculateDoorEndpoints, rotateDoorAroundHinge, getDefaultSnapToGrid } from '../src/types/entity';
 import { normalizeEntity } from '../src/modules/persistence/normalizer';
 
 describe('Doors new token model and normalizer migration', () => {
@@ -410,6 +410,55 @@ describe('Effects lighting and scale integration', () => {
       entities: []
     };
     expect(Boolean(rawGameWithOpt.grid?.wallsBlockMovement ?? false)).toBe(true);
+  });
+
+  it('determines entity snapToGrid defaults correctly and normalizer populates them', () => {
+    // Personajes con bando -> true
+    expect(getDefaultSnapToGrid({ type: 'token', side: 'jugador' })).toBe(true);
+    expect(getDefaultSnapToGrid({ type: 'token', side: 'enemigo' })).toBe(true);
+    expect(getDefaultSnapToGrid({ type: 'token', side: 'neutral' })).toBe(true);
+
+    // Objetos, tokens sin bando, efectos y luces -> false
+    expect(getDefaultSnapToGrid({ type: 'object' })).toBe(false);
+    expect(getDefaultSnapToGrid({ type: 'token' })).toBe(false);
+    expect(getDefaultSnapToGrid({ type: 'effect' })).toBe(false);
+    expect(getDefaultSnapToGrid({ type: 'light' })).toBe(false);
+
+    // Override explícito
+    expect(getDefaultSnapToGrid({ type: 'object', snapToGrid: true })).toBe(true);
+    expect(getDefaultSnapToGrid({ type: 'token', side: 'jugador', snapToGrid: false })).toBe(false);
+
+    // Normalizer rellena el campo
+    const character: Entity = {
+      id: 'pj_1',
+      type: 'token',
+      name: 'Hero',
+      x: 0,
+      y: 0,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      zIndex: 10,
+      visibleToPlayers: true,
+      locked: false,
+      side: 'jugador'
+    };
+    const chest: Entity = {
+      id: 'chest_1',
+      type: 'object',
+      name: 'Cofre',
+      x: 0,
+      y: 0,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      zIndex: 10,
+      visibleToPlayers: true,
+      locked: false
+    };
+
+    expect(normalizeEntity(character).snapToGrid).toBe(true);
+    expect(normalizeEntity(chest).snapToGrid).toBe(false);
   });
 });
 
