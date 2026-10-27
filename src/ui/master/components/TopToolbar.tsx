@@ -21,6 +21,7 @@ import {
   CloudOff,
   RotateCcw,
   Scan,
+  Maximize,
   History,
   Flame,
   Sun,
@@ -43,6 +44,8 @@ import { Entity } from '../../../types/entity';
 import { videoManager } from '../../../modules/media/videoManager';
 import { cloudSync } from '../../../modules/sync/cloudSync';
 import { parseColor, colorToHex } from '../../../utils/color';
+import { fitMapInViewport } from '../../../modules/camera/cameraUtils';
+import { syncChannel } from '../../../modules/sync/syncChannel';
 
 interface TopToolbarProps {
   onOpenGridModal: () => void;
@@ -69,6 +72,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
 
   const game = useGameStore((s) => s.game);
   const addEntity = useGameStore((s) => s.addEntity);
+  const setPlayerCamera = useGameStore((s) => s.setPlayerCamera);
   const sendMasterCameraToPlayers = useGameStore((s) => s.sendMasterCameraToPlayers);
   const setFollowMasterCamera = useGameStore((s) => s.setFollowMasterCamera);
   const setFogConfig = useGameStore((s) => s.setFogConfig);
@@ -966,6 +970,22 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
                   <span>Marco TV en tablero</span>
                 </span>
                 <span className="font-mono text-xs font-bold">{showPlayerFrame ? 'SÍ' : 'NO'}</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  const fitted = fitMapInViewport(game.entities, game.playerViewport);
+                  if (fitted) {
+                    setPlayerCamera(fitted);
+                    syncChannel.sendCamera(fitted);
+                  }
+                  setShowTvMenu(false);
+                }}
+                className="w-full p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded flex items-center gap-2 text-emerald-300 transition-colors"
+                title="Ajusta la posición y zoom de la pantalla de jugadores para mostrar el mapa entero"
+              >
+                <Maximize className="w-4 h-4 text-emerald-400" />
+                <span>Encuadrar mapa en TV</span>
               </button>
 
               <button

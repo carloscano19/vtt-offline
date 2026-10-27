@@ -4,6 +4,7 @@ export type SyncMessage =
   | { type: 'STATE_SYNC'; state: GameState }
   | { type: 'RULER_SYNC'; ruler: RulerState }
   | { type: 'CAMERA_SYNC'; camera: CameraState }
+  | { type: 'PLAYER_CAMERA_CHANGED'; camera: CameraState }
   | { type: 'VIEWPORT_SYNC'; width: number; height: number }
   | { type: 'REQUEST_CURRENT_STATE' }
   | { type: 'MASTER_HELLO'; id: string }
@@ -18,6 +19,7 @@ class SyncManager {
   private stateListeners: Set<(state: GameState) => void> = new Set();
   private rulerListeners: Set<(ruler: RulerState) => void> = new Set();
   private cameraListeners: Set<(camera: CameraState) => void> = new Set();
+  private playerCameraChangedListeners: Set<(camera: CameraState) => void> = new Set();
   private viewportListeners: Set<(vp: { width: number; height: number }) => void> = new Set();
   private requestStateListeners: Set<() => void> = new Set();
 
@@ -80,6 +82,9 @@ class SyncManager {
             break;
           case 'CAMERA_SYNC':
             this.cameraListeners.forEach((listener) => listener(msg.camera));
+            break;
+          case 'PLAYER_CAMERA_CHANGED':
+            this.playerCameraChangedListeners.forEach((listener) => listener(msg.camera));
             break;
           case 'VIEWPORT_SYNC':
             this.viewportListeners.forEach((listener) => listener({ width: msg.width, height: msg.height }));
@@ -233,6 +238,21 @@ class SyncManager {
   public onCamera(callback: (camera: CameraState) => void): () => void {
     this.cameraListeners.add(callback);
     return () => this.cameraListeners.delete(callback);
+  }
+
+  public sendPlayerCameraChanged(camera: CameraState) {
+    if (this.channel) {
+      try {
+        this.channel.postMessage({ type: 'PLAYER_CAMERA_CHANGED', camera });
+      } catch (err) {
+        console.error('[SyncManager] Error al enviar PLAYER_CAMERA_CHANGED:', err);
+      }
+    }
+  }
+
+  public onPlayerCameraChanged(callback: (camera: CameraState) => void): () => void {
+    this.playerCameraChangedListeners.add(callback);
+    return () => this.playerCameraChangedListeners.delete(callback);
   }
 
   public sendViewport(width: number, height: number) {

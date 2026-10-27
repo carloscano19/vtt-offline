@@ -333,8 +333,10 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
   // Funciones auxiliares de cámara y coordenadas
   const getCamera = useCallback(() => {
-    return isMaster ? (isPlayerPreviewMode ? game.playerCamera : game.masterCamera) : game.playerCamera;
-  }, [isMaster, isPlayerPreviewMode, game.masterCamera, game.playerCamera]);
+    return isMaster
+      ? (isPlayerPreviewMode ? game.playerCamera : game.masterCamera)
+      : (game.followMasterCamera ? game.masterCamera : game.playerCamera);
+  }, [isMaster, isPlayerPreviewMode, game.masterCamera, game.playerCamera, game.followMasterCamera]);
 
   const setCamera = useCallback(
     (cam: Partial<{ x: number; y: number; zoom: number }>) => {
@@ -346,10 +348,16 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           setMasterCamera(cam);
         }
       } else {
-        setPlayerCamera(cam);
+        const currentEffective = game.followMasterCamera ? game.masterCamera : game.playerCamera;
+        if (game.followMasterCamera) {
+          useGameStore.getState().setFollowMasterCamera(false);
+        }
+        const updated = { ...currentEffective, ...cam };
+        setPlayerCamera(updated);
+        syncChannel.sendPlayerCameraChanged(updated);
       }
     },
-    [isMaster, isPlayerPreviewMode, game.playerCamera, setMasterCamera, setPlayerCamera]
+    [isMaster, isPlayerPreviewMode, game.playerCamera, game.masterCamera, game.followMasterCamera, setMasterCamera, setPlayerCamera]
   );
 
   const getCanvasDimensions = useCallback(() => {
@@ -365,7 +373,6 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     if (!container) return;
 
     const onWheelNative = (e: WheelEvent) => {
-      if (!isMaster) return;
       e.preventDefault();
 
       const { width, height } = getCanvasDimensions();
@@ -405,7 +412,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     return () => {
       container.removeEventListener('wheel', onWheelNative);
     };
-  }, [isMaster, getCamera, getCanvasDimensions, getLocalPointer, setCamera]);
+  }, [getCamera, getCanvasDimensions, getLocalPointer, setCamera]);
 
   // Helper para calcular la posición mundial de un nodo de pared
   const getWallNodeWorldPos = useCallback(
@@ -424,11 +431,18 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
   // 5. Manejo de clics e interacciones de ratón
   const handlePointerDown = (e: React.PointerEvent) => {
-    if (!isMaster) return;
-
     const { width, height } = getCanvasDimensions();
     const camera = getCamera();
     const localMouse = getLocalPointer(e);
+
+    // En la ventana de jugadores, arrastrar con ratón o trackpad desplaza la cámara
+    if (!isMaster) {
+      interactionState.current.isPanning = true;
+      interactionState.current.startMouse = localMouse;
+      interactionState.current.startCamera = { x: camera.x, y: camera.y };
+      return;
+    }
+
     const worldPos = screenToWorld(localMouse, camera, width, height);
 
     // Paneo con botón central (botón 1) o barra espaciadora pulsada o herramienta Paneo
@@ -846,11 +860,23 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isMaster) return;
-
     const { width, height } = getCanvasDimensions();
     const camera = getCamera();
     const localMouse = getLocalPointer(e);
+
+    // En la ventana de jugadores, gestionar paneo
+    if (!isMaster) {
+      if (interactionState.current.isPanning) {
+        const dx = (localMouse.x - interactionState.current.startMouse.x) / camera.zoom;
+        const dy = (localMouse.y - interactionState.current.startMouse.y) / camera.zoom;
+        setCamera({
+          x: interactionState.current.startCamera.x - dx,
+          y: interactionState.current.startCamera.y - dy
+        });
+      }
+      return;
+    }
+
     const worldPos = screenToWorld(localMouse, camera, width, height);
 
     // 1. Paneo de cámara del máster
@@ -1166,7 +1192,10 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    if (!isMaster) return;
+    if (!isMaster) {
+      interactionState.current.isPanning = false;
+      return;
+    }
 
     const { width, height } = getCanvasDimensions();
     const camera = getCamera();
@@ -1475,7 +1504,9 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
   // Determinar cursor CSS dinámico
   let activeCursor = 'default';
-  if (isSpacePressed || interactionState.current.isPanning) {
+  if (!isMaster) {
+    activeCursor = interactionState.current.isPanning ? 'cursor-grabbing' : 'cursor-grab';
+  } else if (isSpacePressed || interactionState.current.isPanning) {
     activeCursor = 'cursor-grab active:cursor-grabbing';
   } else if (
     activeTool === 'wall' ||

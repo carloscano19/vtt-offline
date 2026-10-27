@@ -2,6 +2,7 @@ import { Entity } from '../../types/entity';
 import { GameState } from '../../types/game';
 import { safeClip } from '../vision/safeClip';
 import { parseColor, colorToHex } from '../../utils/color';
+import { fitMapInViewport, isPlayerCameraOutOfBounds } from '../camera/cameraUtils';
 
 /**
  * Normaliza una entidad individual.
@@ -189,6 +190,21 @@ export function normalizeEntity(entity: Entity): Entity {
  */
 export function normalizeGameState(game: GameState): GameState {
   const currentGridSize = (game.grid?.size && game.grid.size > 0) ? game.grid.size : 70;
+  const normalizedEntities = (game.entities || []).map((ent) => {
+    let nEnt = normalizeEntity(ent);
+    if (nEnt.type === 'map' && nEnt.mapData?.pixelsPerGrid && nEnt.mapData.pixelsPerGrid > 0) {
+      const expectedScale = currentGridSize / nEnt.mapData.pixelsPerGrid;
+      if (Math.abs(nEnt.scaleX - expectedScale) > 0.001 || Math.abs(nEnt.scaleY - expectedScale) > 0.001) {
+        nEnt = {
+          ...nEnt,
+          scaleX: expectedScale,
+          scaleY: expectedScale
+        };
+      }
+    }
+    return nEnt;
+  });
+
   return {
       ...game,
       fog: {
@@ -253,19 +269,16 @@ export function normalizeGameState(game: GameState): GameState {
         volume: game.music?.volume ?? 0.8,
         loopTrack: game.music?.loopTrack ?? false
       },
-      entities: (game.entities || []).map((ent) => {
-        let nEnt = normalizeEntity(ent);
-        if (nEnt.type === 'map' && nEnt.mapData?.pixelsPerGrid && nEnt.mapData.pixelsPerGrid > 0) {
-          const expectedScale = currentGridSize / nEnt.mapData.pixelsPerGrid;
-          if (Math.abs(nEnt.scaleX - expectedScale) > 0.001 || Math.abs(nEnt.scaleY - expectedScale) > 0.001) {
-            nEnt = {
-              ...nEnt,
-              scaleX: expectedScale,
-              scaleY: expectedScale
-            };
+      entities: normalizedEntities,
+      playerCamera: (() => {
+        let cam = game.playerCamera || { x: 0, y: 0, zoom: 1 };
+        if (isPlayerCameraOutOfBounds(cam, normalizedEntities)) {
+          const fitted = fitMapInViewport(normalizedEntities, game.playerViewport || { width: 1920, height: 1080 });
+          if (fitted) {
+            cam = fitted;
           }
         }
-        return nEnt;
-      })
+        return cam;
+      })()
     };
 }

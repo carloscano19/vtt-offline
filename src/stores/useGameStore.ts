@@ -15,6 +15,8 @@ import {
 import { Entity, recalculateDoorEndpoints } from '../types/entity';
 import { revealRect, hideRect } from '../modules/vision/fogMemory';
 import { normalizeEntity, normalizeGameState } from '../modules/persistence/normalizer';
+import { fitMapInViewport } from '../modules/camera/cameraUtils';
+import { syncChannel } from '../modules/sync/syncChannel';
 
 /**
  * Reescala proporcionalmente las entidades existentes cuando cambia el tamaño de la cuadrícula.
@@ -203,16 +205,31 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       const newGrid = { ...oldGrid, ...partial };
 
       let updatedEntities = state.game.entities;
+      let masterCamera = state.game.masterCamera;
+      let playerCamera = state.game.playerCamera;
 
       // Si cambia el tamaño de la cuadrícula, reescalar proporcionalmente entidades existentes
+      // y reescalar el zoom de masterCamera y playerCamera en la proporción inversa para mantener el encuadre visible
       if (partial.size && partial.size !== oldGrid.size && oldGrid.size > 0) {
         updatedEntities = rescaleEntitiesForGridChange(state.game.entities, oldGrid.size, partial.size);
+        const invRatio = oldGrid.size / partial.size;
+        masterCamera = {
+          ...masterCamera,
+          zoom: Math.max(0.05, Math.min(8.0, (masterCamera.zoom || 1) * invRatio))
+        };
+        playerCamera = {
+          ...playerCamera,
+          zoom: Math.max(0.05, Math.min(8.0, (playerCamera.zoom || 1) * invRatio))
+        };
+        syncChannel.sendCamera(playerCamera);
       }
 
       return {
         game: {
           ...state.game,
           grid: newGrid,
+          masterCamera,
+          playerCamera,
           entities: updatedEntities,
           updatedAt: Date.now()
         }
@@ -227,6 +244,8 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       let grid = state.game.grid;
       let existingEntities = state.game.entities;
       let finalEntity = normalizedEntity;
+      let masterCamera = state.game.masterCamera;
+      let playerCamera = state.game.playerCamera;
 
       // Si es el primer mapa y el tablero no tenía mapas, ajustar grid.size al pixelsPerGrid del mapa
       if (finalEntity.type === 'map' && state.game.entities.filter((e) => e.type === 'map').length === 0) {
@@ -243,9 +262,21 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
             scaleX: 1,
             scaleY: 1
           };
-          // Reescalar en proporción el resto de entidades existentes
+          // Reescalar en proporción el resto de entidades existentes y masterCamera en la proporción inversa
           if (oldGridSize > 0 && oldGridSize !== newSize) {
             existingEntities = rescaleEntitiesForGridChange(existingEntities, oldGridSize, newSize);
+            const invRatio = oldGridSize / newSize;
+            masterCamera = {
+              ...masterCamera,
+              zoom: Math.max(0.05, Math.min(8.0, (masterCamera.zoom || 1) * invRatio))
+            };
+          }
+
+          // Ajustar la cámara de jugadores para mostrar el mapa entero en la tele
+          const fittedCam = fitMapInViewport([finalEntity], state.game.playerViewport);
+          if (fittedCam) {
+            playerCamera = fittedCam;
+            syncChannel.sendCamera(fittedCam);
           }
         }
       }
@@ -256,6 +287,8 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
         game: {
           ...state.game,
           grid,
+          masterCamera,
+          playerCamera,
           entities,
           updatedAt: Date.now()
         },
