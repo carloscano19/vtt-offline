@@ -25,6 +25,7 @@ import { TokenSide, recalculateDoorEndpoints, getDefaultSnapToGrid } from '../..
 import { getAsset, db } from '../../../db/dexie';
 import { cloudSync } from '../../../modules/sync/cloudSync';
 import { getMediaDimensions } from '../../../utils/mediaDimensions';
+import { EyeDropperButton } from '../../common/EyeDropperButton';
 
 const EFFECT_PRESET_NAMES: Record<string, string> = {
   torch: 'Antorcha de pared',
@@ -108,26 +109,6 @@ export const PropertiesTab: React.FC = () => {
   };
 
   const degrees = Math.round((selectedEntity.rotation * 180) / Math.PI);
-
-  const handleEyeDropper = async () => {
-    if ('EyeDropper' in window) {
-      try {
-        const eyeDropper = new (window as any).EyeDropper();
-        const result = await eyeDropper.open();
-        if (result && result.sRGBHex) {
-          handleUpdate({
-            chromaKey: {
-              enabled: true,
-              color: result.sRGBHex,
-              tolerance: selectedEntity.chromaKey?.tolerance ?? 15
-            }
-          });
-        }
-      } catch (e) {
-        // Cancelado o no soportado
-      }
-    }
-  };
 
   return (
     <div className="p-4 space-y-4 text-xs text-slate-200 overflow-y-auto max-h-full">
@@ -627,6 +608,13 @@ export const PropertiesTab: React.FC = () => {
                   }
                   className="w-7 h-7 rounded cursor-pointer border border-slate-600 bg-transparent"
                 />
+                <EyeDropperButton
+                  onColorSelect={(hex) =>
+                    handleUpdate({
+                      light: { ...selectedEntity.light!, color: hex }
+                    })
+                  }
+                />
                 <span className="font-mono text-[11px] text-slate-300 uppercase">
                   {selectedEntity.light.color}
                 </span>
@@ -779,6 +767,17 @@ export const PropertiesTab: React.FC = () => {
                   handleUpdate(upd);
                 }}
                 className="w-8 h-8 rounded cursor-pointer border border-slate-600 bg-transparent shrink-0"
+              />
+              <EyeDropperButton
+                onColorSelect={(hex) => {
+                  const upd: any = {
+                    effect: { ...selectedEntity.effect!, color: hex }
+                  };
+                  if (selectedEntity.effect?.emitsLight && selectedEntity.light) {
+                    upd.light = { ...selectedEntity.light, color: hex };
+                  }
+                  handleUpdate(upd);
+                }}
               />
               <div className="flex items-center gap-1 flex-wrap">
                 {[
@@ -1405,15 +1404,17 @@ export const PropertiesTab: React.FC = () => {
                     }
                     className="w-6 h-6 rounded cursor-pointer border border-slate-600 bg-transparent"
                   />
-                  {'EyeDropper' in window && (
-                    <button
-                      onClick={handleEyeDropper}
-                      className="p-1 bg-slate-700 hover:bg-slate-600 text-emerald-300 rounded"
-                      title="Cuentagotas: hacer clic en el color a eliminar"
-                    >
-                      <Pipette className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                  <EyeDropperButton
+                    onColorSelect={(hex) =>
+                      handleUpdate({
+                        chromaKey: {
+                          ...selectedEntity.chromaKey!,
+                          color: hex
+                        }
+                      })
+                    }
+                    title="Cuentagotas: hacer clic en el color a eliminar"
+                  />
                 </div>
               </div>
 

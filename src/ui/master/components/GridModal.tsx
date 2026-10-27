@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useGameStore } from '../../../stores/useGameStore';
 import { X, Grid } from 'lucide-react';
 import { getZoomSensitivity, setZoomSensitivity } from '../../../modules/settings/zoomSensitivity';
+import { EyeDropperButton } from '../../common/EyeDropperButton';
 
 interface GridModalProps {
   isOpen: boolean;
@@ -64,6 +65,7 @@ export const GridModal: React.FC<GridModalProps> = ({ isOpen, onClose }) => {
                 onChange={(e) => setGridConfig({ color: e.target.value })}
                 className="w-8 h-8 rounded border border-slate-700 cursor-pointer bg-transparent"
               />
+              <EyeDropperButton onColorSelect={(color) => setGridConfig({ color })} />
               <span className="text-xs font-mono">{grid.color}</span>
             </div>
           </div>

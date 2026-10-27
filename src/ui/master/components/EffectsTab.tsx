@@ -6,6 +6,7 @@ import { AssetItem } from '../../../types/game';
 import { getAllAssets, saveAsset, db } from '../../../db/dexie';
 import { cloudSync } from '../../../modules/sync/cloudSync';
 import { getMediaDimensions } from '../../../utils/mediaDimensions';
+import { EyeDropperButton } from '../../common/EyeDropperButton';
 import {
   Sparkles,
   Flame,
@@ -1013,12 +1014,15 @@ export const EffectsTab: React.FC = () => {
                   <div className="space-y-2 pt-1 border-t border-slate-700/60">
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">Color de luz</span>
-                      <input
-                        type="color"
-                        value={modalLightColor}
-                        onChange={(e) => setModalLightColor(e.target.value)}
-                        className="w-7 h-7 rounded border border-slate-600 bg-transparent cursor-pointer"
-                      />
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="color"
+                          value={modalLightColor}
+                          onChange={(e) => setModalLightColor(e.target.value)}
+                          className="w-7 h-7 rounded border border-slate-600 bg-transparent cursor-pointer"
+                        />
+                        <EyeDropperButton onColorSelect={(color) => setModalLightColor(color)} />
+                      </div>
                     </div>
 
                     <div>

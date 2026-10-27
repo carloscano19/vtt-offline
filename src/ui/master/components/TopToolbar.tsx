@@ -48,6 +48,7 @@ import { authManager } from '../../../modules/auth/authManager';
 import { parseColor, colorToHex } from '../../../utils/color';
 import { fitMapInViewport } from '../../../modules/camera/cameraUtils';
 import { syncChannel } from '../../../modules/sync/syncChannel';
+import { EyeDropperButton } from '../../common/EyeDropperButton';
 
 interface TopToolbarProps {
   onOpenGridModal: () => void;
@@ -755,17 +756,27 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
               <div className="pt-2 border-t border-slate-800 space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400">Personalizado</span>
-                  <input
-                    type="color"
-                    value={game.ambient.color}
-                    onChange={(e) =>
-                      setAmbientConfig({
-                        preset: 'custom',
-                        color: e.target.value
-                      })
-                    }
-                    className="w-6 h-6 rounded cursor-pointer border border-slate-600 bg-transparent"
-                  />
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="color"
+                      value={game.ambient.color}
+                      onChange={(e) =>
+                        setAmbientConfig({
+                          preset: 'custom',
+                          color: e.target.value
+                        })
+                      }
+                      className="w-6 h-6 rounded cursor-pointer border border-slate-600 bg-transparent"
+                    />
+                    <EyeDropperButton
+                      onColorSelect={(color) =>
+                        setAmbientConfig({
+                          preset: 'custom',
+                          color
+                        })
+                      }
+                    />
+                  </div>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400">Intensidad ({game.ambient.intensity}%)</span>
