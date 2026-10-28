@@ -1,3 +1,30 @@
+import { db } from '../db/dexie';
+import { supabase } from '../modules/supabase/supabaseClient';
+import { authManager } from '../modules/auth/authManager';
+
+/**
+ * Persiste las dimensiones naturales de un asset en la base de datos local Dexie
+ * y directamente en las columnas width/height de Supabase si el usuario está autenticado,
+ * SIN volver a encolar la subida del archivo multimedia completo.
+ */
+export async function persistAssetDimensions(
+  assetId: string,
+  width: number,
+  height: number
+): Promise<void> {
+  try {
+    await db.assets.update(assetId, { width, height });
+    if (supabase && authManager.isAuthenticated()) {
+      await supabase
+        .from('library_assets')
+        .update({ width, height })
+        .eq('id', assetId);
+    }
+  } catch (err) {
+    console.warn(`[persistAssetDimensions] Error guardando dimensiones para ${assetId}:`, err);
+  }
+}
+
 /**
  * Helper para obtener dimensiones naturales (ancho y alto) de archivos multimedia
  * soportando imágenes (PNG, JPG, WebP), GIFs animados y vídeos (MP4, WebM).

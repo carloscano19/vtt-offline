@@ -24,7 +24,7 @@ import {
 import { TokenSide, recalculateDoorEndpoints, getDefaultSnapToGrid } from '../../../types/entity';
 import { getAsset, db } from '../../../db/dexie';
 import { cloudSync } from '../../../modules/sync/cloudSync';
-import { getMediaDimensions } from '../../../utils/mediaDimensions';
+import { getMediaDimensions, persistAssetDimensions } from '../../../utils/mediaDimensions';
 import { EyeDropperButton } from '../../common/EyeDropperButton';
 
 const EFFECT_PRESET_NAMES: Record<string, string> = {
@@ -71,10 +71,7 @@ export const PropertiesTab: React.FC = () => {
             const dims = await getMediaDimensions(asset.blob);
             if (!isCancelled && dims && dims.width > 0 && dims.height > 0) {
               setAssetDims(dims);
-              await db.assets.update(asset.id, { width: dims.width, height: dims.height });
-              if (cloudSync.isCloudEligible(asset.type)) {
-                cloudSync.enqueueUpload(asset.id);
-              }
+              await persistAssetDimensions(asset.id, dims.width, dims.height);
             }
           } catch {}
         }

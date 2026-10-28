@@ -8,9 +8,11 @@ import { authManager } from './modules/auth/authManager';
 import { db } from './db/dexie';
 import './ui/styles/theme.css';
 
+import { videoManager } from './modules/media/videoManager';
+
 // Solo en desarrollo: acceso a los stores para depuración y verificación automatizada
 if (import.meta.env.DEV) {
-  (window as any).__vtt = { useGameStore, useUIStore, authManager, db };
+  (window as any).__vtt = { useGameStore, useUIStore, authManager, db, videoManager };
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

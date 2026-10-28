@@ -25,6 +25,8 @@ class ProceduralEffectNode extends Container {
   public sprite: Sprite | null = null;
   private loadedAssetId: string | null = null;
   private loadedCkKey: string | null = null;
+  private loadingAssetId: string | null = null;
+  private loadingCkKey: string | null = null;
   private gifData: AnimatedGifData | null = null;
   private particles: EffectParticle[] = [];
   private time = 0;
@@ -76,13 +78,15 @@ class ProceduralEffectNode extends Container {
 
       const ck = entity.chromaKey;
       const currentCkKey = ck && ck.enabled ? `ck_${ck.color}_${ck.tolerance}` : 'no_ck';
-      if (
-        this.loadedAssetId !== entity.assetId ||
-        this.loadedCkKey !== currentCkKey ||
-        this.sprite.texture === Texture.EMPTY
-      ) {
-        this.loadedAssetId = entity.assetId;
-        this.loadedCkKey = currentCkKey;
+      const isConfigChanged = this.loadedAssetId !== entity.assetId || this.loadedCkKey !== currentCkKey;
+      const needsTexture = !this.sprite.texture || this.sprite.texture === Texture.EMPTY || this.sprite.texture.destroyed;
+      const isAlreadyLoading = this.loadingAssetId === entity.assetId && this.loadingCkKey === currentCkKey;
+
+      if ((isConfigChanged || needsTexture) && !isAlreadyLoading) {
+        this.loadingAssetId = entity.assetId;
+        this.loadingCkKey = currentCkKey;
+
+        videoManager.registerActiveEntityVideo(entity.id);
 
         getGifDataForAsset(entity.assetId, ck).then((gd) => {
           if (gd && !this.destroyed) {
@@ -90,13 +94,25 @@ class ProceduralEffectNode extends Container {
           }
         });
 
-        videoManager.registerActiveEntityVideo(entity.id);
-
-        getTextureForAsset(entity.assetId, ck).then((tex) => {
-          if (tex && this.sprite && !this.destroyed) {
-            this.sprite.texture = tex;
-          }
-        });
+        getTextureForAsset(entity.assetId, ck)
+          .then((tex) => {
+            if (this.loadingAssetId === entity.assetId && this.loadingCkKey === currentCkKey) {
+              this.loadingAssetId = null;
+              this.loadingCkKey = null;
+            }
+            if (tex && this.sprite && !this.destroyed) {
+              this.sprite.texture = tex;
+              this.loadedAssetId = entity.assetId || null;
+              this.loadedCkKey = currentCkKey;
+            }
+          })
+          .catch((err) => {
+            if (this.loadingAssetId === entity.assetId && this.loadingCkKey === currentCkKey) {
+              this.loadingAssetId = null;
+              this.loadingCkKey = null;
+            }
+            console.error('Error cargando textura para efecto:', err);
+          });
       }
 
       // Animación continua de frames de GIF
@@ -756,6 +772,8 @@ class ProceduralEffectNode extends Container {
     if (!assetId || this.loadedAssetId === assetId) {
       this.loadedAssetId = null;
       this.loadedCkKey = null;
+      this.loadingAssetId = null;
+      this.loadingCkKey = null;
       this.gifData = null;
       if (this.sprite) {
         this.sprite.texture = Texture.EMPTY;

@@ -10,7 +10,7 @@ import { getZoomSensitivity } from '../modules/settings/zoomSensitivity';
 import { isMovementBlockedByWall } from '../modules/walls/wallManager';
 import { getAsset, db } from '../db/dexie';
 import { cloudSync } from '../modules/sync/cloudSync';
-import { getMediaDimensions } from '../utils/mediaDimensions';
+import { getMediaDimensions, persistAssetDimensions } from '../utils/mediaDimensions';
 
 interface PixiCanvasProps {
   isMaster: boolean;
@@ -1370,11 +1370,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
                   w = dims.width;
                   h = dims.height;
                   asset.width = w;
-                  asset.height = h;
-                  await db.assets.update(asset.id, { width: w, height: h });
-                  if (cloudSync.isCloudEligible(asset.type)) {
-                    cloudSync.enqueueUpload(asset.id);
-                  }
+                  await persistAssetDimensions(asset.id, w, h);
                 }
               } catch (dimErr) {
                 console.warn('Error calculando dimensiones al soltar efecto:', dimErr);

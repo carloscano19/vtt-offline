@@ -1,3 +1,4 @@
+import 'fake-indexeddb/auto';
 import { describe, it, expect } from 'vitest';
 import { snapPointToGridOrMidpoint } from '../src/pixi/utils/coordinates';
 import { lightManager } from '../src/modules/lights/lightManager';
@@ -8,6 +9,8 @@ import { videoManager } from '../src/modules/media/videoManager';
 import { syncChannel } from '../src/modules/sync/syncChannel';
 import { GizmoLayer } from '../src/pixi/layers/GizmoLayer';
 import { getDimRadialGradientTexture, getTintRadialGradientTexture } from '../src/pixi/utils/gradientTextures';
+import { persistAssetDimensions } from '../src/utils/mediaDimensions';
+import { db } from '../src/db/dexie';
 
 describe('Doors new token model and normalizer migration', () => {
   it('migrates legacy doors without length and center using normalizer', () => {
@@ -660,6 +663,23 @@ describe('Asset download reactive reload and video management', () => {
 
     const texTintCached = getTintRadialGradientTexture(0.5);
     expect(texTintCached).toBe(texTint);
+  });
+
+  it('persists asset dimensions directly without re-enqueuing full file uploads', async () => {
+    await db.assets.put({
+      id: 'test_asset_dims',
+      name: 'Test Dimension Asset',
+      type: 'video',
+      mimeType: 'video/webm',
+      blob: new Blob(['dummy'], { type: 'video/webm' }),
+      tags: ['effect']
+    });
+
+    await persistAssetDimensions('test_asset_dims', 384, 256);
+
+    const updated = await db.assets.get('test_asset_dims');
+    expect(updated?.width).toBe(384);
+    expect(updated?.height).toBe(256);
   });
 });
 

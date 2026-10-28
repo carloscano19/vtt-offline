@@ -5,7 +5,7 @@ import { Entity, EffectPresetId } from '../../../types/entity';
 import { AssetItem } from '../../../types/game';
 import { getAllAssets, saveAsset, db } from '../../../db/dexie';
 import { cloudSync } from '../../../modules/sync/cloudSync';
-import { getMediaDimensions } from '../../../utils/mediaDimensions';
+import { getMediaDimensions, persistAssetDimensions } from '../../../utils/mediaDimensions';
 import { EyeDropperButton } from '../../common/EyeDropperButton';
 import {
   Sparkles,
@@ -216,6 +216,42 @@ const CATALOG_ITEMS: EffectCatalogItem[] = [
   }
 ];
 
+const VideoThumbnail: React.FC<{ src: string; alt?: string }> = ({ src, alt }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const handleMouseEnter = () => {
+    if (videoRef.current) {
+      videoRef.current.play().catch(() => {});
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
+  };
+
+  return (
+    <div
+      className="w-full h-full flex items-center justify-center overflow-hidden cursor-pointer"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      <video
+        ref={videoRef}
+        src={src}
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        className="w-full h-full object-cover pointer-events-none"
+        aria-label={alt}
+      />
+    </div>
+  );
+};
+
 export const EffectsTab: React.FC = () => {
   const game = useGameStore((s) => s.game);
   const addEntity = useGameStore((s) => s.addEntity);
@@ -275,23 +311,21 @@ export const EffectsTab: React.FC = () => {
     );
     setCustomAssets(effects);
 
-    // Calcular dimensiones en segundo plano para efectos legados sin width/height
-    for (const a of effects) {
-      if ((!a.width || !a.height) && a.blob) {
-        getMediaDimensions(a.blob)
-          .then(async (dims) => {
+    // Calcular dimensiones en segundo plano de forma estrictamente secuencial para efectos legados sin width/height
+    (async () => {
+      for (const a of effects) {
+        if ((!a.width || !a.height) && a.blob) {
+          try {
+            const dims = await getMediaDimensions(a.blob);
             if (dims && dims.width > 0 && dims.height > 0) {
               a.width = dims.width;
               a.height = dims.height;
-              await db.assets.update(a.id, { width: dims.width, height: dims.height });
-              if (cloudSync.isCloudEligible(a.type)) {
-                cloudSync.enqueueUpload(a.id);
-              }
+              await persistAssetDimensions(a.id, dims.width, dims.height);
             }
-          })
-          .catch(() => {});
+          } catch {}
+        }
       }
-    }
+    })();
 
     // Generar object URLs para las miniaturas
     const urls = new Map<string, string>();
@@ -711,18 +745,11 @@ export const EffectsTab: React.FC = () => {
                   className="group p-2.5 bg-slate-800/90 hover:bg-slate-800 border border-amber-600/50 hover:border-amber-400 rounded-xl transition-all cursor-grab active:cursor-grabbing flex items-start justify-between gap-2.5 shadow-sm"
                 >
                   <div className="flex items-start gap-2.5 min-w-0">
-                    {/* Miniatura animada (vídeo, gif o imagen) */}
+                    {/* Miniatura (vídeo bajo hover, gif o imagen) */}
                     <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-white/15 bg-slate-950 flex items-center justify-center">
                       {previewUrl ? (
                         isVideo ? (
-                          <video
-                            src={previewUrl}
-                            muted
-                            loop
-                            autoPlay
-                            playsInline
-                            className="w-full h-full object-cover"
-                          />
+                          <VideoThumbnail src={previewUrl} alt={asset.name} />
                         ) : (
                           <img
                             src={previewUrl}

@@ -19,6 +19,7 @@ interface VideoInstance {
 
 class VideoManager {
   private instances = new Map<string, VideoInstance>();
+  private loadingPromises = new Map<string, Promise<{ texture: Texture; video: HTMLVideoElement } | null>>();
   private activeEntityVideos = new Set<string>(); // IDs de entidades que están usando vídeo
   private warningListeners = new Set<(showWarning: boolean, count: number) => void>();
 
@@ -43,8 +44,14 @@ class VideoManager {
       }
     };
 
-    window.addEventListener('pointerdown', resumeAll, { passive: true });
-    window.addEventListener('keydown', resumeAll, { passive: true });
+    const unlockAndResume = () => {
+      resumeAll();
+      window.removeEventListener('pointerdown', unlockAndResume);
+      window.removeEventListener('keydown', unlockAndResume);
+    };
+
+    window.addEventListener('pointerdown', unlockAndResume, { passive: true });
+    window.addEventListener('keydown', unlockAndResume, { passive: true });
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
@@ -109,6 +116,11 @@ class VideoManager {
         this.instances.delete(key);
       }
     }
+    for (const key of Array.from(this.loadingPromises.keys())) {
+      if (key === assetId || key.startsWith(`${assetId}_ck_`)) {
+        this.loadingPromises.delete(key);
+      }
+    }
   }
 
   /**
@@ -135,128 +147,135 @@ class VideoManager {
       }
     }
 
-    const asset = await getAsset(assetId);
-    if (!asset || !asset.blob) return null;
-
-    const blobUrl = URL.createObjectURL(asset.blob);
-    const video = document.createElement('video');
-    video.src = blobUrl;
-    video.crossOrigin = 'anonymous';
-    video.loop = true;
-    video.muted = true;
-    video.playsInline = true;
-    video.autoplay = true;
-
-    await new Promise<void>((resolve) => {
-      video.onloadeddata = () => resolve();
-      video.onerror = () => resolve();
-      // Timeout defensivo
-      setTimeout(resolve, 2000);
-    });
-
-    try {
-      await video.play();
-    } catch {
-      // Ignorar si el navegador bloquea autoplay hasta interacción
+    if (this.loadingPromises.has(key)) {
+      return this.loadingPromises.get(key)!;
     }
 
-    // Caso 1: Vídeo normal sin Chroma Key
-    if (!chromaKey || !chromaKey.enabled) {
-      const texture = Texture.from(video);
-      // Garantizar que el VideoSource de Pixi v8 tenga autoPlay y autoUpdate activos
-      const source = texture.source as any;
-      if (source) {
-        source.autoPlay = true;
-        source.autoUpdate = true;
-      }
-      const inst: VideoInstance = {
-        video,
-        texture,
-        assetId,
-        blobUrl,
-        targetScale: 1.0,
-        isProcessing: false,
-        destroyed: false
-      };
-      this.instances.set(key, inst);
-      return { texture, video };
-    }
+    const loadPromise = (async () => {
+      try {
+        const asset = await getAsset(assetId);
+        if (!asset || !asset.blob) return null;
 
-    // Caso 2: Vídeo con Chroma Key mediante Canvas
-    const vidW = video.videoWidth || 640;
-    const vidH = video.videoHeight || 360;
-    const maxSide = Math.max(vidW, vidH);
-    const initialScale = maxSide > 1024 ? 1024 / maxSide : 1.0;
+        const blobUrl = URL.createObjectURL(asset.blob);
+        const video = document.createElement('video');
+        video.src = blobUrl;
+        video.crossOrigin = 'anonymous';
+        video.loop = true;
+        video.muted = true;
+        video.playsInline = true;
+        video.autoplay = true;
 
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(vidW * initialScale));
-    canvas.height = Math.max(1, Math.round(vidH * initialScale));
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return null;
+        await new Promise<void>((resolve) => {
+          video.onloadeddata = () => resolve();
+          video.onerror = () => resolve();
+          // Timeout defensivo
+          setTimeout(resolve, 2000);
+        });
 
-    const texture = Texture.from(canvas);
-
-    const inst: VideoInstance = {
-      video,
-      texture,
-      assetId,
-      blobUrl,
-      canvas,
-      ctx,
-      chromaKey,
-      targetScale: initialScale,
-      isProcessing: false,
-      destroyed: false
-    };
-
-    this.instances.set(key, inst);
-
-    // Bucle de procesamiento de frames con requestVideoFrameCallback o rAF
-    const processFrame = () => {
-      if (inst.destroyed) return;
-
-      if (!video.paused && !video.ended && video.readyState >= 2) {
-        const start = performance.now();
-        const curW = inst.canvas!.width;
-        const curH = inst.canvas!.height;
-
-        // Dibujar frame actual
-        inst.ctx!.drawImage(video, 0, 0, curW, curH);
-        const imgData = inst.ctx!.getImageData(0, 0, curW, curH);
-
-        // Procesar chroma key con suavizado de bordes
-        applyChromaKeyToImageData(imgData, inst.chromaKey!.color, inst.chromaKey!.tolerance);
-        inst.ctx!.putImageData(imgData, 0, 0);
-
-        // Actualizar textura en Pixi
-        inst.texture.source.update();
-
-        const duration = performance.now() - start;
-
-        // Si tarda más de 8ms, reducir resolución automáticamente para mantener 60 fps
-        if (duration > 8 && inst.targetScale > 0.25) {
-          inst.targetScale = Math.max(0.25, inst.targetScale * 0.85);
-          const newW = Math.max(1, Math.round(vidW * inst.targetScale));
-          const newH = Math.max(1, Math.round(vidH * inst.targetScale));
-          inst.canvas!.width = newW;
-          inst.canvas!.height = newH;
+        try {
+          await video.play();
+        } catch {
+          // Ignorar si el navegador bloquea autoplay hasta interacción
         }
+
+        // Caso 1: Vídeo normal sin Chroma Key
+        if (!chromaKey || !chromaKey.enabled) {
+          const texture = Texture.from(video);
+          const inst: VideoInstance = {
+            video,
+            texture,
+            assetId,
+            blobUrl,
+            targetScale: 1.0,
+            isProcessing: false,
+            destroyed: false
+          };
+          this.instances.set(key, inst);
+          return { texture, video };
+        }
+
+        // Caso 2: Vídeo con Chroma Key mediante Canvas
+        const vidW = video.videoWidth || 640;
+        const vidH = video.videoHeight || 360;
+        const maxSide = Math.max(vidW, vidH);
+        const initialScale = maxSide > 1024 ? 1024 / maxSide : 1.0;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(vidW * initialScale));
+        canvas.height = Math.max(1, Math.round(vidH * initialScale));
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return null;
+
+        const texture = Texture.from(canvas);
+
+        const inst: VideoInstance = {
+          video,
+          texture,
+          assetId,
+          blobUrl,
+          canvas,
+          ctx,
+          chromaKey,
+          targetScale: initialScale,
+          isProcessing: false,
+          destroyed: false
+        };
+
+        this.instances.set(key, inst);
+
+        // Bucle de procesamiento de frames con requestVideoFrameCallback o rAF
+        const processFrame = () => {
+          if (inst.destroyed) return;
+
+          if (!video.paused && !video.ended && video.readyState >= 2) {
+            const start = performance.now();
+            const curW = inst.canvas!.width;
+            const curH = inst.canvas!.height;
+
+            // Dibujar frame actual
+            inst.ctx!.drawImage(video, 0, 0, curW, curH);
+            const imgData = inst.ctx!.getImageData(0, 0, curW, curH);
+
+            // Procesar chroma key con suavizado de bordes
+            applyChromaKeyToImageData(imgData, inst.chromaKey!.color, inst.chromaKey!.tolerance);
+            inst.ctx!.putImageData(imgData, 0, 0);
+
+            // Actualizar textura en Pixi
+            inst.texture.source.update();
+
+            const duration = performance.now() - start;
+
+            // Si tarda más de 8ms, reducir resolución automáticamente para mantener 60 fps
+            if (duration > 8 && inst.targetScale > 0.25) {
+              inst.targetScale = Math.max(0.25, inst.targetScale * 0.85);
+              const newW = Math.max(1, Math.round(vidW * inst.targetScale));
+              const newH = Math.max(1, Math.round(vidH * inst.targetScale));
+              inst.canvas!.width = newW;
+              inst.canvas!.height = newH;
+            }
+          }
+
+          if ('requestVideoFrameCallback' in video) {
+            (video as any).requestVideoFrameCallback(processFrame);
+          } else {
+            requestAnimationFrame(processFrame);
+          }
+        };
+
+        if ('requestVideoFrameCallback' in video) {
+          (video as any).requestVideoFrameCallback(processFrame);
+        } else {
+          requestAnimationFrame(processFrame);
+        }
+
+        return { texture, video };
+      } finally {
+        this.loadingPromises.delete(key);
       }
+    })();
 
-      if ('requestVideoFrameCallback' in video) {
-        (video as any).requestVideoFrameCallback(processFrame);
-      } else {
-        requestAnimationFrame(processFrame);
-      }
-    };
-
-    if ('requestVideoFrameCallback' in video) {
-      (video as any).requestVideoFrameCallback(processFrame);
-    } else {
-      requestAnimationFrame(processFrame);
-    }
-
-    return { texture, video };
+    this.loadingPromises.set(key, loadPromise);
+    return loadPromise;
   }
 }
 
