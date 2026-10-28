@@ -12,6 +12,7 @@ import { DisplaysModal } from './components/DisplaysModal';
 import { AuthModal } from './components/AuthModal';
 import { LockScreen } from './components/LockScreen';
 import { CreditsModal } from './components/CreditsModal';
+import { FpsCounter } from './components/FpsCounter';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { saveAutoSaveToDb, loadAutoSaveFromDb } from '../../modules/persistence/saveManager';
 import { syncChannel } from '../../modules/sync/syncChannel';
@@ -38,6 +39,7 @@ export const MasterApp: React.FC = () => {
   const [isRulerModalOpen, setIsRulerModalOpen] = useState(false);
   const [hasConflict, setHasConflict] = useState(false);
   const [hasControl, setHasControl] = useState(true);
+  const [showFps, setShowFps] = useState(false);
 
   // Estado de autenticación para pantalla de clave al abrir
   const [isAuthenticated, setIsAuthenticated] = useState(authManager.isAuthenticated());
@@ -59,6 +61,27 @@ export const MasterApp: React.FC = () => {
       cleanupConflict();
       cleanupControl();
     };
+  }, []);
+
+  // Alternar contador de FPS con tecla 'F'
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.key === 'f' || e.key === 'F') {
+        setShowFps((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   const hasControlRef = useRef(hasControl);
@@ -215,6 +238,9 @@ export const MasterApp: React.FC = () => {
       >
         v{__APP_VERSION__} · Créditos
       </button>
+
+      {/* Contador de FPS activado con tecla F */}
+      {showFps && <FpsCounter />}
 
       {/* Aviso a pantalla completa si hay otra pestaña máster activa */}
       {hasConflict && (

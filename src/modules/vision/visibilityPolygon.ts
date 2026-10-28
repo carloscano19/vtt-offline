@@ -103,7 +103,7 @@ export function computeVisibilityPolygon(
   }
 
   // 2. Generar caja delimitadora circular del alcance máximo
-  const circleSteps = 48;
+  const circleSteps = 32;
   const circlePoints: Point2D[] = [];
   for (let i = 0; i < circleSteps; i++) {
     const angle = (i / circleSteps) * Math.PI * 2;

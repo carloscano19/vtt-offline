@@ -2,28 +2,20 @@ import { Entity, Point2D } from '../../types/entity';
 import { getAllWallSegments, WallSegment } from '../walls/wallManager';
 import { computeVisibilityPolygon, TokenVisibility } from './visibilityPolygon';
 
+interface CachedTokenPoly {
+  key: string;
+  brightPolygon: Point2D[];
+  totalPolygon: Point2D[];
+  losPolygon: Point2D[];
+}
+
 export class VisionManager {
   private lastCacheKey: string = '';
   private cachedVisibilities: TokenVisibility[] = [];
+  private perTokenCache: Map<string, CachedTokenPoly> = new Map();
 
-  /**
-   * Genera una clave de estado basada en posiciones y configuraciones relevantes.
-   * Si no ha cambiado nada, reutiliza la visibilidad calculada sin coste por frame.
-   */
-  private generateStateKey(entities: Entity[], gridSize: number): string {
-    const relevantTokens = entities.filter(
-      (e) => e.type === 'token' && e.side === 'jugador' && e.vision?.active && e.visibleToPlayers !== false
-    );
-
-    const tokenPart = relevantTokens
-      .map((t) => {
-        const b = t.vision?.brightRangeInSquares ?? t.vision?.rangeInSquares ?? 4;
-        const d = t.vision?.dimRangeInSquares ?? 2;
-        return `${t.id}:${Math.round(t.x)}:${Math.round(t.y)}:${b}:${d}:${t.vision?.hardness}`;
-      })
-      .join('|');
-
-    const wallPart = entities
+  private generateWallPart(entities: Entity[]): string {
+    return entities
       .filter((e) => e.type === 'wall' || e.type === 'door' || e.type === 'map')
       .map((e) => {
         if (e.type === 'door') {
@@ -38,6 +30,24 @@ export class VisionManager {
         return '';
       })
       .join(';');
+  }
+
+  /**
+   * Genera una clave de estado basada en posiciones y configuraciones relevantes.
+   * Si no ha cambiado nada, reutiliza la visibilidad calculada sin coste por frame.
+   */
+  private generateStateKey(entities: Entity[], gridSize: number, wallPart: string): string {
+    const relevantTokens = entities.filter(
+      (e) => e.type === 'token' && e.side === 'jugador' && e.vision?.active && e.visibleToPlayers !== false
+    );
+
+    const tokenPart = relevantTokens
+      .map((t) => {
+        const b = t.vision?.brightRangeInSquares ?? t.vision?.rangeInSquares ?? 4;
+        const d = t.vision?.dimRangeInSquares ?? 2;
+        return `${t.id}:${Math.round(t.x)}:${Math.round(t.y)}:${b}:${d}:${t.vision?.hardness}`;
+      })
+      .join('|');
 
     return `${gridSize}__${tokenPart}__${wallPart}`;
   }
@@ -46,7 +56,8 @@ export class VisionManager {
    * Calcula o recupera de la caché los polígonos de visión de todos los tokens de jugador activos.
    */
   public getTokensVisibility(entities: Entity[], gridSize: number): TokenVisibility[] {
-    const stateKey = this.generateStateKey(entities, gridSize);
+    const wallPart = this.generateWallPart(entities);
+    const stateKey = this.generateStateKey(entities, gridSize, wallPart);
     if (stateKey === this.lastCacheKey && this.cachedVisibilities.length > 0) {
       return this.cachedVisibilities;
     }
@@ -58,42 +69,59 @@ export class VisionManager {
     if (playerVisionTokens.length === 0) {
       this.lastCacheKey = stateKey;
       this.cachedVisibilities = [];
+      this.perTokenCache.clear();
       return [];
     }
 
-    const wallSegments = getAllWallSegments(entities);
+    let wallSegments: ReturnType<typeof getAllWallSegments> | null = null;
+    const getSegments = () => {
+      if (!wallSegments) wallSegments = getAllWallSegments(entities);
+      return wallSegments;
+    };
+
     const visibilities: TokenVisibility[] = [];
+    const activeIds = new Set<string>();
 
     for (const token of playerVisionTokens) {
+      activeIds.add(token.id);
       const brightSquares = token.vision?.brightRangeInSquares ?? token.vision?.rangeInSquares ?? 4;
       const dimSquares = token.vision?.dimRangeInSquares ?? (token.vision?.rangeInSquares !== undefined ? 0 : 2);
       const hardness = token.vision?.hardness ?? 0.5;
       const center: Point2D = { x: token.x, y: token.y };
 
-      let brightRangePx = 0;
-      let totalRangePx = 0;
+      const brightRangePx = brightSquares === 0 ? 0 : brightSquares * gridSize;
+      const totalRangePx = brightSquares === 0 ? 0 : (dimSquares > 0 ? (brightSquares + dimSquares) * gridSize : brightRangePx);
+
+      const tokenKey = `${Math.round(center.x)}:${Math.round(center.y)}:${brightRangePx}:${totalRangePx}__${wallPart}`;
+      const cached = this.perTokenCache.get(token.id);
+
       let brightPolygon: Point2D[];
       let totalPolygon: Point2D[];
+      let losPolygon: Point2D[];
 
-      if (brightSquares === 0) {
-        brightRangePx = 0;
-        totalRangePx = 0;
-        brightPolygon = computeVisibilityPolygon(center, 0, wallSegments);
-        totalPolygon = brightPolygon;
+      if (cached && cached.key === tokenKey) {
+        brightPolygon = cached.brightPolygon;
+        totalPolygon = cached.totalPolygon;
+        losPolygon = cached.losPolygon;
       } else {
-        brightRangePx = brightSquares * gridSize;
-        brightPolygon = computeVisibilityPolygon(center, brightRangePx, wallSegments);
-
-        if (dimSquares > 0) {
-          totalRangePx = (brightSquares + dimSquares) * gridSize;
-          totalPolygon = computeVisibilityPolygon(center, totalRangePx, wallSegments);
-        } else {
-          totalRangePx = brightRangePx;
+        const segments = getSegments();
+        if (brightSquares === 0) {
+          brightPolygon = computeVisibilityPolygon(center, 0, segments);
           totalPolygon = brightPolygon;
+          losPolygon = totalPolygon;
+        } else {
+          brightPolygon = computeVisibilityPolygon(center, brightRangePx, segments);
+          totalPolygon = dimSquares > 0 ? computeVisibilityPolygon(center, totalRangePx, segments) : brightPolygon;
+          losPolygon = computeVisibilityPolygon(center, 0, segments);
         }
-      }
 
-      const losPolygon = brightSquares === 0 ? totalPolygon : computeVisibilityPolygon(center, 0, wallSegments);
+        this.perTokenCache.set(token.id, {
+          key: tokenKey,
+          brightPolygon,
+          totalPolygon,
+          losPolygon
+        });
+      }
 
       visibilities.push({
         tokenId: token.id,
@@ -107,6 +135,12 @@ export class VisionManager {
         rangePx: totalRangePx,
         hardness
       });
+    }
+
+    if (this.perTokenCache.size > activeIds.size * 2) {
+      for (const id of this.perTokenCache.keys()) {
+        if (!activeIds.has(id)) this.perTokenCache.delete(id);
+      }
     }
 
     this.lastCacheKey = stateKey;
