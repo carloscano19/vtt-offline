@@ -83,6 +83,36 @@ export function clipPolygonToCone(
   return bestRing.map(([x, y]) => ({ x, y }));
 }
 
+/**
+ * Une dos polígonos de visibilidad (por ejemplo, cono de visión y círculo alrededor del propio token).
+ */
+export function unionVisibilityPolygons(polyA: Point2D[], polyB: Point2D[]): Point2D[] {
+  if (!polyA || polyA.length < 3) return polyB || [];
+  if (!polyB || polyB.length < 3) return polyA;
+
+  const multiA = visionToMulti([polyA]);
+  const multiB = visionToMulti([polyB]);
+  if (multiA.length === 0) return polyB;
+  if (multiB.length === 0) return polyA;
+
+  const unioned = safeClip.union(multiA, multiB);
+  if (!unioned || unioned.length === 0) return polyA;
+
+  let maxArea = -1;
+  let bestRing: [number, number][] = unioned[0][0];
+  for (const p of unioned) {
+    if (p[0]) {
+      const a = ringArea(p[0]);
+      if (a > maxArea) {
+        maxArea = a;
+        bestRing = p[0];
+      }
+    }
+  }
+
+  return bestRing.map(([x, y]) => ({ x, y }));
+}
+
 function distToSegment(p: Point2D, v: Point2D, w: Point2D): number {
   const l2 = (w.x - v.x) ** 2 + (w.y - v.y) ** 2;
   if (l2 === 0) return Math.hypot(p.x - v.x, p.y - v.y);

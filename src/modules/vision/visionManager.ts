@@ -1,6 +1,6 @@
 import { Entity, Point2D } from '../../types/entity';
 import { getAllWallSegments, WallSegment } from '../walls/wallManager';
-import { computeVisibilityPolygon, clipPolygonToCone, TokenVisibility } from './visibilityPolygon';
+import { computeVisibilityPolygon, clipPolygonToCone, unionVisibilityPolygons, TokenVisibility } from './visibilityPolygon';
 
 interface CachedTokenPoly {
   key: string;
@@ -49,7 +49,8 @@ export class VisionManager {
         const coneAngle = t.vision?.coneAngle ?? 60;
         const dirOffset = t.vision?.directionOffset ?? 0;
         const rot = Math.round((t.rotation || 0) * 100) / 100;
-        return `${t.id}:${Math.round(t.x)}:${Math.round(t.y)}:${b}:${d}:${t.vision?.hardness}:${shape}:${coneAngle}:${dirOffset}:${rot}`;
+        const scale = Math.round((t.scaleX || 1) * 100) / 100;
+        return `${t.id}:${Math.round(t.x)}:${Math.round(t.y)}:${b}:${d}:${t.vision?.hardness}:${shape}:${coneAngle}:${dirOffset}:${rot}:${scale}`;
       })
       .join('|');
 
@@ -101,7 +102,8 @@ export class VisionManager {
       const brightRangePx = brightSquares === 0 ? 0 : brightSquares * gridSize;
       const totalRangePx = brightSquares === 0 ? 0 : (dimSquares > 0 ? (brightSquares + dimSquares) * gridSize : brightRangePx);
 
-      const tokenKey = `${Math.round(center.x)}:${Math.round(center.y)}:${brightRangePx}:${totalRangePx}:${shape}:${coneAngle}:${directionOffset}:${Math.round(rotation * 100) / 100}__${wallPart}`;
+      const scale = Math.round((token.scaleX || 1) * 100) / 100;
+      const tokenKey = `${Math.round(center.x)}:${Math.round(center.y)}:${brightRangePx}:${totalRangePx}:${shape}:${coneAngle}:${directionOffset}:${Math.round(rotation * 100) / 100}:${scale}__${wallPart}`;
       const cached = this.perTokenCache.get(token.id);
 
       let brightPolygon: Point2D[];
@@ -128,6 +130,16 @@ export class VisionManager {
           brightPolygon = clipPolygonToCone(brightPolygon, center, brightRangePx, rotation, coneAngle, directionOffset);
           totalPolygon = clipPolygonToCone(totalPolygon, center, totalRangePx, rotation, coneAngle, directionOffset);
           losPolygon = clipPolygonToCone(losPolygon, center, 5000, rotation, coneAngle, directionOffset);
+
+          // El token con visión en cono debe verse a sí mismo:
+          // Unir siempre un círculo pequeño alrededor del token (radio = mitad de su tamaño + 0,25 casillas, recortado por paredes)
+          const tokenSizePx = Math.max(0.2, Math.abs(token.scaleX || 1)) * gridSize;
+          const selfRadiusPx = (tokenSizePx / 2) + 0.25 * gridSize;
+          const selfPolygon = computeVisibilityPolygon(center, selfRadiusPx, segments);
+
+          brightPolygon = unionVisibilityPolygons(brightPolygon, selfPolygon);
+          totalPolygon = unionVisibilityPolygons(totalPolygon, selfPolygon);
+          losPolygon = unionVisibilityPolygons(losPolygon, selfPolygon);
         }
 
         this.perTokenCache.set(token.id, {

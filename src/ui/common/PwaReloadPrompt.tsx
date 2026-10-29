@@ -12,7 +12,19 @@ const AUTO_UPDATE_WINDOW_MS = 15000;
 export const PwaReloadPrompt: React.FC = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isAutoUpdating, setIsAutoUpdating] = useState(false);
+  const [remoteNewerDetected, setRemoteNewerDetected] = useState(false);
   const updatingRef = useRef(false);
+
+  useEffect(() => {
+    const localBuildTime = typeof __APP_BUILD_TIME__ !== 'undefined' ? Number(__APP_BUILD_TIME__) : 0;
+    const cleanup = syncChannel.onPlayerVersion((info) => {
+      if (localBuildTime > 0 && info.appBuildTime > localBuildTime) {
+        console.log(`[PWA] Versión más nueva reportada por la tele: build ${info.appBuildTime} vs local ${localBuildTime}`);
+        setRemoteNewerDetected(true);
+      }
+    });
+    return cleanup;
+  }, []);
 
   const {
     needRefresh: [needRefresh, setNeedRefresh],
@@ -73,6 +85,9 @@ export const PwaReloadPrompt: React.FC = () => {
     try {
       // 3. Activar nuevo service worker y recargar
       await updateServiceWorker(true);
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     } catch {
       window.location.reload();
     }
@@ -89,13 +104,10 @@ export const PwaReloadPrompt: React.FC = () => {
     }
   }, [needRefresh]);
 
-  if (!needRefresh) {
-    return null;
-  }
-
-  // Si aún está dentro de los 15s iniciales o se está aplicando la actualización silenciosa, no mostrar popup
   const elapsed = Date.now() - pageLoadTime;
-  if (isAutoUpdating || elapsed < AUTO_UPDATE_WINDOW_MS) {
+  const showPrompt = remoteNewerDetected || (needRefresh && !isAutoUpdating && elapsed >= AUTO_UPDATE_WINDOW_MS);
+
+  if (!showPrompt) {
     return null;
   }
 

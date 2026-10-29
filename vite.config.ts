@@ -14,12 +14,14 @@ try {
 } catch {
   commitHash = '';
 }
+const buildTimestamp = Date.now();
 const buildTime = new Date().toISOString().slice(0, 10);
 const appVersion = commitHash || buildTime;
 
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
+    __APP_BUILD_TIME__: buildTimestamp,
     __BUILD_TIME__: JSON.stringify(buildTime)
   },
   plugins: [

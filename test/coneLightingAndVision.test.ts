@@ -86,12 +86,24 @@ describe('Directional Cone Vision and Lighting', () => {
     expect(vis.totalPolygon.length).toBeGreaterThan(3);
 
     const halfAngleRad = (30 * Math.PI) / 180;
+    const tokenSizePx = Math.max(0.2, Math.abs(token.scaleX || 1)) * gridSize;
+    const selfRadiusPx = tokenSizePx / 2 + 0.25 * gridSize; // 52.5px
+
+    // Debe incluir un círculo de visión alrededor del propio token para que se vea a sí mismo
+    const minX = Math.min(...vis.totalPolygon.map((p) => p.x));
+    expect(minX).toBeLessThan(-30);
+    expect(minX).toBeGreaterThanOrEqual(-selfRadiusPx - 1);
+
     for (const pt of vis.totalPolygon) {
       const dist = Math.hypot(pt.x, pt.y);
-      if (dist > 1) {
+      // Cualquier punto más allá del radio propio debe encontrarse dentro del cono de 60°
+      if (dist > selfRadiusPx + 1) {
         const angle = Math.atan2(pt.y, pt.x);
         expect(angle).toBeGreaterThanOrEqual(-halfAngleRad - 0.05);
         expect(angle).toBeLessThanOrEqual(halfAngleRad + 0.05);
+      } else {
+        // Dentro del radio propio, no excede selfRadiusPx
+        expect(dist).toBeLessThanOrEqual(selfRadiusPx + 1);
       }
     }
 
@@ -100,6 +112,63 @@ describe('Directional Cone Vision and Lighting', () => {
     expect(maxX).toBeCloseTo(100, 1);
     for (const p of vis.totalPolygon) {
       expect(p.x).toBeLessThanOrEqual(100.5);
+    }
+  });
+
+  it('clips token self-circle vision against a wall behind the token', () => {
+    const token: Entity = {
+      id: 'token_scout_2',
+      type: 'token',
+      name: 'Explorador Con Pared Atras',
+      x: 0,
+      y: 0,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      zIndex: 50,
+      visibleToPlayers: true,
+      locked: false,
+      side: 'jugador',
+      vision: {
+        active: true,
+        brightRangeInSquares: 4,
+        dimRangeInSquares: 2,
+        hardness: 0.5,
+        shape: 'cone',
+        coneAngle: 60,
+        directionOffset: 0
+      }
+    };
+
+    // Pared detrás del token a x = -20 (el radio propio normal sería 52.5px)
+    const backWall: Entity = {
+      id: 'back_wall',
+      type: 'wall',
+      name: 'Muro Atras',
+      x: 0,
+      y: 0,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      zIndex: 30,
+      visibleToPlayers: false,
+      locked: true,
+      points: [
+        { x: -20, y: -200 },
+        { x: -20, y: 200 }
+      ]
+    };
+
+    const gridSize = 70;
+    const visibilities = visionManager.getTokensVisibility([token, backWall], gridSize);
+    expect(visibilities.length).toBe(1);
+
+    const vis = visibilities[0];
+    const minX = Math.min(...vis.totalPolygon.map((p) => p.x));
+    // El círculo propio debe quedar recortado por la pared a x = -20
+    expect(minX).toBeCloseTo(-20, 1);
+    for (const p of vis.totalPolygon) {
+      expect(p.x).toBeGreaterThanOrEqual(-20.5);
     }
   });
 

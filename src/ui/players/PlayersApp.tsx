@@ -22,6 +22,7 @@ export const PlayersApp: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(!!document.fullscreenElement);
   const [showHint, setShowHint] = useState(true);
   const [showConnected, setShowConnected] = useState(false);
+  const [showMasterOlderWarning, setShowMasterOlderWarning] = useState(false);
   const hasConnectedRef = React.useRef(false);
 
   // Ocultar hint tras 6 segundos
@@ -67,15 +68,38 @@ export const PlayersApp: React.FC = () => {
   useEffect(() => {
     // 1. Recibir estado completo ligero desde la ventana máster por BroadcastChannel
     const cleanupState = syncChannel.onState((state) => {
-      // Si la versión del estado difiere de la local, recargar para actualizar
-      if (
-        state.appVersion &&
-        typeof __APP_VERSION__ !== 'undefined' &&
-        state.appVersion !== __APP_VERSION__
-      ) {
-        console.log(`[PlayersApp] Versión recibida (${state.appVersion}) distinta de local (${__APP_VERSION__}). Recargando...`);
-        window.location.reload();
-        return;
+      const localBuildTime = typeof __APP_BUILD_TIME__ !== 'undefined' ? Number(__APP_BUILD_TIME__) : 0;
+      const localVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '';
+      const masterBuildTime = typeof state.appBuildTime === 'number' ? state.appBuildTime : 0;
+      const masterVersion = state.appVersion || '';
+
+      if (masterVersion && masterVersion !== localVersion) {
+        if (masterBuildTime > localBuildTime) {
+          // El máster es más nuevo: recargar (como máximo una vez por versión en esta sesión)
+          setShowMasterOlderWarning(false);
+          const sessionKey = `vtt_tv_reloaded_${masterVersion}`;
+          let alreadyReloaded = false;
+          try {
+            alreadyReloaded = typeof sessionStorage !== 'undefined' && !!sessionStorage.getItem(sessionKey);
+          } catch {}
+
+          if (!alreadyReloaded) {
+            try {
+              if (typeof sessionStorage !== 'undefined') {
+                sessionStorage.setItem(sessionKey, '1');
+              }
+            } catch {}
+            console.log(`[PlayersApp] Versión del máster (${masterVersion}) más nueva que local (${localVersion}). Recargando...`);
+            window.location.reload();
+            return;
+          }
+        } else {
+          // El máster es más antiguo: NO recargar, mostrar aviso y notificar al máster
+          setShowMasterOlderWarning(true);
+          syncChannel.sendPlayerVersion(localVersion, localBuildTime);
+        }
+      } else {
+        setShowMasterOlderWarning(false);
       }
       setGame(state);
       if (!hasConnectedRef.current) {
@@ -156,6 +180,14 @@ export const PlayersApp: React.FC = () => {
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/90 border border-sky-500/50 text-slate-200 px-4 py-2 rounded-lg shadow-xl text-xs flex items-center gap-2 pointer-events-none backdrop-blur-xs z-50 animate-fade-in">
           <Tv className="w-4 h-4 text-sky-400" />
           <span>Arrastra esta ventana a la TV o monitor secundario y pulsa <strong className="text-sky-300">F11</strong> o el botón de pantalla completa.</span>
+        </div>
+      )}
+
+      {/* Aviso discreto si el máster tiene versión más antigua */}
+      {showMasterOlderWarning && (
+        <div className="absolute bottom-3 left-3 bg-slate-900/90 border border-amber-500/60 text-amber-200 px-3 py-1.5 rounded-lg shadow-lg text-xs flex items-center gap-2 pointer-events-auto backdrop-blur-xs z-50 animate-fade-in select-none">
+          <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0 animate-pulse" />
+          <span>El máster tiene una versión anterior: actualízalo</span>
         </div>
       )}
     </div>

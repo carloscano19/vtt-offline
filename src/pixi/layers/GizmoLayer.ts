@@ -136,9 +136,16 @@ export class GizmoLayer extends Container {
     this.coneGfx.moveTo(posX, posY);
     this.coneGfx.lineTo(posX + totalRangePx * Math.cos(startAngle), posY + totalRangePx * Math.sin(startAngle));
     this.coneGfx.arc(posX, posY, totalRangePx, startAngle, endAngle, false);
-    this.coneGfx.lineTo(posX, posY);
     this.coneGfx.fill({ color, alpha: 0.08 });
     this.coneGfx.stroke({ width: strokeWidth, color, alpha: 0.85 });
+
+    if (entity.type === 'token') {
+      const tokenSizePx = Math.max(0.2, Math.abs(entity.scaleX || 1)) * this.gridSize;
+      const selfRadiusPx = (tokenSizePx / 2) + 0.25 * this.gridSize;
+      this.coneGfx.circle(posX, posY, selfRadiusPx);
+      this.coneGfx.fill({ color, alpha: 0.08 });
+      this.coneGfx.stroke({ width: strokeWidth, color, alpha: 0.6 });
+    }
   }
 
   public getEntityLocalBounds(entity: Entity) {

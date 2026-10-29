@@ -1,11 +1,12 @@
 import { GameState, RulerState, CameraState } from '../../types/game';
 
 export type SyncMessage =
-  | { type: 'STATE_SYNC'; state: GameState; appVersion?: string }
+  | { type: 'STATE_SYNC'; state: GameState; appVersion?: string; appBuildTime?: number }
   | { type: 'RULER_SYNC'; ruler: RulerState }
   | { type: 'CAMERA_SYNC'; camera: CameraState }
   | { type: 'PLAYER_CAMERA_CHANGED'; camera: CameraState }
-  | { type: 'VIEWPORT_SYNC'; width: number; height: number }
+  | { type: 'VIEWPORT_SYNC'; width: number; height: number; appVersion?: string; appBuildTime?: number }
+  | { type: 'PLAYER_VERSION_REPORT'; appVersion: string; appBuildTime: number }
   | { type: 'REQUEST_CURRENT_STATE' }
   | { type: 'ASSET_DOWNLOADED'; assetId: string }
   | { type: 'APP_RELOAD_REQUEST'; version?: string }
@@ -26,6 +27,7 @@ class SyncManager {
   private requestStateListeners: Set<() => void> = new Set();
   private assetDownloadedListeners: Set<(assetId: string) => void> = new Set();
   private appReloadListeners: Set<() => void> = new Set();
+  private playerVersionListeners: Set<(info: { appVersion: string; appBuildTime: number }) => void> = new Set();
 
   // Control de pestaña máster única
   private readonly tabId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -92,6 +94,13 @@ class SyncManager {
             break;
           case 'VIEWPORT_SYNC':
             this.viewportListeners.forEach((listener) => listener({ width: msg.width, height: msg.height }));
+            if (typeof msg.appBuildTime === 'number' && msg.appVersion) {
+              const info = { appVersion: msg.appVersion, appBuildTime: msg.appBuildTime };
+              this.playerVersionListeners.forEach((listener) => listener(info));
+            }
+            break;
+          case 'PLAYER_VERSION_REPORT':
+            this.playerVersionListeners.forEach((listener) => listener({ appVersion: msg.appVersion, appBuildTime: msg.appBuildTime }));
             break;
           case 'REQUEST_CURRENT_STATE':
             this.requestStateListeners.forEach((listener) => listener());
@@ -199,10 +208,16 @@ class SyncManager {
     if (this.channel) {
       try {
         const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined;
+        const buildTime = typeof __APP_BUILD_TIME__ !== 'undefined' ? Number(__APP_BUILD_TIME__) : undefined;
         this.channel.postMessage({
           type: 'STATE_SYNC',
-          state: { ...state, appVersion: state.appVersion || version },
-          appVersion: version
+          state: {
+            ...state,
+            appVersion: state.appVersion || version,
+            appBuildTime: state.appBuildTime || buildTime
+          },
+          appVersion: version,
+          appBuildTime: buildTime
         });
       } catch (err) {
         console.error('[SyncManager] Error al enviar STATE_SYNC:', err);
@@ -272,14 +287,31 @@ class SyncManager {
     return () => this.playerCameraChangedListeners.delete(callback);
   }
 
-  public sendViewport(width: number, height: number) {
+  public sendViewport(width: number, height: number, appVersion?: string, appBuildTime?: number) {
     if (this.channel) {
       try {
-        this.channel.postMessage({ type: 'VIEWPORT_SYNC', width, height });
+        const v = appVersion ?? (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined);
+        const bt = appBuildTime ?? (typeof __APP_BUILD_TIME__ !== 'undefined' ? Number(__APP_BUILD_TIME__) : undefined);
+        this.channel.postMessage({ type: 'VIEWPORT_SYNC', width, height, appVersion: v, appBuildTime: bt });
       } catch (err) {
         console.error('[SyncManager] Error al enviar VIEWPORT_SYNC:', err);
       }
     }
+  }
+
+  public sendPlayerVersion(appVersion: string, appBuildTime: number) {
+    if (this.channel) {
+      try {
+        this.channel.postMessage({ type: 'PLAYER_VERSION_REPORT', appVersion, appBuildTime });
+      } catch (err) {
+        console.error('[SyncManager] Error al enviar PLAYER_VERSION_REPORT:', err);
+      }
+    }
+  }
+
+  public onPlayerVersion(callback: (info: { appVersion: string; appBuildTime: number }) => void): () => void {
+    this.playerVersionListeners.add(callback);
+    return () => this.playerVersionListeners.delete(callback);
   }
 
   public onRequestState(callback: () => void): () => void {

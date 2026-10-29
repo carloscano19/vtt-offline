@@ -95,6 +95,7 @@ export interface GameState {
   createdAt: number;
   updatedAt: number;
   appVersion?: string;
+  appBuildTime?: number;
 }
 
 export type AssetType = 'image' | 'gif' | 'video' | 'map' | 'audio';
