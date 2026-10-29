@@ -34,7 +34,8 @@ import {
   AlertTriangle,
   ChevronDown,
   PanelRight,
-  KeyRound
+  KeyRound,
+  SkipForward
 } from 'lucide-react';
 import { useUIStore, ActiveTool } from '../../../stores/useUIStore';
 import { useGameStore } from '../../../stores/useGameStore';
@@ -90,10 +91,23 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
   const resetFogExploration = useGameStore((s) => s.resetFogExploration);
   const setAmbientConfig = useGameStore((s) => s.setAmbientConfig);
   const setWeatherConfig = useGameStore((s) => s.setWeatherConfig);
+  const nextTurn = useGameStore((s) => s.nextTurn);
+  const addToast = useUIStore((s) => s.addToast);
   const undo = useGameStore((s) => s.undo);
   const redo = useGameStore((s) => s.redo);
   const canUndo = useGameStore((s) => s.canUndo());
   const canRedo = useGameStore((s) => s.canRedo());
+
+  const handleNextTurn = () => {
+    const expired = nextTurn();
+    if (expired.length > 0) {
+      for (const msg of expired) {
+        addToast(msg, 'warning', 4500);
+      }
+    } else {
+      addToast(`Turno ${game.turnCounter || 1}`, 'info', 2000);
+    }
+  };
 
   const [showFogMenu, setShowFogMenu] = useState(false);
   const [showAmbientMenu, setShowAmbientMenu] = useState(false);
@@ -551,8 +565,24 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
         </button>
       </div>
 
-      {/* Controles centrales: 3 Menús desplegables (Niebla, Ambiente, Pantalla TV) */}
+      {/* Controles centrales: Siguiente turno y 3 Menús desplegables (Niebla, Ambiente, Pantalla TV) */}
       <div className="flex items-center gap-2">
+        {/* Botón Siguiente turno */}
+        <button
+          type="button"
+          onClick={handleNextTurn}
+          className="px-2.5 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 border border-amber-600/60 bg-amber-950/40 hover:bg-amber-900/60 text-amber-300 shadow-sm transition-all active:scale-95 cursor-pointer"
+          title={`Siguiente turno (Turno actual: ${game.turnCounter || 1}). Avanza combate restando 1 turno a estados temporales de todos los tokens.`}
+        >
+          <SkipForward className="w-4 h-4 text-amber-400" />
+          <span className="hidden md:inline">Siguiente turno</span>
+          <span className="font-mono text-[11px] px-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+            T{game.turnCounter || 1}
+          </span>
+        </button>
+
+        <div className="w-[1px] h-6 bg-slate-700/80 mx-0.5" />
+
         {/* 1. Menú desplegable "Niebla" */}
         <div className="relative" ref={fogMenuRef}>
           <button

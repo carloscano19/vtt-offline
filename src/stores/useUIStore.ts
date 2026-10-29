@@ -5,6 +5,12 @@ import { DiagonalRule, RulerMode, RulerState } from '../types/game';
 export type ActiveTool = 'select' | 'pan' | 'ruler' | 'wall' | 'door' | 'fogReveal' | 'fogHide' | 'light';
 export type SidebarTab = 'properties' | 'layers' | 'library' | 'effects' | 'music';
 
+export interface ToastNotification {
+  id: string;
+  message: string;
+  type?: 'info' | 'success' | 'warning';
+}
+
 interface UIStoreState {
   activeTool: ActiveTool;
   selectedEntityIds: string[];
@@ -24,6 +30,8 @@ interface UIStoreState {
   showResetFogConfirm: boolean;
   showAuthModal: boolean;
   showCreditsModal: boolean;
+  editingTokenStatusesId: string | null;
+  toasts: ToastNotification[];
 
   // Acciones
   setActiveTool: (tool: ActiveTool) => void;
@@ -48,6 +56,9 @@ interface UIStoreState {
   setShowDisplaysModal: (show: boolean) => void;
   setShowAuthModal: (show: boolean) => void;
   setShowCreditsModal: (show: boolean) => void;
+  setEditingTokenStatusesId: (id: string | null) => void;
+  addToast: (message: string, type?: 'info' | 'success' | 'warning', durationMs?: number) => void;
+  removeToast: (id: string) => void;
 }
 
 export const useUIStore = create<UIStoreState>((set) => ({
@@ -60,6 +71,8 @@ export const useUIStore = create<UIStoreState>((set) => ({
   showResetFogConfirm: false,
   showAuthModal: false,
   showCreditsModal: false,
+  editingTokenStatusesId: null,
+  toasts: [],
 
   ruler: {
     active: false,
@@ -170,5 +183,23 @@ export const useUIStore = create<UIStoreState>((set) => ({
   setShowCreditsModal: (show) => set({ showCreditsModal: show }),
   setShowResetFogConfirm: (show) => set({ showResetFogConfirm: show }),
   setIsPlayerPreviewMode: (isPlayerPreviewMode) => set({ isPlayerPreviewMode }),
-  setShowPlayerFrame: (showPlayerFrame) => set({ showPlayerFrame })
+  setShowPlayerFrame: (showPlayerFrame) => set({ showPlayerFrame }),
+  setEditingTokenStatusesId: (editingTokenStatusesId) => set({ editingTokenStatusesId }),
+  addToast: (message, type = 'info', durationMs = 3500) => {
+    const id = `toast_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    set((state) => ({
+      toasts: [...state.toasts, { id, message, type }]
+    }));
+    if (durationMs > 0) {
+      setTimeout(() => {
+        set((state) => ({
+          toasts: state.toasts.filter((t) => t.id !== id)
+        }));
+      }, durationMs);
+    }
+  },
+  removeToast: (id) =>
+    set((state) => ({
+      toasts: state.toasts.filter((t) => t.id !== id)
+    }))
 }));

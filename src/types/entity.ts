@@ -3,24 +3,21 @@ export type EntityType = 'map' | 'token' | 'object' | 'door' | 'light' | 'wall' 
 export type TokenSide = 'jugador' | 'enemigo' | 'neutral';
 
 export const DEFAULT_STATUS_TYPES = [
-  'congelado',
-  'aturdido',
-  'envenenado',
-  'cegado',
-  'asustado',
-  'paralizado',
-  'derribado',
-  'agarrado',
-  'hechizado',
-  'invisible',
-  'ensordecido',
-  'petrificado',
-  'apresado',
-  'inconsciente',
-  'quemado',
-  'sangrando',
-  'bendecido',
-  'acelerado'
+  'Cegado',
+  'Hechizado',
+  'Ensordecido',
+  'Asustado',
+  'Agarrado',
+  'Incapacitado',
+  'Invisible',
+  'Paralizado',
+  'Petrificado',
+  'Envenenado',
+  'Derribado',
+  'Restringido',
+  'Aturdido',
+  'Inconsciente',
+  'Agotamiento'
 ] as const;
 
 export type DefaultStatusType = (typeof DEFAULT_STATUS_TYPES)[number];

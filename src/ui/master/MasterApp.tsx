@@ -13,6 +13,8 @@ import { AuthModal } from './components/AuthModal';
 import { LockScreen } from './components/LockScreen';
 import { CreditsModal } from './components/CreditsModal';
 import { FpsCounter } from './components/FpsCounter';
+import { TokenStatusesModal } from './components/TokenStatusesModal';
+import { ToastContainer } from './components/ToastContainer';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { saveAutoSaveToDb, loadAutoSaveFromDb } from '../../modules/persistence/saveManager';
 import { syncChannel } from '../../modules/sync/syncChannel';
@@ -236,6 +238,8 @@ export const MasterApp: React.FC = () => {
       <DisplaysModal />
       <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
       <CreditsModal isOpen={showCreditsModal} onClose={() => setShowCreditsModal(false)} />
+      <TokenStatusesModal />
+      <ToastContainer />
 
       {/* Indicador discreto de versión en esquina inferior izquierda (abre créditos al pulsar) */}
       <button

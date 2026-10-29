@@ -215,7 +215,7 @@ export class TokensLayer extends Container {
         entityContainer.visible = f > 0.001;
       }
 
-      this.updateEntityVisuals(entityContainer, entity, selectedIds.includes(entity.id));
+      this.updateEntityVisuals(entityContainer, entity, selectedIds.includes(entity.id), isPlayerPreview);
     }
 
     // Eliminar entidades que ya no existan o se hayan ocultado completamente
@@ -234,7 +234,7 @@ export class TokensLayer extends Container {
     }
   }
 
-  private updateEntityVisuals(container: Container, entity: Entity, isSelected: boolean) {
+  private updateEntityVisuals(container: Container, entity: Entity, isSelected: boolean, isPlayerPreview = false) {
     const sprite = container.getChildByLabel('sprite') as Sprite;
     const ring = container.getChildByLabel('ring') as Graphics;
     const nameText = container.getChildByLabel('name') as Text;
@@ -276,6 +276,81 @@ export class TokensLayer extends Container {
       ring.stroke({ width: 3, color: sideColor, alpha: 0.9 });
     }
 
+    // 3. Gestión de estados para tokens (borde rojo sutil y badges apilados)
+    let statusesContainer = container.getChildByLabel('statuses') as Container;
+    if (!statusesContainer) {
+      statusesContainer = new Container();
+      statusesContainer.label = 'statuses';
+      container.addChild(statusesContainer);
+    }
+
+    if (entity.type === 'token') {
+      const isPlayerView = !this.isMaster || isPlayerPreview;
+      const allStatuses = Array.isArray(entity.statuses) ? entity.statuses : [];
+      const visibleStatuses = allStatuses.filter((s) => !isPlayerView || s.visibleToPlayers !== false);
+
+      if (visibleStatuses.length > 0) {
+        // Borde rojo sutil alrededor del token
+        ring.circle(0, 0, radius + 3.5);
+        ring.stroke({ width: 2, color: 0xef4444, alpha: 0.85 });
+      }
+
+      statusesContainer.removeChildren();
+      if (visibleStatuses.length > 0) {
+        statusesContainer.visible = true;
+        statusesContainer.rotation = -entity.rotation;
+        statusesContainer.scale.x = entity.scaleX < 0 ? -1 : 1;
+        statusesContainer.scale.y = entity.scaleY < 0 ? -1 : 1;
+
+        const badgeSpacing = 18;
+        const totalHeight = visibleStatuses.length * badgeSpacing;
+        const startY = -totalHeight / 2;
+        const startX = radius + 6;
+
+        visibleStatuses.forEach((status, idx) => {
+          const badgeItem = new Container();
+          const turnsText = status.turnsRemaining !== null ? status.turnsRemaining : '∞';
+          const labelStr = `${status.type} ${turnsText}`;
+
+          const t = new Text({
+            text: labelStr,
+            style: new TextStyle({
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+              fontSize: 10,
+              fontWeight: 'bold',
+              fill: '#ffffff'
+            })
+          });
+
+          const pillW = Math.max(46, t.width + 10);
+          const pillH = 16;
+          const bg = new Graphics();
+          bg.roundRect(0, 0, pillW, pillH, 4);
+          bg.fill({ color: 0x1c1917, alpha: 0.88 });
+          bg.stroke({ width: 1, color: 0xef4444, alpha: 0.85 });
+
+          badgeItem.addChild(bg);
+          t.x = 5;
+          t.y = 1;
+          badgeItem.addChild(t);
+
+          badgeItem.x = startX;
+          badgeItem.y = startY + idx * badgeSpacing;
+
+          if (this.isMaster && !isPlayerPreview && !status.visibleToPlayers) {
+            badgeItem.alpha = 0.5;
+          }
+
+          statusesContainer.addChild(badgeItem);
+        });
+      } else {
+        statusesContainer.visible = false;
+      }
+    } else {
+      statusesContainer.removeChildren();
+      statusesContainer.visible = false;
+    }
+
     // Indicador visual de selección en máster
     if (this.isMaster && isSelected) {
       ring.circle(0, 0, radius + 6);
@@ -303,6 +378,9 @@ export class TokensLayer extends Container {
     if (nameText) {
       nameText.y = radius + 6;
       nameText.visible = entity.type === 'token';
+      nameText.rotation = -entity.rotation;
+      nameText.scale.x = entity.scaleX < 0 ? -1 : 1;
+      nameText.scale.y = entity.scaleY < 0 ? -1 : 1;
     }
   }
 

@@ -14,6 +14,7 @@ import { cloudGameSync } from '../modules/persistence/cloudGameSync';
 import { unionExplored } from '../modules/vision/fogMemory';
 import { visionManager } from '../modules/vision/visionManager';
 import { getMediaDimensions, persistAssetDimensions } from '../utils/mediaDimensions';
+import { FastActionBar } from '../ui/master/components/FastActionBar';
 
 interface PixiCanvasProps {
   isMaster: boolean;
@@ -49,6 +50,27 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
   const [draftWallPoints, setDraftWallPoints] = useState<Point2D[]>([]);
   const [fogDragRect, setFogDragRect] = useState<{ start: Point2D; current: Point2D } | null>(null);
   const [hoverCursor, setHoverCursor] = useState<string>('default');
+
+  const [canvasDimensions, setCanvasDimensions] = useState({
+    width: typeof window !== 'undefined' ? window.innerWidth : 1920,
+    height: typeof window !== 'undefined' ? window.innerHeight : 1080
+  });
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const updateSize = () => {
+      if (containerRef.current) {
+        setCanvasDimensions({
+          width: containerRef.current.clientWidth || window.innerWidth,
+          height: containerRef.current.clientHeight || window.innerHeight
+        });
+      }
+    };
+    updateSize();
+    const ro = new ResizeObserver(updateSize);
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
 
   // Estado de interacción de ratón
   const [isSpacePressed, setIsSpacePressed] = useState(false);
@@ -1609,16 +1631,25 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
   }
 
   return (
-    <div
-      ref={containerRef}
-      className={`relative w-full h-full overflow-hidden select-none ${activeCursor}`}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
-      onDoubleClick={handleDoubleClick}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-    />
+    <div className="relative w-full h-full overflow-hidden select-none">
+      <div
+        ref={containerRef}
+        className={`w-full h-full ${activeCursor}`}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
+        onDoubleClick={handleDoubleClick}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      />
+      {isMaster && !isPlayerPreviewMode && selectedEntityIds.length === 1 && (
+        <FastActionBar
+          selectedEntityId={selectedEntityIds[0]}
+          canvasWidth={canvasDimensions.width}
+          canvasHeight={canvasDimensions.height}
+        />
+      )}
+    </div>
   );
 };

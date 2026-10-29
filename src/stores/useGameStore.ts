@@ -12,7 +12,7 @@ import {
   AmbientConfig,
   WeatherConfig
 } from '../types/game';
-import { Entity, recalculateDoorEndpoints } from '../types/entity';
+import { Entity, recalculateDoorEndpoints, TokenStatus } from '../types/entity';
 import { revealRect, hideRect } from '../modules/vision/fogMemory';
 import { normalizeEntity, normalizeGameState } from '../modules/persistence/normalizer';
 import { fitMapInViewport } from '../modules/camera/cameraUtils';
@@ -145,9 +145,14 @@ interface GameStoreState {
   sendMasterCameraToPlayers: () => void;
   setFollowMasterCamera: (follow: boolean) => void;
 
-  // Combate
+  // Combate y Estados
   setCombatState: (partial: Partial<CombatState>) => void;
   setTurnCounter: (turn: number) => void;
+  nextTurn: () => string[];
+  addTokenStatus: (tokenId: string, status: Omit<TokenStatus, 'id'> | TokenStatus) => void;
+  removeTokenStatus: (tokenId: string, statusId: string) => void;
+  updateTokenStatus: (tokenId: string, statusId: string, updates: Partial<TokenStatus>) => void;
+  duplicateEntity: (id: string) => string | undefined;
 
   // Ambiente y Clima
   setAmbientConfig: (partial: Partial<AmbientConfig>) => void;
@@ -447,6 +452,138 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
     set((state) => ({
       game: { ...state.game, turnCounter: turn, updatedAt: Date.now() }
     }));
+  },
+
+  nextTurn: () => {
+    const expiredNotifications: string[] = [];
+    set((state) => {
+      const past = [...state.past, state.game.entities];
+      const currentTurn = (state.game.turnCounter || 1) + 1;
+      let anyChanged = false;
+
+      const entities = state.game.entities.map((ent) => {
+        if (ent.type !== 'token' || !Array.isArray(ent.statuses) || ent.statuses.length === 0) {
+          return ent;
+        }
+
+        const survivingStatuses: TokenStatus[] = [];
+        for (const st of ent.statuses) {
+          if (st.turnsRemaining === null) {
+            // Sin límite: no cambia
+            survivingStatuses.push(st);
+          } else {
+            anyChanged = true;
+            const remaining = st.turnsRemaining - 1;
+            if (remaining <= 0) {
+              expiredNotifications.push(`${st.type} terminó en ${ent.name || 'Token'}`);
+            } else {
+              survivingStatuses.push({
+                ...st,
+                turnsRemaining: remaining
+              });
+            }
+          }
+        }
+
+        return {
+          ...ent,
+          statuses: survivingStatuses
+        };
+      });
+
+      return {
+        game: {
+          ...state.game,
+          turnCounter: currentTurn,
+          entities,
+          updatedAt: Date.now()
+        },
+        past: anyChanged ? past : state.past,
+        future: anyChanged ? [] : state.future
+      };
+    });
+
+    return expiredNotifications;
+  },
+
+  addTokenStatus: (tokenId, status) => {
+    set((state) => {
+      const past = [...state.past, state.game.entities];
+      const newStatus: TokenStatus = {
+        id: 'id' in status && status.id ? status.id : `status_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        type: status.type,
+        turnsRemaining: status.turnsRemaining !== undefined ? status.turnsRemaining : 1,
+        visibleToPlayers: status.visibleToPlayers !== false
+      };
+      const entities = state.game.entities.map((e) => {
+        if (e.id !== tokenId || e.type !== 'token') return e;
+        const current = Array.isArray(e.statuses) ? e.statuses : [];
+        return {
+          ...e,
+          statuses: [...current, newStatus]
+        };
+      });
+      return {
+        game: { ...state.game, entities, updatedAt: Date.now() },
+        past,
+        future: []
+      };
+    });
+  },
+
+  removeTokenStatus: (tokenId, statusId) => {
+    set((state) => {
+      const past = [...state.past, state.game.entities];
+      const entities = state.game.entities.map((e) => {
+        if (e.id !== tokenId || e.type !== 'token') return e;
+        const current = Array.isArray(e.statuses) ? e.statuses : [];
+        return {
+          ...e,
+          statuses: current.filter((s) => s.id !== statusId)
+        };
+      });
+      return {
+        game: { ...state.game, entities, updatedAt: Date.now() },
+        past,
+        future: []
+      };
+    });
+  },
+
+  updateTokenStatus: (tokenId, statusId, updates) => {
+    set((state) => {
+      const past = [...state.past, state.game.entities];
+      const entities = state.game.entities.map((e) => {
+        if (e.id !== tokenId || e.type !== 'token') return e;
+        const current = Array.isArray(e.statuses) ? e.statuses : [];
+        return {
+          ...e,
+          statuses: current.map((s) => (s.id === statusId ? { ...s, ...updates } : s))
+        };
+      });
+      return {
+        game: { ...state.game, entities, updatedAt: Date.now() },
+        past,
+        future: []
+      };
+    });
+  },
+
+  duplicateEntity: (id) => {
+    const state = get();
+    const source = state.game.entities.find((e) => e.id === id);
+    if (!source) return undefined;
+
+    const gridSize = state.game.grid.size || 70;
+    const newId = `${source.type}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const clone: Entity = JSON.parse(JSON.stringify(source));
+    clone.id = newId;
+    clone.name = `${source.name} (copia)`;
+    clone.x += gridSize;
+    clone.y += gridSize;
+
+    state.addEntity(clone);
+    return newId;
   },
 
   setAmbientConfig: (partial) => {

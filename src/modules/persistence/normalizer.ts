@@ -54,6 +54,19 @@ export function normalizeEntity(entity: Entity): Entity {
         }
       };
     }
+
+    const statuses = Array.isArray(entity.statuses)
+      ? entity.statuses.map((s) => ({
+          ...s,
+          visibleToPlayers: s.visibleToPlayers !== false,
+          turnsRemaining: typeof s.turnsRemaining === 'number' ? s.turnsRemaining : null
+        }))
+      : [];
+
+    entity = {
+      ...entity,
+      statuses
+    };
   }
   // Normalizar animaciones si existen
   const rawAnim: any = entity.animations || (entity as any).animation;
