@@ -12,7 +12,7 @@ const tintGradientCache = new Map<number, Texture>();
  * exterior se una de forma continua e imperceptible con la niebla o la oscuridad exterior.
  */
 export function getDimRadialGradientTexture(ratio: number): Texture {
-  const clampedRatio = Math.max(0, Math.min(0.96, Math.round(ratio * 50) / 50));
+  const clampedRatio = Math.max(0.05, Math.min(0.95, Math.round(ratio * 50) / 50));
   if (dimGradientCache.has(clampedRatio)) {
     return dimGradientCache.get(clampedRatio)!;
   }
@@ -33,21 +33,14 @@ export function getDimRadialGradientTexture(ratio: number): Texture {
   const cx = size / 2;
   const cy = size / 2;
   const r1 = cx;
-  const r0 = Math.max(0, r1 * clampedRatio);
+  const p = Math.max(1.0, Math.min(3.5, Math.log(0.45) / Math.log(clampedRatio)));
 
   const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r1);
-  grad.addColorStop(0, 'rgba(255, 255, 255, 0.0)');
-  if (clampedRatio > 0.001) {
-    grad.addColorStop(clampedRatio, 'rgba(255, 255, 255, 0.0)');
-  }
-
-  const steps = 32;
-  for (let i = 1; i <= steps; i++) {
-    const u = i / steps;
-    const t = clampedRatio + u * (1 - clampedRatio);
-    // Curva coseno suave C1: derivada cero tanto en el radio claro como en el radio tenue exterior
-    const smoothAlpha = 0.5 * (1 - Math.cos(u * Math.PI));
-    grad.addColorStop(Math.min(1.0, t), `rgba(255, 255, 255, ${smoothAlpha.toFixed(4)})`);
+  const steps = 64;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const smoothAlpha = 0.5 * (1 - Math.cos(Math.PI * Math.pow(t, p)));
+    grad.addColorStop(t, `rgba(255, 255, 255, ${smoothAlpha.toFixed(4)})`);
   }
 
   ctx.fillStyle = grad;
@@ -60,12 +53,12 @@ export function getDimRadialGradientTexture(ratio: number): Texture {
 
 /**
  * Genera o recupera de caché una textura continua de tinte radial inverso (256x256):
- * - Desde r = 0 hasta r = ratio: completamente opaco (alpha = 1.0).
- * - Desde r = ratio hasta r = 1: transición continua suave (curva coseno C1) de 1 a 0.
- * - En r = 1 y fuera de r = 1: alpha = 0.0 (totalmente transparente).
+ * - Máxima intensidad cerca del origen (1.0).
+ * - Desvanecimiento continuo suave (curva coseno C1) hasta 0 en el radio exterior.
+ * - Sin escalón brusco en el radio claro ni relleno plano constante.
  */
 export function getTintRadialGradientTexture(ratio: number): Texture {
-  const clampedRatio = Math.max(0, Math.min(0.96, Math.round(ratio * 50) / 50));
+  const clampedRatio = Math.max(0.05, Math.min(0.95, Math.round(ratio * 50) / 50));
   if (tintGradientCache.has(clampedRatio)) {
     return tintGradientCache.get(clampedRatio)!;
   }
@@ -86,20 +79,14 @@ export function getTintRadialGradientTexture(ratio: number): Texture {
   const cx = size / 2;
   const cy = size / 2;
   const r1 = cx;
-  const r0 = Math.max(0, r1 * clampedRatio);
+  const p = Math.max(1.0, Math.min(3.5, Math.log(0.45) / Math.log(clampedRatio)));
 
   const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r1);
-  grad.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
-  if (clampedRatio > 0.001) {
-    grad.addColorStop(clampedRatio, 'rgba(255, 255, 255, 1.0)');
-  }
-
-  const steps = 32;
-  for (let i = 1; i <= steps; i++) {
-    const u = i / steps;
-    const t = clampedRatio + u * (1 - clampedRatio);
-    const smoothAlpha = 0.5 * (1 + Math.cos(u * Math.PI));
-    grad.addColorStop(Math.min(1.0, t), `rgba(255, 255, 255, ${smoothAlpha.toFixed(4)})`);
+  const steps = 64;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const smoothAlpha = 0.5 * (1 + Math.cos(Math.PI * Math.pow(t, p)));
+    grad.addColorStop(t, `rgba(255, 255, 255, ${smoothAlpha.toFixed(4)})`);
   }
 
   ctx.fillStyle = grad;
@@ -119,11 +106,11 @@ const coneTintGradientCache = new Map<string, Texture>();
  * - Vértice en el centro (cx, cy).
  * - Dirección hacia +X (rotación 0).
  * - Apertura angular coneAngleDeg (10° a 180°).
- * - Borde radial: degradado suave C1 hacia radio exterior.
- * - Bordes laterales: ligero degradado suave (~4.5°) para no verse como línea de cuchillo.
+ * - Borde radial: degradado continuo C1 desde el vértice hasta 0 en el radio exterior.
+ * - Bordes laterales: desvanecimiento angular suave (~4.5°) para una caída limpia en ambos flancos.
  */
 export function getConeTintGradientTexture(ratio: number, coneAngleDeg: number): Texture {
-  const clampedRatio = Math.max(0, Math.min(0.96, Math.round(ratio * 50) / 50));
+  const clampedRatio = Math.max(0.05, Math.min(0.95, Math.round(ratio * 50) / 50));
   const clampedAngle = Math.max(10, Math.min(180, Math.round(coneAngleDeg / 5) * 5));
   const cacheKey = `${clampedRatio}_${clampedAngle}`;
 
@@ -150,9 +137,10 @@ export function getConeTintGradientTexture(ratio: number, coneAngleDeg: number):
   const cx = size / 2;
   const cy = size / 2;
   const r1 = cx;
-  const r0 = Math.max(0, r1 * clampedRatio);
   const halfAngle = (clampedAngle * Math.PI) / 360;
   const softAngle = Math.min(0.08, halfAngle * 0.2); // ~4.5 grados de desvanecimiento lateral
+
+  const p = Math.max(1.0, Math.min(3.5, Math.log(0.45) / Math.log(clampedRatio)));
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
@@ -164,14 +152,11 @@ export function getConeTintGradientTexture(ratio: number, coneAngleDeg: number):
       const angle = Math.abs(Math.atan2(dy, dx));
       if (angle > halfAngle) continue;
 
-      // Factor radial
-      let fRadial = 1.0;
-      if (dist > r0) {
-        const u = (dist - r0) / (r1 - r0);
-        fRadial = 0.5 * (1 + Math.cos(u * Math.PI));
-      }
+      // Factor radial continuo: derivada 0 en vértice y derivada 0 en borde exterior
+      const t = dist / r1;
+      const fRadial = 0.5 * (1 + Math.cos(Math.PI * Math.pow(t, p)));
 
-      // Factor angular (desvanecimiento lateral suave)
+      // Factor angular (desvanecimiento lateral suave y uniforme)
       let fAngle = 1.0;
       if (angle > halfAngle - softAngle) {
         const v = (angle - (halfAngle - softAngle)) / softAngle;

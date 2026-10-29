@@ -33,17 +33,15 @@ export class AmbientLayer extends Container {
   private isMaster: boolean;
 
   private darknessGfx = new Graphics();
-  private brightGfxContainer = new Container();
-  private brightGfxList: Graphics[] = [];
 
-  // Contenedor con máscara stencil para degradado radial suave de oscuridad en zona tenue
+  // Contenedor con máscara stencil para degradado radial suave de oscuridad en zona iluminada
   private dimContainer = new Container();
   private dimMaskGfx = new Graphics();
   private dimSpritesContainer = new Container();
   private dimSprites: Sprite[] = [];
   private darknessFilter: DarknessInvertFilter | null = null;
 
-  // Contenedor con máscara stencil para degradado radial suave de tinte en zona tenue
+  // Contenedor con máscara stencil para haz continuo de luz con degradado suave
   private tintDimContainer = new Container();
   private tintDimMaskGfx = new Graphics();
   private tintDimSpritesContainer = new Container();
@@ -63,8 +61,7 @@ export class AmbientLayer extends Container {
   private lastGeometryKey = '';
   private cachedRegions: {
     outsideMulti: ExploredMultiPolygon;
-    dimMulti: ExploredMultiPolygon;
-    brightMulti: ExploredMultiPolygon;
+    totalMulti: ExploredMultiPolygon;
   } | null = null;
 
   private timeSec = 0;
@@ -76,7 +73,7 @@ export class AmbientLayer extends Container {
     // 1. Oscuridad completa fuera de las luces
     this.addChild(this.darknessGfx);
 
-    // 2. Degradado suave de oscuridad en zona tenue
+    // 2. Degradado suave de oscuridad en todas las zonas iluminadas
     this.dimContainer.mask = this.dimMaskGfx;
     this.dimContainer.addChild(this.dimMaskGfx);
     this.dimContainer.addChild(this.dimSpritesContainer);
@@ -92,10 +89,7 @@ export class AmbientLayer extends Container {
 
     this.addChild(this.dimContainer);
 
-    // 3. Tinte de luz claro (polígonos de zona brillante)
-    this.addChild(this.brightGfxContainer);
-
-    // 4. Degradado suave de tinte en zona tenue
+    // 3. Haz continuo de tinte de luz (sin polígonos planos ni cortes en radio claro)
     this.tintDimContainer.mask = this.tintDimMaskGfx;
     this.tintDimContainer.addChild(this.tintDimMaskGfx);
     this.tintDimContainer.addChild(this.tintDimSpritesContainer);
@@ -176,47 +170,32 @@ export class AmbientLayer extends Container {
         ]
       ];
 
-      const brightPolys = lights.map((l) => l.brightPolygon).filter((p) => p && p.length >= 3);
       const totalPolys = lights.map((l) => l.totalPolygon).filter((p) => p && p.length >= 3);
 
-      let brightMulti: ExploredMultiPolygon = [];
       let totalMulti: ExploredMultiPolygon = [];
-      let dimMulti: ExploredMultiPolygon = [];
       let outsideMulti: ExploredMultiPolygon = worldBoxMulti;
 
-      if (brightPolys.length > 0) {
-        brightMulti = simplifyMulti(safeClip.union(visionToMulti(brightPolys)));
-      }
       if (totalPolys.length > 0) {
         totalMulti = simplifyMulti(safeClip.union(visionToMulti(totalPolys)));
-      }
-
-      if (totalMulti.length > 0 && brightMulti.length > 0) {
-        dimMulti = simplifyMulti(safeClip.difference(totalMulti, brightMulti));
-      } else if (totalMulti.length > 0) {
-        dimMulti = totalMulti;
-      }
-
-      if (totalMulti.length > 0) {
         outsideMulti = simplifyMulti(safeClip.difference(worldBoxMulti, totalMulti));
       }
 
-      this.cachedRegions = { outsideMulti, dimMulti, brightMulti };
+      this.cachedRegions = { outsideMulti, totalMulti };
 
       // 4a. Regenerar geometría estática de oscuridad fuera de las luces
       this.darknessGfx.clear();
       this.renderMulti(this.darknessGfx, outsideMulti, 0xffffff, 1.0);
 
-      // 4b. Regenerar máscara stencil única para zona tenue de oscuridad
+      // 4b. Regenerar máscara stencil única para degradado de oscuridad de todas las luces
       this.dimMaskGfx.clear();
-      if (dimMulti.length > 0) {
-        this.renderMulti(this.dimMaskGfx, dimMulti, 0xffffff, 1.0);
+      if (totalMulti.length > 0) {
+        this.renderMulti(this.dimMaskGfx, totalMulti, 0xffffff, 1.0);
 
         let darkSpriteIdx = 0;
         for (const light of lights) {
           const rBright = light.brightRangePx || 0;
           const rTotal = light.totalRangePx || 0;
-          if (rTotal <= rBright || !light.center) continue;
+          if (rTotal <= 0 || !light.center) continue;
 
           let sprite = this.dimSprites[darkSpriteIdx];
           if (!sprite) {
@@ -225,7 +204,7 @@ export class AmbientLayer extends Container {
             this.dimSprites.push(sprite);
             this.dimSpritesContainer.addChild(sprite);
           }
-          const ratio = rBright / rTotal;
+          const ratio = rTotal > 0 ? rBright / rTotal : 1.0;
           const isCone = light.shape === 'cone';
           const coneAngle = light.coneAngle ?? 60;
           const totalAngleRad = (light.rotation || 0) + ((light.directionOffset || 0) * Math.PI) / 180;
@@ -255,14 +234,14 @@ export class AmbientLayer extends Container {
         for (const s of this.dimSprites) s.visible = false;
       }
 
-      // 5a. Regenerar máscara stencil única para tinte de zona tenue (polígonos totales de todas las luces)
+      // 5. Regenerar máscara stencil única y sprites del haz continuo de luz (mismo sector, color uniforme)
       this.tintDimMaskGfx.clear();
       let tintSpriteIdx = 0;
       for (const light of lights) {
         if (light.totalPolygon && light.totalPolygon.length >= 3) {
           const rBright = light.brightRangePx || 0;
           const rTotal = light.totalRangePx || 0;
-          if (rTotal > rBright && light.center) {
+          if (rTotal > 0 && light.center) {
             this.tintDimMaskGfx.poly(light.totalPolygon.map((p) => [p.x, p.y]).flat());
             this.tintDimMaskGfx.fill({ color: 0xffffff, alpha: 1.0 });
 
@@ -270,12 +249,11 @@ export class AmbientLayer extends Container {
             if (!sprite) {
               sprite = new Sprite();
               sprite.anchor.set(0.5);
-              sprite.blendMode = 'max';
               this.tintDimSprites.push(sprite);
               this.tintDimSpritesContainer.addChild(sprite);
             }
-            sprite.blendMode = 'max';
-            const ratio = rBright / rTotal;
+            sprite.blendMode = 'screen';
+            const ratio = rTotal > 0 ? rBright / rTotal : 1.0;
             const isCone = light.shape === 'cone';
             const coneAngle = light.coneAngle ?? 60;
             const totalAngleRad = (light.rotation || 0) + ((light.directionOffset || 0) * Math.PI) / 180;
@@ -294,27 +272,6 @@ export class AmbientLayer extends Container {
       }
       for (let i = tintSpriteIdx; i < this.tintDimSprites.length; i++) {
         this.tintDimSprites[i].visible = false;
-      }
-
-      // 5b. Regenerar geometrías de polígonos claros para tinte brillante
-      let brightIdx = 0;
-      for (const light of lights) {
-        if (light.brightPolygon && light.brightPolygon.length >= 3) {
-          let bgfx = this.brightGfxList[brightIdx];
-          if (!bgfx) {
-            bgfx = new Graphics();
-            this.brightGfxList.push(bgfx);
-            this.brightGfxContainer.addChild(bgfx);
-          }
-          bgfx.clear();
-          bgfx.poly(light.brightPolygon.map((p) => [p.x, p.y]).flat());
-          bgfx.fill({ color: 0xffffff, alpha: 1.0 });
-          bgfx.visible = true;
-          brightIdx++;
-        }
-      }
-      for (let i = brightIdx; i < this.brightGfxList.length; i++) {
-        this.brightGfxList[i].visible = false;
       }
     }
 
@@ -351,9 +308,7 @@ export class AmbientLayer extends Container {
     // Modular tinte de luces según oscuridad ambiental y parpadeo de antorchas
     const darknessFactor = 0.05 + 0.95 * Math.pow(Math.min(1.0, currentDarkness / 0.85), 1.5);
 
-    let activeBrightIdx = 0;
     let activeTintIdx = 0;
-
     for (const light of lights) {
       const { rgb: colorNum } = parseColor(light.color, 0xffaa44);
 
@@ -364,21 +319,8 @@ export class AmbientLayer extends Container {
       }
 
       const baseAlpha = light.intensity * 0.25 * darknessFactor * flickerMod;
-
-      // Zona clara
-      if (light.brightPolygon && light.brightPolygon.length >= 3) {
-        const bgfx = this.brightGfxList[activeBrightIdx++];
-        if (bgfx) {
-          bgfx.tint = colorNum;
-          bgfx.alpha = baseAlpha;
-          bgfx.visible = baseAlpha > 0.001;
-        }
-      }
-
-      // Zona tenue
-      const rBright = light.brightRangePx || 0;
       const rTotal = light.totalRangePx || 0;
-      if (rTotal > rBright && light.center) {
+      if (rTotal > 0 && light.center && light.totalPolygon && light.totalPolygon.length >= 3) {
         const sprite = this.tintDimSprites[activeTintIdx++];
         if (sprite) {
           sprite.tint = colorNum;

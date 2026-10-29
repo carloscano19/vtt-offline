@@ -1,7 +1,8 @@
 import { Container, Graphics, Renderer, Sprite } from 'pixi.js';
 import { ExploredMultiPolygon } from '../../types/game';
 import { TokenVisibility } from '../../modules/vision/visibilityPolygon';
-import { exploredSignature } from '../../modules/vision/fogMemory';
+import { exploredSignature, simplifyMulti } from '../../modules/vision/fogMemory';
+import { safeClip } from '../../modules/vision/safeClip';
 import { computeFogRegions } from '../../modules/vision/fogRegions';
 import { getDimRadialGradientTexture, getTintRadialGradientTexture, getConeTintGradientTexture } from '../utils/gradientTextures';
 import { DarknessInvertFilter } from '../filters/DarknessInvertFilter';
@@ -130,12 +131,16 @@ export class FogLayer extends Container {
     this.exploredDarkGfx.clear();
     this.renderMultiPolygon(this.exploredDarkGfx, regions.exploradoNoVisible, FOG_COLOR, EXPLORED_ALPHA);
 
-    // 3. Dibuja visibleDim (zona tenue de tokens y luces) con degradado radial continuo hacia negro total
+    // 3. Dibuja visible con degradado continuo hacia negro total (sin corte brusco en radio claro)
     this.dimMaskGfx.clear();
 
-    if (regions.visibleDim.length > 0) {
-      // Máscara stencil recortada por visibleDim (paredes y huecos claros cortan en seco)
-      this.renderMultiPolygon(this.dimMaskGfx, regions.visibleDim, 0xffffff, 1.0);
+    const maskMulti = revealed && revealed.length > 0
+      ? simplifyMulti(safeClip.difference(regions.visible, revealed))
+      : regions.visible;
+
+    if (maskMulti.length > 0) {
+      // Máscara stencil recortada por las zonas de visión (las paredes cortan en seco)
+      this.renderMultiPolygon(this.dimMaskGfx, maskMulti, 0xffffff, 1.0);
 
       const sources: {
         center: { x: number; y: number };
@@ -177,7 +182,7 @@ export class FogLayer extends Container {
       for (const src of sources) {
         const rBright = src.rBright || 0;
         const rTotal = src.rTotal || 0;
-        if (rTotal <= rBright) continue;
+        if (rTotal <= 0) continue;
 
         let sprite = this.dimSprites[spriteIdx];
         if (!sprite) {
@@ -188,7 +193,7 @@ export class FogLayer extends Container {
         }
         sprite.visible = true;
 
-        const ratio = rBright / rTotal;
+        const ratio = rTotal > 0 ? rBright / rTotal : 1.0;
         const isCone = src.shape === 'cone';
         const coneAngle = src.coneAngle ?? 60;
         const totalAngleRad = (src.rotation || 0) + ((src.directionOffset || 0) * Math.PI) / 180;
