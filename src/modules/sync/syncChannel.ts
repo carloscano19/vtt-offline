@@ -1,13 +1,14 @@
 import { GameState, RulerState, CameraState } from '../../types/game';
 
 export type SyncMessage =
-  | { type: 'STATE_SYNC'; state: GameState }
+  | { type: 'STATE_SYNC'; state: GameState; appVersion?: string }
   | { type: 'RULER_SYNC'; ruler: RulerState }
   | { type: 'CAMERA_SYNC'; camera: CameraState }
   | { type: 'PLAYER_CAMERA_CHANGED'; camera: CameraState }
   | { type: 'VIEWPORT_SYNC'; width: number; height: number }
   | { type: 'REQUEST_CURRENT_STATE' }
   | { type: 'ASSET_DOWNLOADED'; assetId: string }
+  | { type: 'APP_RELOAD_REQUEST'; version?: string }
   | { type: 'MASTER_HELLO'; id: string }
   | { type: 'MASTER_PRESENT'; id: string }
   | { type: 'MASTER_TAKEOVER'; id: string }
@@ -24,6 +25,7 @@ class SyncManager {
   private viewportListeners: Set<(vp: { width: number; height: number }) => void> = new Set();
   private requestStateListeners: Set<() => void> = new Set();
   private assetDownloadedListeners: Set<(assetId: string) => void> = new Set();
+  private appReloadListeners: Set<() => void> = new Set();
 
   // Control de pestaña máster única
   private readonly tabId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -35,7 +37,7 @@ class SyncManager {
   private electionTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
-    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    if (typeof BroadcastChannel !== 'undefined') {
       this.channel = new BroadcastChannel(CHANNEL_NAME);
       this.channel.onmessage = (event: MessageEvent<SyncMessage>) => {
         const msg = event.data;
@@ -97,14 +99,19 @@ class SyncManager {
           case 'ASSET_DOWNLOADED':
             this.assetDownloadedListeners.forEach((listener) => listener(msg.assetId));
             break;
+          case 'APP_RELOAD_REQUEST':
+            this.appReloadListeners.forEach((listener) => listener());
+            break;
         }
       };
 
-      window.addEventListener('beforeunload', () => {
-        if (this.isMasterWindow && this.canEmit) {
-          this.post({ type: 'MASTER_CLOSED', id: this.tabId });
-        }
-      });
+      if (typeof window !== 'undefined') {
+        window.addEventListener('beforeunload', () => {
+          if (this.isMasterWindow && this.canEmit) {
+            this.post({ type: 'MASTER_CLOSED', id: this.tabId });
+          }
+        });
+      }
     }
   }
 
@@ -191,7 +198,12 @@ class SyncManager {
     if (!this.canEmit) return;
     if (this.channel) {
       try {
-        this.channel.postMessage({ type: 'STATE_SYNC', state });
+        const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined;
+        this.channel.postMessage({
+          type: 'STATE_SYNC',
+          state: { ...state, appVersion: state.appVersion || version },
+          appVersion: version
+        });
       } catch (err) {
         console.error('[SyncManager] Error al enviar STATE_SYNC:', err);
       }
@@ -293,6 +305,21 @@ class SyncManager {
   public onAssetDownloaded(callback: (assetId: string) => void): () => void {
     this.assetDownloadedListeners.add(callback);
     return () => this.assetDownloadedListeners.delete(callback);
+  }
+
+  public sendAppReload(version?: string) {
+    if (this.channel) {
+      try {
+        this.channel.postMessage({ type: 'APP_RELOAD_REQUEST', version });
+      } catch (err) {
+        console.error('[SyncManager] Error al enviar APP_RELOAD_REQUEST:', err);
+      }
+    }
+  }
+
+  public onAppReload(callback: () => void): () => void {
+    this.appReloadListeners.add(callback);
+    return () => this.appReloadListeners.delete(callback);
   }
 }
 

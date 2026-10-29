@@ -94,6 +94,7 @@ export interface GameState {
   music: MusicState;
   createdAt: number;
   updatedAt: number;
+  appVersion?: string;
 }
 
 export type AssetType = 'image' | 'gif' | 'video' | 'map' | 'audio';

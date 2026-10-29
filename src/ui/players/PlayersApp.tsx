@@ -67,6 +67,16 @@ export const PlayersApp: React.FC = () => {
   useEffect(() => {
     // 1. Recibir estado completo ligero desde la ventana máster por BroadcastChannel
     const cleanupState = syncChannel.onState((state) => {
+      // Si la versión del estado difiere de la local, recargar para actualizar
+      if (
+        state.appVersion &&
+        typeof __APP_VERSION__ !== 'undefined' &&
+        state.appVersion !== __APP_VERSION__
+      ) {
+        console.log(`[PlayersApp] Versión recibida (${state.appVersion}) distinta de local (${__APP_VERSION__}). Recargando...`);
+        window.location.reload();
+        return;
+      }
       setGame(state);
       if (!hasConnectedRef.current) {
         hasConnectedRef.current = true;
@@ -102,11 +112,18 @@ export const PlayersApp: React.FC = () => {
       invalidateCachedTexture(assetId);
     });
 
+    // 6. Recibir orden de recarga por actualización de app enviada desde el máster
+    const cleanupReload = syncChannel.onAppReload(() => {
+      console.log('[PlayersApp] Orden de recarga recibida desde el máster.');
+      window.location.reload();
+    });
+
     return () => {
       cleanupState();
       cleanupRuler();
       cleanupCamera();
       cleanupAsset();
+      cleanupReload();
     };
   }, [setGame, setPlayerCamera, setRulerMode, setRulerDiagonalRule, setRulerVisibleToPlayers, startRulerMeasure, updateRulerMeasure, clearRuler]);
 
