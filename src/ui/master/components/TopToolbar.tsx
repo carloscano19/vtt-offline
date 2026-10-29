@@ -301,7 +301,10 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
                   brightRadiusInSquares,
                   dimRadiusInSquares,
                   edgeHardness: 0.5,
-                  flicker: false
+                  flicker: false,
+                  shape: lgt.shape ?? 'circle',
+                  coneAngle: lgt.coneAngle ?? 60,
+                  directionOffset: lgt.directionOffset ?? 0
                 }
               };
               addEntity(lightEntity);

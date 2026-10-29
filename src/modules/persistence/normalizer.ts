@@ -20,7 +20,10 @@ export function normalizeEntity(entity: Entity): Entity {
           active: side === 'jugador',
           brightRangeInSquares: 4,
           dimRangeInSquares: 2,
-          hardness: 0.5
+          hardness: 0.5,
+          shape: 'circle',
+          coneAngle: 60,
+          directionOffset: 0
         }
       };
     } else {
@@ -44,7 +47,10 @@ export function normalizeEntity(entity: Entity): Entity {
         vision: {
           ...entity.vision,
           brightRangeInSquares,
-          dimRangeInSquares
+          dimRangeInSquares,
+          shape: entity.vision.shape === 'cone' ? 'cone' : 'circle',
+          coneAngle: typeof entity.vision.coneAngle === 'number' ? Math.max(10, Math.min(180, entity.vision.coneAngle)) : 60,
+          directionOffset: typeof entity.vision.directionOffset === 'number' ? ((entity.vision.directionOffset % 360) + 360) % 360 : 0
         }
       };
     }
@@ -132,7 +138,11 @@ export function normalizeEntity(entity: Entity): Entity {
       const parsed = parseColor(lgt.color, 0xffffff);
       return {
         ...lgt,
-        color: colorToHex(parsed.rgb)
+        color: colorToHex(parsed.rgb),
+        shape: lgt.shape === 'cone' ? ('cone' as const) : ('circle' as const),
+        coneAngle: typeof lgt.coneAngle === 'number' ? Math.max(10, Math.min(180, lgt.coneAngle)) : 60,
+        directionOffset: typeof lgt.directionOffset === 'number' ? ((lgt.directionOffset % 360) + 360) % 360 : 0,
+        rotation: typeof lgt.rotation === 'number' ? lgt.rotation : 0
       };
     });
     entity = {
@@ -144,20 +154,29 @@ export function normalizeEntity(entity: Entity): Entity {
     };
   }
 
-  if (entity.type === 'light') {
+  if (entity.light) {
     const parsed = parseColor(entity.light?.color, 0xffaa44);
+    entity = {
+      ...entity,
+      light: {
+        color: colorToHex(parsed.rgb),
+        intensity: entity.light.intensity ?? 100,
+        brightRadiusInSquares: entity.light.brightRadiusInSquares ?? 4,
+        dimRadiusInSquares: entity.light.dimRadiusInSquares ?? 2,
+        edgeHardness: entity.light.edgeHardness ?? 0.5,
+        flicker: entity.light.flicker ?? false,
+        shape: entity.light.shape === 'cone' ? ('cone' as const) : ('circle' as const),
+        coneAngle: typeof entity.light.coneAngle === 'number' ? Math.max(10, Math.min(180, entity.light.coneAngle)) : 60,
+        directionOffset: typeof entity.light.directionOffset === 'number' ? ((entity.light.directionOffset % 360) + 360) % 360 : 0
+      }
+    };
+  }
+
+  if (entity.type === 'light') {
     return {
       ...entity,
       visibleToPlayers: entity.visibleToPlayers ?? true,
-      locked: entity.locked ?? false,
-      light: {
-        color: colorToHex(parsed.rgb),
-        intensity: entity.light?.intensity ?? 100,
-        brightRadiusInSquares: entity.light?.brightRadiusInSquares ?? 4,
-        dimRadiusInSquares: entity.light?.dimRadiusInSquares ?? 2,
-        edgeHardness: entity.light?.edgeHardness ?? 0.5,
-        flicker: entity.light?.flicker ?? false
-      }
+      locked: entity.locked ?? false
     };
   }
 

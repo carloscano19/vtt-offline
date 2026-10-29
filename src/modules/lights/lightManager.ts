@@ -1,6 +1,6 @@
 import { Entity, Point2D } from '../../types/entity';
 import { getAllWallSegments } from '../walls/wallManager';
-import { computeVisibilityPolygon } from '../vision/visibilityPolygon';
+import { computeVisibilityPolygon, clipPolygonToCone } from '../vision/visibilityPolygon';
 import { parseColor, colorToHex } from '../../utils/color';
 
 export interface LightVisibility {
@@ -14,6 +14,10 @@ export interface LightVisibility {
   totalRangePx: number;
   edgeHardness: number;
   flicker: boolean;
+  shape?: 'circle' | 'cone';
+  coneAngle?: number;
+  directionOffset?: number;
+  rotation?: number;
 }
 
 interface CachedLightPoly {
@@ -61,7 +65,11 @@ export class LightManager {
     const lightPart = lightEntities
       .map((l) => {
         const c = l.light!;
-        return `${l.id}:${Math.round(l.x)}:${Math.round(l.y)}:${l.scaleX}:${l.scaleY}:${c.brightRadiusInSquares}:${c.dimRadiusInSquares}:${c.color}:${c.intensity}:${c.edgeHardness}`;
+        const shape = c.shape ?? 'circle';
+        const coneAngle = c.coneAngle ?? 60;
+        const dirOffset = c.directionOffset ?? 0;
+        const rot = Math.round((l.rotation || 0) * 100) / 100;
+        return `${l.id}:${Math.round(l.x)}:${Math.round(l.y)}:${l.scaleX}:${l.scaleY}:${c.brightRadiusInSquares}:${c.dimRadiusInSquares}:${c.color}:${c.intensity}:${c.edgeHardness}:${shape}:${coneAngle}:${dirOffset}:${rot}`;
       })
       .join('|');
 
@@ -110,7 +118,12 @@ export class LightManager {
       const brightRangePx = Math.max(0, brightSquares * effectiveGridSize);
       const totalRangePx = Math.max(brightRangePx, (brightSquares + dimSquares) * effectiveGridSize);
 
-      const lightKey = `${Math.round(center.x)}:${Math.round(center.y)}:${brightRangePx}:${totalRangePx}__${wallPart}`;
+      const shape = cfg.shape ?? 'circle';
+      const coneAngle = cfg.coneAngle ?? 60;
+      const directionOffset = cfg.directionOffset ?? 0;
+      const rotation = lightEnt.rotation ?? 0;
+
+      const lightKey = `${Math.round(center.x)}:${Math.round(center.y)}:${brightRangePx}:${totalRangePx}:${shape}:${coneAngle}:${directionOffset}:${Math.round(rotation * 100) / 100}__${wallPart}`;
       const cached = this.perLightCache.get(lightEnt.id);
 
       let brightPolygon: Point2D[];
@@ -133,6 +146,15 @@ export class LightManager {
           totalPolygon = brightPolygon;
         }
 
+        if (shape === 'cone') {
+          if (brightPolygon.length >= 3) {
+            brightPolygon = clipPolygonToCone(brightPolygon, center, brightRangePx, rotation, coneAngle, directionOffset);
+          }
+          if (totalPolygon.length >= 3) {
+            totalPolygon = clipPolygonToCone(totalPolygon, center, totalRangePx, rotation, coneAngle, directionOffset);
+          }
+        }
+
         this.perLightCache.set(lightEnt.id, {
           key: lightKey,
           brightPolygon,
@@ -150,7 +172,11 @@ export class LightManager {
         brightRangePx,
         totalRangePx,
         edgeHardness: cfg.edgeHardness ?? 0.5,
-        flicker: !!cfg.flicker
+        flicker: !!cfg.flicker,
+        shape,
+        coneAngle,
+        directionOffset,
+        rotation
       });
     }
 

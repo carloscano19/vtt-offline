@@ -1,5 +1,7 @@
 import { Point2D } from '../../types/entity';
 import { WallSegment } from '../walls/wallManager';
+import { safeClip } from './safeClip';
+import { visionToMulti, ringArea } from './fogMemory';
 
 export interface TokenVisibility {
   tokenId: string;
@@ -12,6 +14,73 @@ export interface TokenVisibility {
   rangePx: number; // alias de totalRangePx para compatibilidad
   hardness: number; // 0 = difuminado, 1 = nítido
   losPolygon?: Point2D[]; // Línea de visión ilimitada (hasta paredes) para ver zonas iluminadas lejanas
+  shape?: 'circle' | 'cone';
+  coneAngle?: number;
+  directionOffset?: number;
+  rotation?: number;
+}
+
+/**
+ * Genera los puntos de un sector circular (cono) para recorte o dibujado.
+ */
+export function generateConeSectorPolygon(
+  center: Point2D,
+  rangePx: number,
+  rotationRad: number,
+  coneAngleDeg: number,
+  directionOffsetDeg: number = 0,
+  steps = 32
+): Point2D[] {
+  const centralAngle = rotationRad + (directionOffsetDeg * Math.PI) / 180;
+  const halfAngle = (coneAngleDeg * Math.PI) / 360;
+  const startAngle = centralAngle - halfAngle;
+  const endAngle = centralAngle + halfAngle;
+
+  const points: Point2D[] = [{ x: center.x, y: center.y }];
+  for (let i = 0; i <= steps; i++) {
+    const a = startAngle + (endAngle - startAngle) * (i / steps);
+    points.push({
+      x: center.x + Math.cos(a) * rangePx,
+      y: center.y + Math.sin(a) * rangePx
+    });
+  }
+  return points;
+}
+
+/**
+ * Recorta un polígono de visibilidad existente con un sector circular (cono).
+ */
+export function clipPolygonToCone(
+  polygon: Point2D[],
+  center: Point2D,
+  rangePx: number,
+  rotationRad: number,
+  coneAngleDeg: number,
+  directionOffsetDeg: number = 0
+): Point2D[] {
+  if (!polygon || polygon.length < 3 || rangePx <= 0) return polygon;
+  const sector = generateConeSectorPolygon(center, rangePx, rotationRad, coneAngleDeg, directionOffsetDeg);
+  const polyMulti = visionToMulti([polygon]);
+  const sectorMulti = visionToMulti([sector]);
+  if (polyMulti.length === 0 || sectorMulti.length === 0) return polygon;
+
+  const clipped = safeClip.intersection(polyMulti, sectorMulti);
+  if (!clipped || clipped.length === 0) return [];
+
+  // Si hay varios polígonos resultantes (por ejemplo cortados por columnas), devolver el de mayor área
+  let maxArea = -1;
+  let bestRing: [number, number][] = clipped[0][0];
+  for (const p of clipped) {
+    if (p[0]) {
+      const a = ringArea(p[0]);
+      if (a > maxArea) {
+        maxArea = a;
+        bestRing = p[0];
+      }
+    }
+  }
+
+  return bestRing.map(([x, y]) => ({ x, y }));
 }
 
 function distToSegment(p: Point2D, v: Point2D, w: Point2D): number {

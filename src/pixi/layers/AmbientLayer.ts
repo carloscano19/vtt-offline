@@ -4,7 +4,7 @@ import { LightVisibility } from '../../modules/lights/lightManager';
 import { visionToMulti, simplifyMulti } from '../../modules/vision/fogMemory';
 import { safeClip } from '../../modules/vision/safeClip';
 import { parseColor, rgbComponents } from '../../utils/color';
-import { getDimRadialGradientTexture, getTintRadialGradientTexture } from '../utils/gradientTextures';
+import { getDimRadialGradientTexture, getTintRadialGradientTexture, getConeTintGradientTexture } from '../utils/gradientTextures';
 import { DarknessInvertFilter } from '../filters/DarknessInvertFilter';
 
 export const AMBIENT_PRESET_CONFIGS: Record<string, { color: string; intensity: number }> = {
@@ -154,7 +154,10 @@ export class AmbientLayer extends Container {
     const bh = Number.isFinite(bounds.height) && bounds.height > 0 ? Math.round(bounds.height) : 4000;
 
     const lightsKey = lights
-      .map((l) => `${l.lightId}:${Math.round(l.center.x)}:${Math.round(l.center.y)}:${l.brightRangePx}:${l.totalRangePx}`)
+      .map(
+        (l) =>
+          `${l.lightId}:${Math.round(l.center.x)}:${Math.round(l.center.y)}:${l.brightRangePx}:${l.totalRangePx}:${l.shape || 'circle'}:${l.coneAngle || 60}:${l.directionOffset || 0}:${Math.round((l.rotation || 0) * 100) / 100}`
+      )
       .join('|');
     const geoKey = `${bx},${by},${bw},${bh}__${lightsKey}`;
 
@@ -223,8 +226,14 @@ export class AmbientLayer extends Container {
             this.dimSpritesContainer.addChild(sprite);
           }
           const ratio = rBright / rTotal;
+          const isCone = light.shape === 'cone';
+          const coneAngle = light.coneAngle ?? 60;
+          const totalAngleRad = (light.rotation || 0) + ((light.directionOffset || 0) * Math.PI) / 180;
+
           if (this.darknessFilter) {
-            sprite.texture = getTintRadialGradientTexture(ratio);
+            sprite.texture = isCone
+              ? getConeTintGradientTexture(ratio, coneAngle)
+              : getTintRadialGradientTexture(ratio);
             sprite.tint = 0xffffff;
             sprite.alpha = 1.0;
             sprite.blendMode = 'max';
@@ -233,6 +242,7 @@ export class AmbientLayer extends Container {
             sprite.blendMode = 'normal';
           }
           sprite.position.set(light.center.x, light.center.y);
+          sprite.rotation = isCone ? totalAngleRad : 0;
           sprite.width = rTotal * 2;
           sprite.height = rTotal * 2;
           sprite.visible = true;
@@ -266,8 +276,15 @@ export class AmbientLayer extends Container {
             }
             sprite.blendMode = 'max';
             const ratio = rBright / rTotal;
-            sprite.texture = getTintRadialGradientTexture(ratio);
+            const isCone = light.shape === 'cone';
+            const coneAngle = light.coneAngle ?? 60;
+            const totalAngleRad = (light.rotation || 0) + ((light.directionOffset || 0) * Math.PI) / 180;
+
+            sprite.texture = isCone
+              ? getConeTintGradientTexture(ratio, coneAngle)
+              : getTintRadialGradientTexture(ratio);
             sprite.position.set(light.center.x, light.center.y);
+            sprite.rotation = isCone ? totalAngleRad : 0;
             sprite.width = rTotal * 2;
             sprite.height = rTotal * 2;
             sprite.visible = true;

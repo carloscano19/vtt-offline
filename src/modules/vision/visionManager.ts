@@ -1,6 +1,6 @@
 import { Entity, Point2D } from '../../types/entity';
 import { getAllWallSegments, WallSegment } from '../walls/wallManager';
-import { computeVisibilityPolygon, TokenVisibility } from './visibilityPolygon';
+import { computeVisibilityPolygon, clipPolygonToCone, TokenVisibility } from './visibilityPolygon';
 
 interface CachedTokenPoly {
   key: string;
@@ -45,7 +45,11 @@ export class VisionManager {
       .map((t) => {
         const b = t.vision?.brightRangeInSquares ?? t.vision?.rangeInSquares ?? 4;
         const d = t.vision?.dimRangeInSquares ?? 2;
-        return `${t.id}:${Math.round(t.x)}:${Math.round(t.y)}:${b}:${d}:${t.vision?.hardness}`;
+        const shape = t.vision?.shape ?? 'circle';
+        const coneAngle = t.vision?.coneAngle ?? 60;
+        const dirOffset = t.vision?.directionOffset ?? 0;
+        const rot = Math.round((t.rotation || 0) * 100) / 100;
+        return `${t.id}:${Math.round(t.x)}:${Math.round(t.y)}:${b}:${d}:${t.vision?.hardness}:${shape}:${coneAngle}:${dirOffset}:${rot}`;
       })
       .join('|');
 
@@ -89,10 +93,15 @@ export class VisionManager {
       const hardness = token.vision?.hardness ?? 0.5;
       const center: Point2D = { x: token.x, y: token.y };
 
+      const shape = token.vision?.shape ?? 'circle';
+      const coneAngle = token.vision?.coneAngle ?? 60;
+      const directionOffset = token.vision?.directionOffset ?? 0;
+      const rotation = token.rotation ?? 0;
+
       const brightRangePx = brightSquares === 0 ? 0 : brightSquares * gridSize;
       const totalRangePx = brightSquares === 0 ? 0 : (dimSquares > 0 ? (brightSquares + dimSquares) * gridSize : brightRangePx);
 
-      const tokenKey = `${Math.round(center.x)}:${Math.round(center.y)}:${brightRangePx}:${totalRangePx}__${wallPart}`;
+      const tokenKey = `${Math.round(center.x)}:${Math.round(center.y)}:${brightRangePx}:${totalRangePx}:${shape}:${coneAngle}:${directionOffset}:${Math.round(rotation * 100) / 100}__${wallPart}`;
       const cached = this.perTokenCache.get(token.id);
 
       let brightPolygon: Point2D[];
@@ -115,6 +124,12 @@ export class VisionManager {
           losPolygon = computeVisibilityPolygon(center, 0, segments);
         }
 
+        if (shape === 'cone') {
+          brightPolygon = clipPolygonToCone(brightPolygon, center, brightRangePx, rotation, coneAngle, directionOffset);
+          totalPolygon = clipPolygonToCone(totalPolygon, center, totalRangePx, rotation, coneAngle, directionOffset);
+          losPolygon = clipPolygonToCone(losPolygon, center, 5000, rotation, coneAngle, directionOffset);
+        }
+
         this.perTokenCache.set(token.id, {
           key: tokenKey,
           brightPolygon,
@@ -133,7 +148,11 @@ export class VisionManager {
         brightRangePx,
         totalRangePx,
         rangePx: totalRangePx,
-        hardness
+        hardness,
+        shape,
+        coneAngle,
+        directionOffset,
+        rotation
       });
     }
 

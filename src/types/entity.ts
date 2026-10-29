@@ -120,6 +120,10 @@ export interface MapLight {
   color: string;
   intensity: number;
   shadows?: boolean;
+  shape?: 'circle' | 'cone';
+  coneAngle?: number;
+  directionOffset?: number;
+  rotation?: number;
 }
 
 export interface MapData {
@@ -169,6 +173,9 @@ export interface LightConfig {
   dimRadiusInSquares: number; // Radio de luz tenue en casillas adicionales (default 2)
   edgeHardness: number; // 0.0 (suave) a 1.0 (nítido) (default 0.5)
   flicker: boolean; // Parpadeo estilo antorcha
+  shape?: 'circle' | 'cone'; // Forma de la luz (default 'circle')
+  coneAngle?: number; // Apertura en grados (10 a 180, default 60)
+  directionOffset?: number; // Desfase de dirección en grados (0 a 360, default 0)
 }
 
 export interface EntityChromaKey {
@@ -184,6 +191,9 @@ export interface TokenVision {
   dimRangeInSquares: number;    // Alcance tenue en casillas adicionales (default 2)
   rangeInSquares?: number;      // Deprecado, para compatibilidad con versiones anteriores
   hardness?: number;
+  shape?: 'circle' | 'cone';    // Forma de la visión (default 'circle')
+  coneAngle?: number;           // Apertura en grados (10 a 180, default 60)
+  directionOffset?: number;     // Desfase de dirección en grados (0 a 360, default 0)
 }
 
 export interface TokenHp {

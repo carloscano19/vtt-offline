@@ -14,6 +14,7 @@ export type TransformHandleType = 'rotate' | 'scale-tl' | 'scale-tr' | 'scale-br
 
 export class GizmoLayer extends Container {
   private graphics: Graphics;
+  private coneGfx: Graphics;
   private eyeGfx: Graphics;
   private isMaster: boolean;
   private tokensLayer?: any;
@@ -24,8 +25,10 @@ export class GizmoLayer extends Container {
   constructor(isMaster: boolean) {
     super();
     this.isMaster = isMaster;
+    this.coneGfx = new Graphics();
     this.graphics = new Graphics();
     this.eyeGfx = new Graphics();
+    this.addChild(this.coneGfx);
     this.addChild(this.graphics);
     this.addChild(this.eyeGfx);
   }
@@ -41,6 +44,7 @@ export class GizmoLayer extends Container {
   private gridSize: number = 70;
 
   public update(selectedEntities: Entity[], allEntities: Entity[] = [], cameraZoom: number = 1, gridSize: number = 70) {
+    this.coneGfx.clear();
     this.graphics.clear();
     this.eyeGfx.clear();
     this.allEntities = allEntities;
@@ -53,6 +57,10 @@ export class GizmoLayer extends Container {
 
     // Dibujar gizmo para la entidad seleccionada principal
     const entity = selectedEntities[0];
+
+    // Previsualización de cono para visión o luz direccional
+    this.drawConePreview(entity);
+
     if (entity.locked) {
       // Si está bloqueada, dibujar borde sutil rojo sin controles de transformación
       this.drawLockedOutline(entity);
@@ -60,6 +68,77 @@ export class GizmoLayer extends Container {
     }
 
     this.drawTransformGizmo(entity);
+  }
+
+  private drawConePreview(entity: Entity) {
+    let hasCone = false;
+    let totalRangePx = 0;
+    let coneAngle = 60;
+    let directionOffset = 0;
+    let color = 0x38bdf8; // Celeste para visión
+
+    if (entity.type === 'token' && entity.vision?.active && entity.vision.shape === 'cone') {
+      const bright = entity.vision.brightRangeInSquares ?? entity.vision.rangeInSquares ?? 4;
+      const dim = entity.vision.dimRangeInSquares ?? (entity.vision.rangeInSquares !== undefined ? 0 : 2);
+      const totalSquares = bright > 0 ? (dim > 0 ? bright + dim : bright) : 0;
+      totalRangePx = totalSquares * this.gridSize;
+      coneAngle = entity.vision.coneAngle ?? 60;
+      directionOffset = entity.vision.directionOffset ?? 0;
+      color = 0x38bdf8;
+      hasCone = totalRangePx > 0;
+    } else if (
+      (entity.type === 'light' || (entity.type === 'effect' && entity.effect?.emitsLight)) &&
+      entity.light?.shape === 'cone'
+    ) {
+      const scaleMultiplier =
+        entity.type === 'effect'
+          ? Math.max(0.2, (Math.abs(entity.scaleX || 1) + Math.abs(entity.scaleY || 1)) / 2)
+          : 1;
+      const brightSquares = (entity.light.brightRadiusInSquares ?? 4) * scaleMultiplier;
+      const dimSquares = (entity.light.dimRadiusInSquares ?? 2) * scaleMultiplier;
+      const totalSquares = brightSquares > 0 ? (dimSquares > 0 ? brightSquares + dimSquares : brightSquares) : 0;
+      totalRangePx = totalSquares * this.gridSize;
+      coneAngle = entity.light.coneAngle ?? 60;
+      directionOffset = entity.light.directionOffset ?? 0;
+      color = 0xfbbf24; // Ámbar para luz
+      hasCone = totalRangePx > 0;
+    }
+
+    if (!hasCone || totalRangePx <= 0) return;
+
+    let posX = entity.x;
+    let posY = entity.y;
+    let rotation = entity.rotation ?? 0;
+
+    if (entity.mapId && this.allEntities.length > 0) {
+      const parentMap = this.allEntities.find((e) => e.id === entity.mapId);
+      if (parentMap) {
+        const wp = localToWorld(
+          { x: entity.x, y: entity.y },
+          { x: parentMap.x, y: parentMap.y },
+          parentMap.rotation,
+          parentMap.scaleX,
+          parentMap.scaleY
+        );
+        posX = wp.x;
+        posY = wp.y;
+        rotation = rotation + parentMap.rotation;
+      }
+    }
+
+    const centralAngle = rotation + (directionOffset * Math.PI) / 180;
+    const halfAngle = ((coneAngle / 2) * Math.PI) / 180;
+    const startAngle = centralAngle - halfAngle;
+    const endAngle = centralAngle + halfAngle;
+
+    const strokeWidth = 1.5 / this.cameraZoom;
+
+    this.coneGfx.moveTo(posX, posY);
+    this.coneGfx.lineTo(posX + totalRangePx * Math.cos(startAngle), posY + totalRangePx * Math.sin(startAngle));
+    this.coneGfx.arc(posX, posY, totalRangePx, startAngle, endAngle, false);
+    this.coneGfx.lineTo(posX, posY);
+    this.coneGfx.fill({ color, alpha: 0.08 });
+    this.coneGfx.stroke({ width: strokeWidth, color, alpha: 0.85 });
   }
 
   public getEntityLocalBounds(entity: Entity) {

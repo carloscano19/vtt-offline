@@ -329,13 +329,115 @@ export const PropertiesTab: React.FC = () => {
                         brightRangeInSquares:
                           selectedEntity.vision?.brightRangeInSquares ?? selectedEntity.vision?.rangeInSquares ?? 4,
                         dimRangeInSquares: Math.max(0, parseInt(e.target.value) || 0),
-                        hardness: selectedEntity.vision?.hardness ?? 0.5
+                        hardness: selectedEntity.vision?.hardness ?? 0.5,
+                        shape: selectedEntity.vision?.shape ?? 'circle',
+                        coneAngle: selectedEntity.vision?.coneAngle ?? 60,
+                        directionOffset: selectedEntity.vision?.directionOffset ?? 0
                       }
                     })
                   }
                   className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200"
                 />
                 <span className="text-[10px] text-slate-500">Casillas en penumbra (50% de oscuridad)</span>
+              </div>
+
+              {/* 3. Forma de la visión */}
+              <div className="pt-2 border-t border-slate-700/60">
+                <div className="flex justify-between text-slate-400 mb-1">
+                  <span>Forma de la visión</span>
+                  <span className="text-white font-mono capitalize">
+                    {selectedEntity.vision?.shape === 'cone' ? 'Cono' : 'Círculo'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 mb-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleUpdate({
+                        vision: {
+                          ...selectedEntity.vision!,
+                          shape: 'circle'
+                        }
+                      })
+                    }
+                    className={`py-1 text-xs rounded font-medium border transition-colors ${
+                      (selectedEntity.vision?.shape ?? 'circle') === 'circle'
+                        ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Círculo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleUpdate({
+                        vision: {
+                          ...selectedEntity.vision!,
+                          shape: 'cone',
+                          coneAngle: selectedEntity.vision?.coneAngle ?? 60,
+                          directionOffset: selectedEntity.vision?.directionOffset ?? 0
+                        }
+                      })
+                    }
+                    className={`py-1 text-xs rounded font-medium border transition-colors ${
+                      selectedEntity.vision?.shape === 'cone'
+                        ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Cono
+                  </button>
+                </div>
+
+                {selectedEntity.vision?.shape === 'cone' && (
+                  <div className="space-y-2 pt-1 border-t border-slate-700/60">
+                    <div>
+                      <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                        <span>Apertura</span>
+                        <span className="text-white font-mono">{selectedEntity.vision?.coneAngle ?? 60}°</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="10"
+                        max="180"
+                        step="5"
+                        value={selectedEntity.vision?.coneAngle ?? 60}
+                        onChange={(e) =>
+                          handleUpdate({
+                            vision: {
+                              ...selectedEntity.vision!,
+                              coneAngle: parseInt(e.target.value) || 60
+                            }
+                          })
+                        }
+                        className="w-full accent-emerald-500 cursor-pointer"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                        <span>Desfase de dirección</span>
+                        <span className="text-white font-mono">{selectedEntity.vision?.directionOffset ?? 0}°</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="360"
+                        step="5"
+                        value={selectedEntity.vision?.directionOffset ?? 0}
+                        onChange={(e) =>
+                          handleUpdate({
+                            vision: {
+                              ...selectedEntity.vision!,
+                              directionOffset: parseInt(e.target.value) || 0
+                            }
+                          })
+                        }
+                        className="w-full accent-emerald-500 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -437,13 +539,107 @@ export const PropertiesTab: React.FC = () => {
 
       {/* Datos del mapa UVTT si corresponde */}
       {selectedEntity.type === 'map' && selectedEntity.mapData && (
-        <div className="bg-slate-800/60 p-2.5 rounded border border-slate-700 space-y-1">
+        <div className="bg-slate-800/60 p-2.5 rounded border border-slate-700 space-y-2">
           <p className="font-semibold text-slate-300">Datos Universal VTT:</p>
           <p className="text-slate-400">Casillas: {selectedEntity.mapData.gridWidth} x {selectedEntity.mapData.gridHeight}</p>
           <p className="text-slate-400">Resolución nativa: {selectedEntity.mapData.pixelsPerGrid} px/casilla</p>
           <p className="text-slate-400">Paredes: {selectedEntity.mapData.walls?.length || 0}</p>
           <p className="text-slate-400">Portales: {selectedEntity.mapData.portals?.length || 0}</p>
           <p className="text-slate-400">Luces: {selectedEntity.mapData.lights?.length || 0}</p>
+
+          {selectedEntity.mapData.lights && selectedEntity.mapData.lights.length > 0 && (
+            <div className="pt-2 border-t border-slate-700/80 space-y-2">
+              <span className="font-semibold text-amber-400 flex items-center gap-1.5 text-xs">
+                <Flame className="w-3.5 h-3.5" />
+                Luces del mapa ({selectedEntity.mapData.lights.length})
+              </span>
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {selectedEntity.mapData.lights.map((lgt, idx) => (
+                  <div key={idx} className="bg-slate-900/70 p-2 rounded border border-slate-800 space-y-1.5 text-xs">
+                    <div className="flex justify-between items-center text-slate-300 font-medium">
+                      <span>Luz #{idx + 1}</span>
+                      <span className="text-white font-mono capitalize">{lgt.shape === 'cone' ? 'Cono' : 'Círculo'}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updatedLights = [...selectedEntity.mapData!.lights];
+                          updatedLights[idx] = { ...updatedLights[idx], shape: 'circle' };
+                          handleUpdate({ mapData: { ...selectedEntity.mapData!, lights: updatedLights } });
+                        }}
+                        className={`py-0.5 rounded font-medium border text-[11px] ${
+                          (lgt.shape ?? 'circle') === 'circle'
+                            ? 'bg-amber-950/80 border-amber-500 text-amber-300'
+                            : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Círculo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updatedLights = [...selectedEntity.mapData!.lights];
+                          updatedLights[idx] = {
+                            ...updatedLights[idx],
+                            shape: 'cone',
+                            coneAngle: lgt.coneAngle ?? 60,
+                            directionOffset: lgt.directionOffset ?? 0
+                          };
+                          handleUpdate({ mapData: { ...selectedEntity.mapData!, lights: updatedLights } });
+                        }}
+                        className={`py-0.5 rounded font-medium border text-[11px] ${
+                          lgt.shape === 'cone'
+                            ? 'bg-amber-950/80 border-amber-500 text-amber-300'
+                            : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Cono
+                      </button>
+                    </div>
+                    {lgt.shape === 'cone' && (
+                      <div className="space-y-1 pt-1 border-t border-slate-800 text-[10px]">
+                        <div className="flex justify-between text-slate-400">
+                          <span>Apertura</span>
+                          <span className="text-white font-mono">{lgt.coneAngle ?? 60}°</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="10"
+                          max="180"
+                          step="5"
+                          value={lgt.coneAngle ?? 60}
+                          onChange={(e) => {
+                            const updatedLights = [...selectedEntity.mapData!.lights];
+                            updatedLights[idx] = { ...updatedLights[idx], coneAngle: parseInt(e.target.value) || 60 };
+                            handleUpdate({ mapData: { ...selectedEntity.mapData!, lights: updatedLights } });
+                          }}
+                          className="w-full accent-amber-500 cursor-pointer"
+                        />
+                        <div className="flex justify-between text-slate-400">
+                          <span>Desfase de dirección</span>
+                          <span className="text-white font-mono">{lgt.directionOffset ?? 0}°</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="360"
+                          step="5"
+                          value={lgt.directionOffset ?? 0}
+                          onChange={(e) => {
+                            const updatedLights = [...selectedEntity.mapData!.lights];
+                            updatedLights[idx] = { ...updatedLights[idx], directionOffset: parseInt(e.target.value) || 0 };
+                            handleUpdate({ mapData: { ...selectedEntity.mapData!, lights: updatedLights } });
+                          }}
+                          className="w-full accent-amber-500 cursor-pointer"
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -726,6 +922,105 @@ export const PropertiesTab: React.FC = () => {
                 className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
               />
             </label>
+          </div>
+
+          {/* Forma de la luz */}
+          <div className="space-y-2 pt-1 border-t border-slate-700/60">
+            <div className="flex justify-between text-[11px] text-slate-400 mb-1">
+              <span>Forma de la luz</span>
+              <span className="text-white font-mono capitalize">
+                {selectedEntity.light.shape === 'cone' ? 'Cono' : 'Círculo'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5 mb-2">
+              <button
+                type="button"
+                onClick={() =>
+                  handleUpdate({
+                    light: {
+                      ...selectedEntity.light!,
+                      shape: 'circle'
+                    }
+                  })
+                }
+                className={`py-1 text-xs rounded font-medium border transition-colors ${
+                  (selectedEntity.light.shape ?? 'circle') === 'circle'
+                    ? 'bg-amber-950/80 border-amber-500 text-amber-300'
+                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                }`}
+              >
+                Círculo
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  handleUpdate({
+                    light: {
+                      ...selectedEntity.light!,
+                      shape: 'cone',
+                      coneAngle: selectedEntity.light?.coneAngle ?? 60,
+                      directionOffset: selectedEntity.light?.directionOffset ?? 0
+                    }
+                  })
+                }
+                className={`py-1 text-xs rounded font-medium border transition-colors ${
+                  selectedEntity.light.shape === 'cone'
+                    ? 'bg-amber-950/80 border-amber-500 text-amber-300'
+                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                }`}
+              >
+                Cono
+              </button>
+            </div>
+
+            {selectedEntity.light.shape === 'cone' && (
+              <div className="space-y-2 pt-1 border-t border-slate-700/60">
+                <div>
+                  <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                    <span>Apertura</span>
+                    <span className="text-white font-mono">{selectedEntity.light.coneAngle ?? 60}°</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="10"
+                    max="180"
+                    step="5"
+                    value={selectedEntity.light.coneAngle ?? 60}
+                    onChange={(e) =>
+                      handleUpdate({
+                        light: {
+                          ...selectedEntity.light!,
+                          coneAngle: parseInt(e.target.value) || 60
+                        }
+                      })
+                    }
+                    className="w-full accent-amber-500 cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                    <span>Desfase de dirección</span>
+                    <span className="text-white font-mono">{selectedEntity.light.directionOffset ?? 0}°</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="360"
+                    step="5"
+                    value={selectedEntity.light.directionOffset ?? 0}
+                    onChange={(e) =>
+                      handleUpdate({
+                        light: {
+                          ...selectedEntity.light!,
+                          directionOffset: parseInt(e.target.value) || 0
+                        }
+                      })
+                    }
+                    className="w-full accent-amber-500 cursor-pointer"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1034,6 +1329,120 @@ export const PropertiesTab: React.FC = () => {
                     className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
                   />
                 </label>
+
+                {/* Forma de la luz para efectos */}
+                <div className="space-y-2 pt-1 border-t border-slate-700/60">
+                  <div className="flex justify-between text-[11px] text-slate-400 mb-1">
+                    <span>Forma de la luz</span>
+                    <span className="text-white font-mono capitalize">
+                      {selectedEntity.light?.shape === 'cone' ? 'Cono' : 'Círculo'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 mb-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleUpdate({
+                          light: {
+                            ...(selectedEntity.light || {
+                              color: selectedEntity.effect!.color,
+                              intensity: selectedEntity.effect!.intensity,
+                              edgeHardness: 0.5,
+                              brightRadiusInSquares: (selectedEntity.effect?.baseLightRadius || 3) * Math.max(selectedEntity.scaleX || 1, selectedEntity.scaleY || 1),
+                              dimRadiusInSquares: 2,
+                              flicker: true
+                            }),
+                            shape: 'circle'
+                          }
+                        })
+                      }
+                      className={`py-1 text-xs rounded font-medium border transition-colors ${
+                        (selectedEntity.light?.shape ?? 'circle') === 'circle'
+                          ? 'bg-amber-950/80 border-amber-500 text-amber-300'
+                          : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Círculo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleUpdate({
+                          light: {
+                            ...(selectedEntity.light || {
+                              color: selectedEntity.effect!.color,
+                              intensity: selectedEntity.effect!.intensity,
+                              edgeHardness: 0.5,
+                              brightRadiusInSquares: (selectedEntity.effect?.baseLightRadius || 3) * Math.max(selectedEntity.scaleX || 1, selectedEntity.scaleY || 1),
+                              dimRadiusInSquares: 2,
+                              flicker: true
+                            }),
+                            shape: 'cone',
+                            coneAngle: selectedEntity.light?.coneAngle ?? 60,
+                            directionOffset: selectedEntity.light?.directionOffset ?? 0
+                          }
+                        })
+                      }
+                      className={`py-1 text-xs rounded font-medium border transition-colors ${
+                        selectedEntity.light?.shape === 'cone'
+                          ? 'bg-amber-950/80 border-amber-500 text-amber-300'
+                          : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Cono
+                    </button>
+                  </div>
+
+                  {selectedEntity.light?.shape === 'cone' && (
+                    <div className="space-y-2 pt-1 border-t border-slate-700/60">
+                      <div>
+                        <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                          <span>Apertura</span>
+                          <span className="text-white font-mono">{selectedEntity.light?.coneAngle ?? 60}°</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="10"
+                          max="180"
+                          step="5"
+                          value={selectedEntity.light?.coneAngle ?? 60}
+                          onChange={(e) =>
+                            handleUpdate({
+                              light: {
+                                ...selectedEntity.light!,
+                                coneAngle: parseInt(e.target.value) || 60
+                              }
+                            })
+                          }
+                          className="w-full accent-amber-500 cursor-pointer"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                          <span>Desfase de dirección</span>
+                          <span className="text-white font-mono">{selectedEntity.light?.directionOffset ?? 0}°</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="360"
+                          step="5"
+                          value={selectedEntity.light?.directionOffset ?? 0}
+                          onChange={(e) =>
+                            handleUpdate({
+                              light: {
+                                ...selectedEntity.light!,
+                                directionOffset: parseInt(e.target.value) || 0
+                              }
+                            })
+                          }
+                          className="w-full accent-amber-500 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <span className="text-[10px] text-slate-500 block">
                   💡 El radio crece automáticamente si escalas el efecto en el tablero con las manijas.
                 </span>

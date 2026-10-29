@@ -3,7 +3,7 @@ import { ExploredMultiPolygon } from '../../types/game';
 import { TokenVisibility } from '../../modules/vision/visibilityPolygon';
 import { exploredSignature } from '../../modules/vision/fogMemory';
 import { computeFogRegions } from '../../modules/vision/fogRegions';
-import { getDimRadialGradientTexture, getTintRadialGradientTexture } from '../utils/gradientTextures';
+import { getDimRadialGradientTexture, getTintRadialGradientTexture, getConeTintGradientTexture } from '../utils/gradientTextures';
 import { DarknessInvertFilter } from '../filters/DarknessInvertFilter';
 
 const FOG_COLOR = 0x020617;
@@ -100,13 +100,13 @@ export class FogLayer extends Container {
     const visKey = visibilities
       .map(
         (v) =>
-          `${v.tokenId}:${Math.round(v.center.x)}:${Math.round(v.center.y)}:${v.brightPolygon?.length || 0}:${v.totalPolygon?.length || 0}`
+          `${v.tokenId}:${Math.round(v.center.x)}:${Math.round(v.center.y)}:${v.brightPolygon?.length || 0}:${v.totalPolygon?.length || 0}:${v.shape || 'circle'}:${v.coneAngle || 60}:${v.directionOffset || 0}:${Math.round((v.rotation || 0) * 100) / 100}`
       )
       .join('|');
     const lightsKey = lights
       .map(
         (l) =>
-          `${l.lightId}:${Math.round(l.center?.x || 0)}:${Math.round(l.center?.y || 0)}:${l.brightPolygon?.length || 0}:${l.totalPolygon?.length || 0}`
+          `${l.lightId}:${Math.round(l.center?.x || 0)}:${Math.round(l.center?.y || 0)}:${l.brightPolygon?.length || 0}:${l.totalPolygon?.length || 0}:${l.shape || 'circle'}:${l.coneAngle || 60}:${l.directionOffset || 0}:${Math.round((l.rotation || 0) * 100) / 100}`
       )
       .join('|');
     const key = `${exploredSignature(explored)}#${exploredSignature(revealed)}#${rememberExplored}#${visKey}#${lightsKey}#${Math.round(bx)},${Math.round(by)},${Math.round(bw)},${Math.round(bh)}`;
@@ -137,15 +137,39 @@ export class FogLayer extends Container {
       // Máscara stencil recortada por visibleDim (paredes y huecos claros cortan en seco)
       this.renderMultiPolygon(this.dimMaskGfx, regions.visibleDim, 0xffffff, 1.0);
 
-      const sources: { center: { x: number; y: number }; rBright: number; rTotal: number }[] = [];
+      const sources: {
+        center: { x: number; y: number };
+        rBright: number;
+        rTotal: number;
+        shape?: 'circle' | 'cone';
+        coneAngle?: number;
+        directionOffset?: number;
+        rotation?: number;
+      }[] = [];
       for (const v of visibilities) {
         if (v.center && v.totalRangePx > 0) {
-          sources.push({ center: v.center, rBright: v.brightRangePx || 0, rTotal: v.totalRangePx });
+          sources.push({
+            center: v.center,
+            rBright: v.brightRangePx || 0,
+            rTotal: v.totalRangePx,
+            shape: v.shape,
+            coneAngle: v.coneAngle,
+            directionOffset: v.directionOffset,
+            rotation: v.rotation
+          });
         }
       }
       for (const l of lights) {
         if (l.center && l.totalRangePx > 0) {
-          sources.push({ center: l.center, rBright: l.brightRangePx || 0, rTotal: l.totalRangePx });
+          sources.push({
+            center: l.center,
+            rBright: l.brightRangePx || 0,
+            rTotal: l.totalRangePx,
+            shape: l.shape,
+            coneAngle: l.coneAngle,
+            directionOffset: l.directionOffset,
+            rotation: l.rotation
+          });
         }
       }
 
@@ -165,10 +189,16 @@ export class FogLayer extends Container {
         sprite.visible = true;
 
         const ratio = rBright / rTotal;
+        const isCone = src.shape === 'cone';
+        const coneAngle = src.coneAngle ?? 60;
+        const totalAngleRad = (src.rotation || 0) + ((src.directionOffset || 0) * Math.PI) / 180;
+
         if (this.darknessFilter) {
           // Con filtro de inversión: la textura representa iluminación (1 en claro, 0 en borde)
           // y el modo 'max' garantiza que en solapes manda el que más ilumina sin líneas de corte
-          sprite.texture = getTintRadialGradientTexture(ratio);
+          sprite.texture = isCone
+            ? getConeTintGradientTexture(ratio, coneAngle)
+            : getTintRadialGradientTexture(ratio);
           sprite.tint = 0xffffff;
           sprite.alpha = 1.0;
           sprite.blendMode = 'max';
@@ -180,6 +210,7 @@ export class FogLayer extends Container {
         }
 
         sprite.position.set(src.center.x, src.center.y);
+        sprite.rotation = isCone ? totalAngleRad : 0;
         sprite.width = rTotal * 2;
         sprite.height = rTotal * 2;
         spriteIdx++;
