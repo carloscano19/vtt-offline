@@ -3,7 +3,8 @@ import { ExploredMultiPolygon } from '../../types/game';
 import { TokenVisibility } from '../../modules/vision/visibilityPolygon';
 import { exploredSignature } from '../../modules/vision/fogMemory';
 import { computeFogRegions } from '../../modules/vision/fogRegions';
-import { getDimRadialGradientTexture } from '../utils/gradientTextures';
+import { getDimRadialGradientTexture, getTintRadialGradientTexture } from '../utils/gradientTextures';
+import { DarknessInvertFilter } from '../filters/DarknessInvertFilter';
 
 const FOG_COLOR = 0x020617;
 const EXPLORED_ALPHA = 0.65;
@@ -25,6 +26,7 @@ export class FogLayer extends Container {
   private dimMaskGfx = new Graphics();
   private dimSpritesContainer = new Container();
   private dimSprites: Sprite[] = [];
+  private darknessFilter: DarknessInvertFilter | null = null;
 
   private lastKey = '';
 
@@ -38,6 +40,16 @@ export class FogLayer extends Container {
     this.dimContainer.mask = this.dimMaskGfx;
     this.dimContainer.addChild(this.dimMaskGfx);
     this.dimContainer.addChild(this.dimSpritesContainer);
+
+    if (typeof document !== 'undefined') {
+      try {
+        this.darknessFilter = new DarknessInvertFilter(2 / 255, 6 / 255, 23 / 255, 1.0);
+        this.dimContainer.filters = [this.darknessFilter];
+      } catch (e) {
+        console.warn('DarknessInvertFilter initialization fallback:', e);
+      }
+    }
+
     this.addChild(this.dimContainer);
   }
 
@@ -118,7 +130,7 @@ export class FogLayer extends Container {
     this.exploredDarkGfx.clear();
     this.renderMultiPolygon(this.exploredDarkGfx, regions.exploradoNoVisible, FOG_COLOR, EXPLORED_ALPHA);
 
-    // 3. Dibuja visibleDim (zona tenue de tokens y luces) con degradado radial continuo
+    // 3. Dibuja visibleDim (zona tenue de tokens y luces) con degradado radial continuo hacia negro total
     this.dimMaskGfx.clear();
 
     if (regions.visibleDim.length > 0) {
@@ -153,9 +165,20 @@ export class FogLayer extends Container {
         sprite.visible = true;
 
         const ratio = rBright / rTotal;
-        sprite.texture = getDimRadialGradientTexture(ratio);
-        sprite.tint = FOG_COLOR;
-        sprite.alpha = DIM_ALPHA;
+        if (this.darknessFilter) {
+          // Con filtro de inversión: la textura representa iluminación (1 en claro, 0 en borde)
+          // y el modo 'max' garantiza que en solapes manda el que más ilumina sin líneas de corte
+          sprite.texture = getTintRadialGradientTexture(ratio);
+          sprite.tint = 0xffffff;
+          sprite.alpha = 1.0;
+          sprite.blendMode = 'max';
+        } else {
+          sprite.texture = getDimRadialGradientTexture(ratio);
+          sprite.tint = FOG_COLOR;
+          sprite.alpha = 1.0;
+          sprite.blendMode = 'normal';
+        }
+
         sprite.position.set(src.center.x, src.center.y);
         sprite.width = rTotal * 2;
         sprite.height = rTotal * 2;

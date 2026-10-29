@@ -5,6 +5,7 @@ import { visionToMulti, simplifyMulti } from '../../modules/vision/fogMemory';
 import { safeClip } from '../../modules/vision/safeClip';
 import { parseColor, rgbComponents } from '../../utils/color';
 import { getDimRadialGradientTexture, getTintRadialGradientTexture } from '../utils/gradientTextures';
+import { DarknessInvertFilter } from '../filters/DarknessInvertFilter';
 
 export const AMBIENT_PRESET_CONFIGS: Record<string, { color: string; intensity: number }> = {
   dawn: { color: '#ff9d55', intensity: 0.80 },
@@ -40,6 +41,7 @@ export class AmbientLayer extends Container {
   private dimMaskGfx = new Graphics();
   private dimSpritesContainer = new Container();
   private dimSprites: Sprite[] = [];
+  private darknessFilter: DarknessInvertFilter | null = null;
 
   // Contenedor con máscara stencil para degradado radial suave de tinte en zona tenue
   private tintDimContainer = new Container();
@@ -78,6 +80,16 @@ export class AmbientLayer extends Container {
     this.dimContainer.mask = this.dimMaskGfx;
     this.dimContainer.addChild(this.dimMaskGfx);
     this.dimContainer.addChild(this.dimSpritesContainer);
+
+    if (typeof document !== 'undefined') {
+      try {
+        this.darknessFilter = new DarknessInvertFilter(0, 0, 0, 1.0);
+        this.dimContainer.filters = [this.darknessFilter];
+      } catch (e) {
+        console.warn('DarknessInvertFilter initialization fallback in AmbientLayer:', e);
+      }
+    }
+
     this.addChild(this.dimContainer);
 
     // 3. Tinte de luz claro (polígonos de zona brillante)
@@ -211,7 +223,15 @@ export class AmbientLayer extends Container {
             this.dimSpritesContainer.addChild(sprite);
           }
           const ratio = rBright / rTotal;
-          sprite.texture = getDimRadialGradientTexture(ratio);
+          if (this.darknessFilter) {
+            sprite.texture = getTintRadialGradientTexture(ratio);
+            sprite.tint = 0xffffff;
+            sprite.alpha = 1.0;
+            sprite.blendMode = 'max';
+          } else {
+            sprite.texture = getDimRadialGradientTexture(ratio);
+            sprite.blendMode = 'normal';
+          }
           sprite.position.set(light.center.x, light.center.y);
           sprite.width = rTotal * 2;
           sprite.height = rTotal * 2;
@@ -240,9 +260,11 @@ export class AmbientLayer extends Container {
             if (!sprite) {
               sprite = new Sprite();
               sprite.anchor.set(0.5);
+              sprite.blendMode = 'max';
               this.tintDimSprites.push(sprite);
               this.tintDimSpritesContainer.addChild(sprite);
             }
+            sprite.blendMode = 'max';
             const ratio = rBright / rTotal;
             sprite.texture = getTintRadialGradientTexture(ratio);
             sprite.position.set(light.center.x, light.center.y);
@@ -289,10 +311,19 @@ export class AmbientLayer extends Container {
       this.darknessGfx.alpha = darknessAlpha;
 
       this.dimContainer.visible = true;
-      for (const sprite of this.dimSprites) {
-        if (sprite.visible) {
-          sprite.tint = darkColorHex;
-          sprite.alpha = darknessAlpha;
+      if (this.darknessFilter) {
+        this.darknessFilter.setDarknessColor(
+          (this.currentR * 0.15) / 255,
+          (this.currentG * 0.15) / 255,
+          (this.currentB * 0.25) / 255
+        );
+        this.darknessFilter.setDarknessAlpha(darknessAlpha);
+      } else {
+        for (const sprite of this.dimSprites) {
+          if (sprite.visible) {
+            sprite.tint = darkColorHex;
+            sprite.alpha = darknessAlpha;
+          }
         }
       }
     } else {
