@@ -35,6 +35,15 @@ export async function getGifDataForAsset(
   return data;
 }
 
+export function getCachedTexture(
+  assetId: string,
+  chromaKey?: EntityChromaKey
+): Texture | null {
+  if (!assetId) return null;
+  const cacheKey = getTextureCacheKey(assetId, chromaKey);
+  return cache.get(cacheKey) || null;
+}
+
 /**
  * Carga una textura PixiJS a partir de un assetId almacenado en Dexie.
  * Soporta imágenes normales (PNG/JPG con Chroma Key procesado en canvas), GIFs animados y vídeos HTML5.

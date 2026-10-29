@@ -109,6 +109,11 @@ export const PlayersApp: React.FC = () => {
       }
     });
 
+    // 1b. Recibir sincronización ligera de movimiento durante arrastre
+    const cleanupEntityPos = syncChannel.onEntityPos(({ id, x, y }) => {
+      useGameStore.getState().updateEntity(id, { x, y }, false);
+    });
+
     // 2. Recibir sincronización de regla desde el máster
     const cleanupRuler = syncChannel.onRuler((ruler) => {
       setRulerMode(ruler.mode);
@@ -144,6 +149,7 @@ export const PlayersApp: React.FC = () => {
 
     return () => {
       cleanupState();
+      cleanupEntityPos();
       cleanupRuler();
       cleanupCamera();
       cleanupAsset();

@@ -43,19 +43,42 @@ class CloudGameSync {
   }
 
   /**
-   * Programa un autoguardado a la nube con debounce de 2.5s.
+   * Programa un autoguardado (Dexie local y nube) con debounce de 1.5s (1–2 s).
    */
   public scheduleAutoSave(game: GameState): void {
     this.pendingGameToSave = game;
     if (this.saveDebounceTimer) {
       clearTimeout(this.saveDebounceTimer);
     }
-    this.saveDebounceTimer = setTimeout(() => {
+    this.saveDebounceTimer = setTimeout(async () => {
       this.saveDebounceTimer = null;
       if (this.pendingGameToSave) {
+        try {
+          await saveAutoSaveToDb(this.pendingGameToSave);
+        } catch (err) {
+          console.warn('[cloudGameSync] Error en autoguardado Dexie:', err);
+        }
         this.saveGameToCloud(this.pendingGameToSave);
       }
-    }, 2500);
+    }, 1500);
+  }
+
+  /**
+   * Fuerza el autoguardado pendiente de inmediato (al soltar o al sincronizar).
+   */
+  public async flushAutoSave(): Promise<void> {
+    if (this.saveDebounceTimer) {
+      clearTimeout(this.saveDebounceTimer);
+      this.saveDebounceTimer = null;
+    }
+    if (this.pendingGameToSave) {
+      try {
+        await saveAutoSaveToDb(this.pendingGameToSave);
+      } catch (err) {
+        console.warn('[cloudGameSync] Error en flush autoguardado Dexie:', err);
+      }
+      await this.saveGameToCloud(this.pendingGameToSave);
+    }
   }
 
   /**

@@ -98,11 +98,17 @@ export const MasterApp: React.FC = () => {
     });
   }, [isAuthenticated, setGame]);
 
-  // 2. Autoguardado periódico cada 60 segundos y autoguardado a la nube con debounce tras cada cambio
+  // 2. Autoguardado con debounce de 1.5s (Dexie y nube). No se encola en cada movimiento durante arrastre
   useEffect(() => {
     if (!hasControl || !isAuthenticated) return;
-    cloudGameSync.scheduleAutoSave(game);
+    if (!syncChannel.isDragging()) {
+      cloudGameSync.scheduleAutoSave(game);
+    }
+  }, [game, hasControl, isAuthenticated]);
 
+  // Intervalo fijo de seguridad cada 60s
+  useEffect(() => {
+    if (!hasControl || !isAuthenticated) return;
     const timer = setInterval(() => {
       if (hasControlRef.current) {
         const curr = useGameStore.getState().game;
@@ -111,7 +117,7 @@ export const MasterApp: React.FC = () => {
       }
     }, 60000);
     return () => clearInterval(timer);
-  }, [game, hasControl, isAuthenticated]);
+  }, [hasControl, isAuthenticated]);
 
   // 3. Autoguardado web en beforeunload y pagehide (solo si esta pestaña tiene el control)
   useEffect(() => {
@@ -137,12 +143,14 @@ export const MasterApp: React.FC = () => {
     syncChannel.sendState(game);
   }, [game, hasControl, isAuthenticated]);
 
-  // 4b. Memoria de exploración (fuente única: el máster). Solo se actualiza cuando visionManager
-  // recalcula (nueva referencia de visibilidades), no en cada render.
+  // 4b. Memoria de exploración (fuente única: el máster).
+  // Durante el arrastre, NO ejecutar unión con lo explorado (polyclip).
+  // Solo se ejecuta al soltar o cuando cambia sin arrastre activo.
   const lastVisRef = useRef<TokenVisibility[] | null>(null);
   const exploredEmpty = (game.fog.explored?.length ?? 0) === 0;
   useEffect(() => {
     if (!hasControl || !isAuthenticated) return;
+    if (syncChannel.isDragging()) return; // Evitar polyclip pesado durante arrastre
     const vis = visionManager.getTokensVisibility(game.entities, game.grid.size || 70);
     if (vis.length === 0) return;
     if (vis === lastVisRef.current && !exploredEmpty) return;

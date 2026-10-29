@@ -1,6 +1,7 @@
 import { Entity, Point2D } from '../../types/entity';
 import { getAllWallSegments, WallSegment } from '../walls/wallManager';
 import { computeVisibilityPolygon, clipPolygonToCone, unionVisibilityPolygons, TokenVisibility } from './visibilityPolygon';
+import { syncChannel } from '../sync/syncChannel';
 
 interface CachedTokenPoly {
   key: string;
@@ -13,6 +14,7 @@ export class VisionManager {
   private lastCacheKey: string = '';
   private cachedVisibilities: TokenVisibility[] = [];
   private perTokenCache: Map<string, CachedTokenPoly> = new Map();
+  private lastDragCalcTime: number = 0;
 
   private generateWallPart(entities: Entity[]): string {
     return entities
@@ -61,6 +63,14 @@ export class VisionManager {
    * Calcula o recupera de la caché los polígonos de visión de todos los tokens de jugador activos.
    */
   public getTokensVisibility(entities: Entity[], gridSize: number): TokenVisibility[] {
+    if (syncChannel.isDragging() && this.cachedVisibilities.length > 0) {
+      const now = performance.now();
+      if (now - this.lastDragCalcTime < 33) {
+        return this.cachedVisibilities;
+      }
+      this.lastDragCalcTime = now;
+    }
+
     const wallPart = this.generateWallPart(entities);
     const stateKey = this.generateStateKey(entities, gridSize, wallPart);
     if (stateKey === this.lastCacheKey && this.cachedVisibilities.length > 0) {

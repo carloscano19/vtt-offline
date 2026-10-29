@@ -10,6 +10,9 @@ import { getZoomSensitivity } from '../modules/settings/zoomSensitivity';
 import { isMovementBlockedByWall } from '../modules/walls/wallManager';
 import { getAsset, db } from '../db/dexie';
 import { cloudSync } from '../modules/sync/cloudSync';
+import { cloudGameSync } from '../modules/persistence/cloudGameSync';
+import { unionExplored } from '../modules/vision/fogMemory';
+import { visionManager } from '../modules/vision/visionManager';
 import { getMediaDimensions, persistAssetDimensions } from '../utils/mediaDimensions';
 
 interface PixiCanvasProps {
@@ -70,6 +73,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     startEntityRotation: number;
     startEntityScale: { x: number; y: number };
     startCamera: Point2D;
+    lastPosSyncTime: number;
   }>({
     isPanning: false,
     isDraggingEntity: false,
@@ -90,7 +94,8 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     startEntityPos: { x: 0, y: 0 },
     startEntityRotation: 0,
     startEntityScale: { x: 1, y: 1 },
-    startCamera: { x: 0, y: 0 }
+    startCamera: { x: 0, y: 0 },
+    lastPosSyncTime: 0
   });
 
   // Helper para obtener coordenadas locales del puntero relativas al canvas
@@ -856,6 +861,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       if (hitEntity) {
         selectEntity(hitEntity.id, e.shiftKey);
         if (hitEntity.type !== 'wall') {
+          syncChannel.setDraggingActive(true);
           interactionState.current.isDraggingEntity = true;
           interactionState.current.dragEntityId = hitEntity.id;
           interactionState.current.startMouse = worldPos;
@@ -1081,10 +1087,20 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           const newY = interactionState.current.startEntityPos.y + localDy;
           const { p1, p2 } = recalculateDoorEndpoints(newX, newY, entity.rotation, entity.door.length ?? 70, entity.door.isHingeInverted);
           updateEntity(entity.id, { x: newX, y: newY, door: { ...entity.door, p1, p2 } }, false);
+          const now = performance.now();
+          if (now - interactionState.current.lastPosSyncTime >= 33) {
+            interactionState.current.lastPosSyncTime = now;
+            syncChannel.sendEntityPos(entity.id, newX, newY);
+          }
         } else {
           const newX = interactionState.current.startEntityPos.x + dx;
           const newY = interactionState.current.startEntityPos.y + dy;
           updateEntity(entity.id, { x: newX, y: newY }, false);
+          const now = performance.now();
+          if (now - interactionState.current.lastPosSyncTime >= 33) {
+            interactionState.current.lastPosSyncTime = now;
+            syncChannel.sendEntityPos(entity.id, newX, newY);
+          }
         }
       }
       return;
@@ -1263,10 +1279,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           }
           const { p1, p2 } = recalculateDoorEndpoints(finalX, finalY, entity.rotation, entity.door.length ?? 70, entity.door.isHingeInverted);
           updateEntity(entity.id, { x: finalX, y: finalY, scaleX: 1, scaleY: 1, door: { ...entity.door, p1, p2 } }, true);
-          interactionState.current.isDraggingEntity = false;
-          interactionState.current.dragEntityId = null;
-          return;
-        }
+        } else {
 
         const entitySnap = getDefaultSnapToGrid(entity);
         const shouldSnap = game.grid.snapToGrid && entitySnap && !e.altKey;
@@ -1292,6 +1305,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         }
 
         updateEntity(entity.id, { x: finalX, y: finalY }, true);
+        }
       }
     }
 
@@ -1322,6 +1336,8 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       endRulerMeasure();
     }
 
+    const wasDraggingEntity = interactionState.current.isDraggingEntity;
+
     interactionState.current.isPanning = false;
     interactionState.current.isDraggingEntity = false;
     interactionState.current.isTransforming = null;
@@ -1329,6 +1345,21 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     interactionState.current.dragWallEntityId = null;
     interactionState.current.dragWallNodeIndex = -1;
     interactionState.current.dragEntityId = null;
+
+    if (wasDraggingEntity) {
+      syncChannel.setDraggingActive(false);
+      const currentFullState = useGameStore.getState().game;
+      syncChannel.sendState(currentFullState, true);
+      cloudGameSync.flushAutoSave();
+
+      // Computar e integrar memoria de niebla explorada ahora que terminó el arrastre
+      const vis = visionManager.getTokensVisibility(currentFullState.entities, currentFullState.grid.size || 70);
+      if (vis.length > 0) {
+        const store = useGameStore.getState();
+        const next = unionExplored(store.game.fog.explored ?? [], vis.map((v) => v.polygon));
+        store.setFogExplored(next);
+      }
+    }
   };
 
   // 6. Soltar asset o efecto desde la biblioteca al tablero (Drag & Drop)

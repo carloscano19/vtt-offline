@@ -2,6 +2,7 @@ import { GameState, RulerState, CameraState } from '../../types/game';
 
 export type SyncMessage =
   | { type: 'STATE_SYNC'; state: GameState; appVersion?: string; appBuildTime?: number }
+  | { type: 'ENTITY_POS_SYNC'; id: string; x: number; y: number }
   | { type: 'RULER_SYNC'; ruler: RulerState }
   | { type: 'CAMERA_SYNC'; camera: CameraState }
   | { type: 'PLAYER_CAMERA_CHANGED'; camera: CameraState }
@@ -20,6 +21,7 @@ const CHANNEL_NAME = 'vtt_offline_sync_channel';
 class SyncManager {
   private channel: BroadcastChannel | null = null;
   private stateListeners: Set<(state: GameState) => void> = new Set();
+  private entityPosListeners: Set<(pos: { id: string; x: number; y: number }) => void> = new Set();
   private rulerListeners: Set<(ruler: RulerState) => void> = new Set();
   private cameraListeners: Set<(camera: CameraState) => void> = new Set();
   private playerCameraChangedListeners: Set<(camera: CameraState) => void> = new Set();
@@ -28,6 +30,7 @@ class SyncManager {
   private assetDownloadedListeners: Set<(assetId: string) => void> = new Set();
   private appReloadListeners: Set<() => void> = new Set();
   private playerVersionListeners: Set<(info: { appVersion: string; appBuildTime: number }) => void> = new Set();
+  private isDraggingActive = false;
 
   // Control de pestaña máster única
   private readonly tabId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -82,6 +85,9 @@ class SyncManager {
 
           case 'STATE_SYNC':
             this.stateListeners.forEach((listener) => listener(msg.state));
+            break;
+          case 'ENTITY_POS_SYNC':
+            this.entityPosListeners.forEach((listener) => listener({ id: msg.id, x: msg.x, y: msg.y }));
             break;
           case 'RULER_SYNC':
             this.rulerListeners.forEach((listener) => listener(msg.ruler));
@@ -203,8 +209,19 @@ class SyncManager {
     return () => this.controlListeners.delete(callback);
   }
 
-  public sendState(state: GameState) {
+  public setDraggingActive(active: boolean) {
+    this.isDraggingActive = active;
+  }
+
+  public isDragging(): boolean {
+    return this.isDraggingActive;
+  }
+
+  public sendState(state: GameState, force = false) {
     if (!this.canEmit) return;
+    // Durante el arrastre, no enviar STATE_SYNC completo para no saturar la tele ni forzar re-cálculos pesados
+    if (this.isDraggingActive && !force) return;
+
     if (this.channel) {
       try {
         const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined;
@@ -223,6 +240,22 @@ class SyncManager {
         console.error('[SyncManager] Error al enviar STATE_SYNC:', err);
       }
     }
+  }
+
+  public sendEntityPos(id: string, x: number, y: number) {
+    if (!this.canEmit) return;
+    if (this.channel) {
+      try {
+        this.channel.postMessage({ type: 'ENTITY_POS_SYNC', id, x, y });
+      } catch (err) {
+        console.error('[SyncManager] Error al enviar ENTITY_POS_SYNC:', err);
+      }
+    }
+  }
+
+  public onEntityPos(callback: (pos: { id: string; x: number; y: number }) => void): () => void {
+    this.entityPosListeners.add(callback);
+    return () => this.entityPosListeners.delete(callback);
   }
 
   public sendRuler(ruler: RulerState) {

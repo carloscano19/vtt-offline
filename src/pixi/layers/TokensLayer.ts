@@ -1,6 +1,6 @@
 import { Container, Sprite, Graphics, Text, TextStyle, Texture, ColorMatrixFilter } from 'pixi.js';
 import { Entity, TokenSide, Point2D, EntityAnimations } from '../../types/entity';
-import { getTextureForAsset, getGifDataForAsset } from '../utils/textureCache';
+import { getTextureForAsset, getGifDataForAsset, getCachedTexture } from '../utils/textureCache';
 import { TokenVisibility } from '../../modules/vision/visibilityPolygon';
 import { getFrameTextureForTime, AnimatedGifData } from '../../modules/media/gifDecoder';
 import { videoManager } from '../../modules/media/videoManager';
@@ -67,11 +67,20 @@ export class TokensLayer extends Container {
         this.containerMap.set(entity.id, entityContainer);
         this.addChild(entityContainer);
 
-        // Crear Sprite interior
-        const sprite = new Sprite(Texture.EMPTY);
+        const ck = entity.chromaKey;
+        const currentCkKey = ck && ck.enabled ? `ck_${ck.color}_${ck.tolerance}` : 'no_ck';
+        const initialTex = entity.assetId ? getCachedTexture(entity.assetId, ck) : null;
+
+        // Crear Sprite interior con textura cacheada si existe
+        const sprite = new Sprite(initialTex || Texture.EMPTY);
         sprite.label = 'sprite';
         sprite.anchor.set(0.5);
         entityContainer.addChild(sprite);
+
+        if (initialTex && entity.assetId) {
+          (entityContainer as any)._loadedAssetId = entity.assetId;
+          (entityContainer as any)._loadedCkKey = currentCkKey;
+        }
 
         // Crear Graphics para anillo de bando y selección
         const ring = new Graphics();
@@ -107,36 +116,54 @@ export class TokensLayer extends Container {
       const prevCkKey = (entityContainer as any)._loadedCkKey;
 
       const sp = entityContainer.getChildByLabel('sprite') as Sprite;
+      const isAlreadyLoading =
+        (entityContainer as any)._isLoadingAssetId === entity.assetId &&
+        (entityContainer as any)._isLoadingCkKey === currentCkKey;
+
       const needsReload =
         entity.assetId &&
         sp &&
+        !isAlreadyLoading &&
         (sp.texture === Texture.EMPTY ||
           currentLoadedAssetId !== entity.assetId ||
           prevCkKey !== currentCkKey);
 
       if (needsReload) {
-        (entityContainer as any)._loadedAssetId = entity.assetId;
-        (entityContainer as any)._loadedCkKey = currentCkKey;
+        (entityContainer as any)._isLoadingAssetId = entity.assetId;
+        (entityContainer as any)._isLoadingCkKey = currentCkKey;
 
-        // Comprobar si es un GIF animado
-        getGifDataForAsset(entity.assetId!, ck).then((gifData) => {
-          if (gifData && entityContainer && !entityContainer.destroyed) {
-            (entityContainer as any)._gifData = gifData;
-          }
-        });
-
-        // Registrar vídeo si aplica
-        videoManager.registerActiveEntityVideo(entity.id);
-
-        getTextureForAsset(entity.assetId!, ck).then((tex) => {
-          if (tex && entityContainer && !entityContainer.destroyed) {
-            const innerSp = entityContainer.getChildByLabel('sprite') as Sprite;
-            if (innerSp) {
-              innerSp.texture = tex;
-              this.updateEntityVisuals(entityContainer, entity, selectedIds.includes(entity.id));
+        // Comprobar si ya está en caché síncrona
+        const fastTex = entity.assetId ? getCachedTexture(entity.assetId, ck) : null;
+        if (fastTex) {
+          sp.texture = fastTex;
+          (entityContainer as any)._loadedAssetId = entity.assetId;
+          (entityContainer as any)._loadedCkKey = currentCkKey;
+          (entityContainer as any)._isLoadingAssetId = null;
+          (entityContainer as any)._isLoadingCkKey = null;
+          this.updateEntityVisuals(entityContainer, entity, selectedIds.includes(entity.id));
+        } else {
+          // Comprobar si es un GIF animado
+          getGifDataForAsset(entity.assetId!, ck).then((gifData) => {
+            if (gifData && entityContainer && !entityContainer.destroyed) {
+              (entityContainer as any)._gifData = gifData;
             }
-          }
-        });
+          });
+
+          // Registrar vídeo si aplica
+          videoManager.registerActiveEntityVideo(entity.id);
+
+          getTextureForAsset(entity.assetId!, ck).then((tex) => {
+            (entityContainer as any)._isLoadingAssetId = null;
+            (entityContainer as any)._isLoadingCkKey = null;
+            if (tex && entityContainer && !entityContainer.destroyed) {
+              const innerSp = entityContainer.getChildByLabel('sprite') as Sprite;
+              if (innerSp) {
+                innerSp.texture = tex;
+                this.updateEntityVisuals(entityContainer, entity, selectedIds.includes(entity.id));
+              }
+            }
+          });
+        }
       }
 
       // Actualizar transformaciones espaciales en el mundo

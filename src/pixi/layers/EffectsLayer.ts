@@ -1,7 +1,7 @@
 import { Container, Graphics, Sprite, Texture, ColorMatrixFilter } from 'pixi.js';
 import { Entity, EffectConfig, EffectPresetId, Point2D } from '../../types/entity';
 import { CameraState } from '../../types/game';
-import { getTextureForAsset, getGifDataForAsset } from '../utils/textureCache';
+import { getTextureForAsset, getGifDataForAsset, getCachedTexture } from '../utils/textureCache';
 import { videoManager } from '../../modules/media/videoManager';
 import { AnimatedGifData, getFrameTextureForTime } from '../../modules/media/gifDecoder';
 import { parseColor } from '../../utils/color';
@@ -68,16 +68,22 @@ class ProceduralEffectNode extends Container {
       this.baseGfx.visible = false;
       this.particleGfx.visible = false;
 
+      const ck = entity.chromaKey;
+      const currentCkKey = ck && ck.enabled ? `ck_${ck.color}_${ck.tolerance}` : 'no_ck';
+
       if (!this.sprite) {
-        this.sprite = new Sprite(Texture.EMPTY);
+        const cachedTex = getCachedTexture(entity.assetId, ck);
+        this.sprite = new Sprite(cachedTex || Texture.EMPTY);
+        if (cachedTex) {
+          this.loadedAssetId = entity.assetId;
+          this.loadedCkKey = currentCkKey;
+        }
         this.sprite.label = 'effect-sprite';
         this.sprite.anchor.set(0.5);
         this.addChild(this.sprite);
       }
       this.sprite.visible = true;
 
-      const ck = entity.chromaKey;
-      const currentCkKey = ck && ck.enabled ? `ck_${ck.color}_${ck.tolerance}` : 'no_ck';
       const isConfigChanged = this.loadedAssetId !== entity.assetId || this.loadedCkKey !== currentCkKey;
       const needsTexture = !this.sprite.texture || this.sprite.texture === Texture.EMPTY || this.sprite.texture.destroyed;
       const isAlreadyLoading = this.loadingAssetId === entity.assetId && this.loadingCkKey === currentCkKey;

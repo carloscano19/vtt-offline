@@ -24,6 +24,7 @@ import {
 import { TokenSide, recalculateDoorEndpoints, getDefaultSnapToGrid } from '../../../types/entity';
 import { getAsset, db } from '../../../db/dexie';
 import { cloudSync } from '../../../modules/sync/cloudSync';
+import { syncChannel } from '../../../modules/sync/syncChannel';
 import { getMediaDimensions, persistAssetDimensions } from '../../../utils/mediaDimensions';
 import { EyeDropperButton } from '../../common/EyeDropperButton';
 
@@ -45,17 +46,31 @@ const EFFECT_PRESET_NAMES: Record<string, string> = {
   ice_zone: 'Zona de hielo'
 };
 
+import { useStoreWithEqualityFn } from 'zustand/traditional';
+
 export const PropertiesTab: React.FC = () => {
-  const game = useGameStore((s) => s.game);
   const updateEntity = useGameStore((s) => s.updateEntity);
   const removeEntities = useGameStore((s) => s.removeEntities);
   const toggleDoor = useGameStore((s) => s.toggleDoor);
   const setDoorLocked = useGameStore((s) => s.setDoorLocked);
+  const gridSizeSetting = useGameStore((s) => s.game.grid.size);
 
   const selectedEntityIds = useUIStore((s) => s.selectedEntityIds);
   const clearSelection = useUIStore((s) => s.clearSelection);
 
-  const selectedEntity = game.entities.find((e) => selectedEntityIds.includes(e.id));
+  const selectedEntity = useStoreWithEqualityFn(
+    useGameStore,
+    (s) => s.game.entities.find((e) => selectedEntityIds.includes(e.id)),
+    (prev, next) => {
+      if (prev === next) return true;
+      if (!prev || !next) return false;
+      if (syncChannel.isDragging()) {
+        return prev.id === next.id && prev.type === next.type && prev.name === next.name && prev.locked === next.locked && prev.visibleToPlayers === next.visibleToPlayers;
+      }
+      return false;
+    }
+  );
+  const parentMap = useGameStore((s) => selectedEntity?.mapId ? s.game.entities.find((m) => m.id === selectedEntity.mapId) : undefined);
 
   const [assetDims, setAssetDims] = React.useState<{ width: number; height: number } | null>(null);
 
@@ -519,7 +534,7 @@ export const PropertiesTab: React.FC = () => {
           {selectedEntity.mapId ? (
             <p className="text-slate-400">
               Vinculada a mapa: <span className="text-sky-300 font-mono">
-                {game.entities.find((e) => e.id === selectedEntity.mapId)?.name || selectedEntity.mapId}
+                {parentMap?.name || selectedEntity.mapId}
               </span> (coordenadas locales)
             </p>
           ) : (
@@ -699,8 +714,7 @@ export const PropertiesTab: React.FC = () => {
             <div className="flex items-center justify-between text-xs">
               <span className="text-slate-300 font-medium">Largo (casillas)</span>
               {(() => {
-                const parentMap = selectedEntity.mapId ? game.entities.find((m) => m.id === selectedEntity.mapId) : undefined;
-                const gridSize = parentMap?.mapData?.pixelsPerGrid ?? (game.grid.size > 0 ? game.grid.size : 70);
+                const gridSize = parentMap?.mapData?.pixelsPerGrid ?? (gridSizeSetting > 0 ? gridSizeSetting : 70);
                 const currentPx = selectedEntity.door.length ?? Math.hypot(selectedEntity.door.p2.x - selectedEntity.door.p1.x, selectedEntity.door.p2.y - selectedEntity.door.p1.y);
                 const currentSquares = parseFloat((currentPx / gridSize).toFixed(2));
                 return (
@@ -1155,7 +1169,7 @@ export const PropertiesTab: React.FC = () => {
               {(() => {
                 const isCustomWithAsset = selectedEntity.effect?.preset === 'custom' && selectedEntity.assetId;
                 const maxDim = assetDims ? Math.max(assetDims.width, assetDims.height) : 0;
-                const gridSize = game.grid.size > 0 ? game.grid.size : 70;
+                const gridSize = gridSizeSetting > 0 ? gridSizeSetting : 70;
 
                 const getScaleForCells = (cells: number) => {
                   if (isCustomWithAsset && maxDim > 0) {

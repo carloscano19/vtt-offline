@@ -2,9 +2,27 @@ import React from 'react';
 import { useGameStore } from '../../../stores/useGameStore';
 import { useUIStore } from '../../../stores/useUIStore';
 import { Lock, Unlock, Eye, EyeOff, Map as MapIcon, User, Box, ArrowUp, ArrowDown, Trash2, BrickWall, Sparkles, DoorClosed, Flame } from 'lucide-react';
+import { syncChannel } from '../../../modules/sync/syncChannel';
+import { useStoreWithEqualityFn } from 'zustand/traditional';
 
 export const LayersTab: React.FC = () => {
-  const game = useGameStore((s) => s.game);
+  const entities = useStoreWithEqualityFn(
+    useGameStore,
+    (s) => s.game.entities,
+    (prev, next) => {
+      if (prev === next) return true;
+      if (prev.length !== next.length) return false;
+      if (syncChannel.isDragging()) return true;
+      for (let i = 0; i < prev.length; i++) {
+        const p = prev[i];
+        const n = next[i];
+        if (p.id !== n.id || p.name !== n.name || p.type !== n.type || p.locked !== n.locked || p.visibleToPlayers !== n.visibleToPlayers || p.zIndex !== n.zIndex) {
+          return false;
+        }
+      }
+      return true;
+    }
+  );
   const toggleEntityLock = useGameStore((s) => s.toggleEntityLock);
   const toggleEntityVisibility = useGameStore((s) => s.toggleEntityVisibility);
   const reorderEntity = useGameStore((s) => s.reorderEntity);
@@ -15,9 +33,9 @@ export const LayersTab: React.FC = () => {
   const clearSelection = useUIStore((s) => s.clearSelection);
 
   // Mostrar entidades en orden inverso (mayor zIndex arriba)
-  const reversedEntities = [...game.entities].reverse();
+  const reversedEntities = [...entities].reverse();
 
-  if (game.entities.length === 0) {
+  if (entities.length === 0) {
     return (
       <div className="p-6 text-center text-slate-400 text-sm">
         <p className="font-medium text-slate-300">Tablero vacío</p>
@@ -50,7 +68,7 @@ export const LayersTab: React.FC = () => {
   return (
     <div className="p-3 text-xs text-slate-200 overflow-y-auto max-h-full space-y-1.5">
       <div className="flex items-center justify-between pb-1 mb-2 border-b border-slate-700/80 text-slate-400 font-semibold text-[11px]">
-        <span>Entidades ({game.entities.length})</span>
+        <span>Entidades ({entities.length})</span>
         <button
           onClick={clearSelection}
           className="text-slate-500 hover:text-slate-300 text-[10px]"
@@ -62,7 +80,7 @@ export const LayersTab: React.FC = () => {
       <div className="space-y-1">
         {reversedEntities.map((entity, index) => {
           const isSelected = selectedEntityIds.includes(entity.id);
-          const originalIndex = game.entities.length - 1 - index;
+          const originalIndex = entities.length - 1 - index;
 
           return (
             <div
@@ -84,8 +102,8 @@ export const LayersTab: React.FC = () => {
               <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                 {/* Reordenar capa */}
                 <button
-                  onClick={() => reorderEntity(entity.id, Math.min(originalIndex + 1, game.entities.length - 1))}
-                  disabled={originalIndex === game.entities.length - 1}
+                  onClick={() => reorderEntity(entity.id, Math.min(originalIndex + 1, entities.length - 1))}
+                  disabled={originalIndex === entities.length - 1}
                   className="p-1 text-slate-400 hover:text-white disabled:opacity-20"
                   title="Subir nivel de capa"
                 >
