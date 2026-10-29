@@ -202,6 +202,13 @@ export class PixiRenderer {
             deltaSec
           );
         }
+
+        if (!this.isMaster) {
+          this.tokensLayer?.tick(deltaSec);
+          if (this.lastEntities && this.lastGridSize) {
+            this.doorsLayer?.update(this.lastEntities, [], this.lastGridSize, deltaSec);
+          }
+        }
       });
 
       this.unsubTextureInvalidated = onTextureInvalidated((assetId) => {

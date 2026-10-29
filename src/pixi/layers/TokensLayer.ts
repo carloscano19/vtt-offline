@@ -23,11 +23,29 @@ function isPointInPolygon(point: Point2D, vs: Point2D[]): boolean {
 export class TokensLayer extends Container {
   private isMaster: boolean;
   private containerMap: Map<string, Container> = new Map();
+  private fadeMap = new Map<string, { current: number; target: number }>();
   private animTime = 0;
 
   constructor(isMaster: boolean) {
     super();
     this.isMaster = isMaster;
+  }
+
+  public tick(deltaSeconds: number) {
+    if (this.isMaster) return;
+    for (const [id, fade] of this.fadeMap.entries()) {
+      const diff = fade.target - fade.current;
+      if (diff !== 0) {
+        const step = deltaSeconds / 0.6;
+        fade.current = Math.abs(diff) <= step ? fade.target : fade.current + Math.sign(diff) * step;
+        const container = this.containerMap.get(id);
+        if (container) {
+          const entityOpacity = (container as any)._entityOpacity ?? 1.0;
+          container.alpha = entityOpacity * fade.current;
+          container.visible = fade.current > 0.001;
+        }
+      }
+    }
   }
 
   public async syncEntities(
@@ -43,19 +61,29 @@ export class TokensLayer extends Container {
     const evaluatePlayerVisibility = !this.isMaster || (this.isMaster && isPlayerPreview);
 
     for (const entity of tokenEntities) {
+      let targetVisibility = 1.0;
       if (evaluatePlayerVisibility) {
         if (!entity.visibleToPlayers) {
-          continue;
-        }
-
-        // Si es enemigo, neutral u objeto, solo se ve si está dentro de la visión real
-        if (fogEnabled && (entity.side === 'enemigo' || entity.side === 'neutral' || entity.type === 'object')) {
+          targetVisibility = 0.0;
+        } else if (fogEnabled && (entity.side === 'enemigo' || entity.side === 'neutral' || entity.type === 'object')) {
           const pt = { x: entity.x, y: entity.y };
           const isInsideAnyVision = visibilities.some((v) => isPointInPolygon(pt, v.polygon));
           if (!isInsideAnyVision) {
-            continue;
+            targetVisibility = 0.0;
           }
         }
+      }
+
+      let fade = this.fadeMap.get(entity.id);
+      if (!fade) {
+        fade = { current: targetVisibility, target: targetVisibility };
+        this.fadeMap.set(entity.id, fade);
+      } else {
+        fade.target = targetVisibility;
+      }
+
+      if (evaluatePlayerVisibility && fade.current <= 0.001 && targetVisibility === 0.0) {
+        continue;
       }
 
       currentIds.add(entity.id);
@@ -175,22 +203,33 @@ export class TokensLayer extends Container {
 
       // Opacidad configurable combinada con visibilidad para jugadores
       const entityOpacity = typeof entity.opacity === 'number' ? entity.opacity : 1.0;
+      (entityContainer as any)._entityOpacity = entityOpacity;
+
       if (this.isMaster && !isPlayerPreview) {
         entityContainer.alpha = (entity.visibleToPlayers ? 1.0 : 0.45) * entityOpacity;
+        entityContainer.visible = true;
       } else {
-        entityContainer.alpha = entityOpacity;
+        const fade = this.fadeMap.get(entity.id);
+        const f = fade ? fade.current : 1.0;
+        entityContainer.alpha = entityOpacity * f;
+        entityContainer.visible = f > 0.001;
       }
 
       this.updateEntityVisuals(entityContainer, entity, selectedIds.includes(entity.id));
     }
 
-    // Eliminar entidades que ya no existan o se hayan ocultado
+    // Eliminar entidades que ya no existan o se hayan ocultado completamente
     for (const [id, container] of this.containerMap.entries()) {
       if (!currentIds.has(id)) {
+        const fade = this.fadeMap.get(id);
+        if (!this.isMaster && fade && fade.current > 0.001) {
+          continue; // Mantener contenedor visible mientras se desvanece
+        }
         videoManager.unregisterActiveEntityVideo(id);
         this.removeChild(container);
         container.destroy({ children: true });
         this.containerMap.delete(id);
+        this.fadeMap.delete(id);
       }
     }
   }

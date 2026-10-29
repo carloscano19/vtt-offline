@@ -64,6 +64,9 @@ export class AmbientLayer extends Container {
     totalMulti: ExploredMultiPolygon;
   } | null = null;
 
+  // Mapa de transición suave de visibilidad (0.6s) para cada luz en la tele
+  private lightFadeMap = new Map<string, { current: number; target: number }>();
+
   private timeSec = 0;
 
   constructor(isMaster: boolean) {
@@ -305,11 +308,41 @@ export class AmbientLayer extends Container {
       this.dimContainer.visible = false;
     }
 
-    // Modular tinte de luces según oscuridad ambiental y parpadeo de antorchas
+    // Modular tinte de luces según oscuridad ambiental, parpadeo de antorchas y fundido de 0.6s
     const darknessFactor = 0.05 + 0.95 * Math.pow(Math.min(1.0, currentDarkness / 0.85), 1.5);
 
     let activeTintIdx = 0;
+    let activeDimIdx = 0;
     for (const light of lights) {
+      let fadeFactor = 1.0;
+      if (!this.isMaster) {
+        const target = light.visibleToPlayers !== false ? 1.0 : 0.0;
+        let fade = this.lightFadeMap.get(light.lightId);
+        if (!fade) {
+          fade = { current: target, target };
+          this.lightFadeMap.set(light.lightId, fade);
+        }
+        fade.target = target;
+        const diff = fade.target - fade.current;
+        if (diff !== 0) {
+          const step = deltaSeconds / 0.6;
+          fade.current = Math.abs(diff) <= step ? fade.target : fade.current + Math.sign(diff) * step;
+        }
+        fadeFactor = fade.current;
+      }
+
+      // Actualizar alfa del sprite de reducción de oscuridad
+      const rBright = light.brightRangePx || 0;
+      const rTotal = light.totalRangePx || 0;
+      if (rTotal > 0 && light.center) {
+        const dimSprite = this.dimSprites[activeDimIdx++];
+        if (dimSprite) {
+          dimSprite.alpha = fadeFactor;
+          dimSprite.visible = fadeFactor > 0.001;
+        }
+      }
+
+      // Actualizar alfa del sprite del haz de luz
       const { rgb: colorNum } = parseColor(light.color, 0xffaa44);
 
       let flickerMod = 1.0;
@@ -319,13 +352,12 @@ export class AmbientLayer extends Container {
       }
 
       const baseAlpha = light.intensity * 0.25 * darknessFactor * flickerMod;
-      const rTotal = light.totalRangePx || 0;
       if (rTotal > 0 && light.center && light.totalPolygon && light.totalPolygon.length >= 3) {
         const sprite = this.tintDimSprites[activeTintIdx++];
         if (sprite) {
           sprite.tint = colorNum;
-          sprite.alpha = baseAlpha;
-          sprite.visible = baseAlpha > 0.001;
+          sprite.alpha = baseAlpha * fadeFactor;
+          sprite.visible = sprite.alpha > 0.001;
         }
       }
     }

@@ -5,6 +5,7 @@ import { localToWorld } from '../utils/coordinates';
 export class DoorsLayer extends Container {
   private graphics: Graphics;
   private isMaster: boolean;
+  private doorFadeMap = new Map<string, { current: number; target: number }>();
 
   constructor(isMaster: boolean) {
     super();
@@ -13,7 +14,7 @@ export class DoorsLayer extends Container {
     this.addChild(this.graphics);
   }
 
-  public update(entities: Entity[], selectedIds: string[] = [], gridSize: number = 70) {
+  public update(entities: Entity[], selectedIds: string[] = [], gridSize: number = 70, deltaSeconds: number = 0.016) {
     this.graphics.clear();
 
     const gSize = Math.max(20, gridSize || 70);
@@ -27,6 +28,28 @@ export class DoorsLayer extends Container {
     const doorEntities = entities.filter((e) => e.type === 'door' && e.door);
 
     for (const ent of doorEntities) {
+      let fadeFactor = 1.0;
+      if (!this.isMaster) {
+        const target = ent.visibleToPlayers !== false ? 1.0 : 0.0;
+        let fade = this.doorFadeMap.get(ent.id);
+        if (!fade) {
+          fade = { current: target, target };
+          this.doorFadeMap.set(ent.id, fade);
+        }
+        fade.target = target;
+        const diff = fade.target - fade.current;
+        if (diff !== 0) {
+          const step = deltaSeconds / 0.6;
+          fade.current = Math.abs(diff) <= step ? fade.target : fade.current + Math.sign(diff) * step;
+        }
+        fadeFactor = fade.current;
+        if (fadeFactor <= 0.001) {
+          continue;
+        }
+      } else if (ent.visibleToPlayers === false) {
+        fadeFactor = 0.45;
+      }
+
       const door = ent.door!;
       const isSelected = selectedIds.includes(ent.id);
 
@@ -48,7 +71,8 @@ export class DoorsLayer extends Container {
       // Grosor proporcional a grid.size (mínimo 6 px)
       const thickness = Math.max(6, 0.18 * gSize);
       const halfThick = thickness / 2;
-      const op = typeof ent.opacity === 'number' ? ent.opacity : 1.0;
+      const baseOp = typeof ent.opacity === 'number' ? ent.opacity : 1.0;
+      const op = baseOp * fadeFactor;
 
       // 1. Marco (Jambas) en p1 y p2: siempre en la posición cerrada de la pared
       const jambaLength = Math.max(5, 0.1 * gSize);

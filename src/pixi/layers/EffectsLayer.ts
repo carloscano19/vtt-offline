@@ -33,6 +33,9 @@ class ProceduralEffectNode extends Container {
   private lightningTimer = 0;
   private lightningBolts: Point2D[][] = [];
 
+  public fadeFactor = 1.0;
+  private hasInitializedFade = false;
+
   constructor(entityId: string) {
     super();
     this.entityId = entityId;
@@ -53,15 +56,31 @@ class ProceduralEffectNode extends Container {
     const entityOpacity = typeof entity.opacity === 'number' ? entity.opacity : 1.0;
     if (isMaster) {
       this.alpha = (entity.visibleToPlayers ? 1.0 : 0.45) * entityOpacity;
+      if (!isVisible) {
+        this.visible = false;
+        return;
+      }
+      this.visible = true;
     } else {
-      this.alpha = entityOpacity;
-    }
+      const target = entity.visibleToPlayers ? 1.0 : 0.0;
+      if (!this.hasInitializedFade) {
+        this.hasInitializedFade = true;
+        this.fadeFactor = target;
+      } else {
+        const diff = target - this.fadeFactor;
+        if (diff !== 0) {
+          const step = deltaSec / 0.6;
+          this.fadeFactor = Math.abs(diff) <= step ? target : this.fadeFactor + Math.sign(diff) * step;
+        }
+      }
 
-    if (!isVisible) {
-      this.visible = false;
-      return;
+      this.alpha = entityOpacity * this.fadeFactor;
+      if (!isVisible || this.fadeFactor <= 0.001) {
+        this.visible = false;
+        return;
+      }
+      this.visible = true;
     }
-    this.visible = true;
 
     // 1. Si el efecto tiene un asset multimedia propio (GIF, vídeo MP4/WebM o imagen PNG)
     if (entity.assetId) {

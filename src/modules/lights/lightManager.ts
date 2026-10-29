@@ -18,6 +18,7 @@ export interface LightVisibility {
   coneAngle?: number;
   directionOffset?: number;
   rotation?: number;
+  visibleToPlayers?: boolean;
 }
 
 interface CachedLightPoly {
@@ -59,7 +60,7 @@ export class LightManager {
    */
   private generateStateKey(entities: Entity[], gridSize: number, wallPart: string): string {
     const lightEntities = entities.filter(
-      (e) => (e.type === 'light' || (e.type === 'effect' && e.effect?.emitsLight)) && e.light && e.visibleToPlayers !== false
+      (e) => (e.type === 'light' || (e.type === 'effect' && e.effect?.emitsLight)) && e.light
     );
 
     const lightPart = lightEntities
@@ -69,7 +70,8 @@ export class LightManager {
         const coneAngle = c.coneAngle ?? 60;
         const dirOffset = c.directionOffset ?? 0;
         const rot = Math.round((l.rotation || 0) * 100) / 100;
-        return `${l.id}:${Math.round(l.x)}:${Math.round(l.y)}:${l.scaleX}:${l.scaleY}:${c.brightRadiusInSquares}:${c.dimRadiusInSquares}:${c.color}:${c.intensity}:${c.edgeHardness}:${shape}:${coneAngle}:${dirOffset}:${rot}`;
+        const vis = l.visibleToPlayers !== false ? 1 : 0;
+        return `${l.id}:${Math.round(l.x)}:${Math.round(l.y)}:${l.scaleX}:${l.scaleY}:${c.brightRadiusInSquares}:${c.dimRadiusInSquares}:${c.color}:${c.intensity}:${c.edgeHardness}:${shape}:${coneAngle}:${dirOffset}:${rot}:${vis}`;
       })
       .join('|');
 
@@ -89,7 +91,7 @@ export class LightManager {
     }
 
     const lightEntities = entities.filter(
-      (e) => (e.type === 'light' || (e.type === 'effect' && e.effect?.emitsLight)) && e.light && e.visibleToPlayers !== false
+      (e) => (e.type === 'light' || (e.type === 'effect' && e.effect?.emitsLight)) && e.light
     );
 
     if (lightEntities.length === 0) {
@@ -176,7 +178,8 @@ export class LightManager {
         shape,
         coneAngle,
         directionOffset,
-        rotation
+        rotation,
+        visibleToPlayers: lightEnt.visibleToPlayers !== false
       });
     }
 
