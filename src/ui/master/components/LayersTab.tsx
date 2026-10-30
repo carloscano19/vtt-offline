@@ -3,25 +3,11 @@ import { useGameStore } from '../../../stores/useGameStore';
 import { useUIStore } from '../../../stores/useUIStore';
 import { Lock, Unlock, Eye, EyeOff, Map as MapIcon, User, Box, ArrowUp, ArrowDown, Trash2, BrickWall, Sparkles, DoorClosed, Flame } from 'lucide-react';
 import { syncChannel } from '../../../modules/sync/syncChannel';
-import { useStoreWithEqualityFn } from 'zustand/traditional';
+import { useShallow } from 'zustand/react/shallow';
 
 export const LayersTab: React.FC = () => {
-  const entities = useStoreWithEqualityFn(
-    useGameStore,
-    (s) => s.game.entities,
-    (prev, next) => {
-      if (prev === next) return true;
-      if (prev.length !== next.length) return false;
-      if (syncChannel.isDragging()) return true;
-      for (let i = 0; i < prev.length; i++) {
-        const p = prev[i];
-        const n = next[i];
-        if (p.id !== n.id || p.name !== n.name || p.type !== n.type || p.locked !== n.locked || p.visibleToPlayers !== n.visibleToPlayers || p.zIndex !== n.zIndex) {
-          return false;
-        }
-      }
-      return true;
-    }
+  const entities = useGameStore(
+    useShallow((s) => s.game.entities)
   );
   const toggleEntityLock = useGameStore((s) => s.toggleEntityLock);
   const toggleEntityVisibility = useGameStore((s) => s.toggleEntityVisibility);

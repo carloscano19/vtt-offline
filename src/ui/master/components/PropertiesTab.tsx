@@ -46,7 +46,7 @@ const EFFECT_PRESET_NAMES: Record<string, string> = {
   ice_zone: 'Zona de hielo'
 };
 
-import { useStoreWithEqualityFn } from 'zustand/traditional';
+import { useShallow } from 'zustand/react/shallow';
 
 export const PropertiesTab: React.FC = () => {
   const updateEntity = useGameStore((s) => s.updateEntity);
@@ -58,17 +58,8 @@ export const PropertiesTab: React.FC = () => {
   const selectedEntityIds = useUIStore((s) => s.selectedEntityIds);
   const clearSelection = useUIStore((s) => s.clearSelection);
 
-  const selectedEntity = useStoreWithEqualityFn(
-    useGameStore,
-    (s) => s.game.entities.find((e) => selectedEntityIds.includes(e.id)),
-    (prev, next) => {
-      if (prev === next) return true;
-      if (!prev || !next) return false;
-      if (syncChannel.isDragging()) {
-        return prev.id === next.id && prev.type === next.type && prev.name === next.name && prev.locked === next.locked && prev.visibleToPlayers === next.visibleToPlayers;
-      }
-      return false;
-    }
+  const selectedEntity = useGameStore(
+    useShallow((s) => s.game.entities.find((e) => selectedEntityIds.includes(e.id)))
   );
   const parentMap = useGameStore((s) => selectedEntity?.mapId ? s.game.entities.find((m) => m.id === selectedEntity.mapId) : undefined);
 
