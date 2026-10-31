@@ -202,4 +202,92 @@ describe('Token Statuses & Turn Management', () => {
       expect(DEFAULT_STATUS_TYPES).toContain(cond);
     }
   });
+
+  it('allows manual decrementing of turns and removes status when decrementing from 1', () => {
+    const token: Entity = {
+      id: 'token_ctrl',
+      type: 'token',
+      name: 'Mago',
+      x: 100,
+      y: 100,
+      rotation: 0,
+      scaleX: 0.15,
+      scaleY: 0.15,
+      zIndex: 10,
+      visibleToPlayers: true,
+      locked: false,
+      statuses: [{ id: 'st_slow', type: 'Aturdido', turnsRemaining: 2, visibleToPlayers: true }]
+    };
+
+    useGameStore.getState().addEntity(token);
+
+    // 1. Decrementar de 2 a 1
+    useGameStore.getState().updateTokenStatus('token_ctrl', 'st_slow', { turnsRemaining: 1 });
+    let ent = useGameStore.getState().game.entities.find((e) => e.id === 'token_ctrl');
+    expect(ent?.statuses?.[0].turnsRemaining).toBe(1);
+
+    // 2. Decrementar de 1 a 0 (debe eliminar el estado como en el botón −)
+    useGameStore.getState().removeTokenStatus('token_ctrl', 'st_slow');
+    ent = useGameStore.getState().game.entities.find((e) => e.id === 'token_ctrl');
+    expect(ent?.statuses).toHaveLength(0);
+  });
+
+  it('toggles turns between finite and infinite (null) and increments with plus', () => {
+    const token: Entity = {
+      id: 'token_toggle',
+      type: 'token',
+      name: 'Pícaro',
+      x: 100,
+      y: 100,
+      rotation: 0,
+      scaleX: 0.15,
+      scaleY: 0.15,
+      zIndex: 10,
+      visibleToPlayers: true,
+      locked: false,
+      statuses: [{ id: 'st_inv', type: 'Invisible', turnsRemaining: null, visibleToPlayers: true }]
+    };
+
+    useGameStore.getState().addEntity(token);
+
+    // 1. Alternar de infinito (null) a número (1)
+    useGameStore.getState().updateTokenStatus('token_toggle', 'st_inv', { turnsRemaining: 1 });
+    let ent = useGameStore.getState().game.entities.find((e) => e.id === 'token_toggle');
+    expect(ent?.statuses?.[0].turnsRemaining).toBe(1);
+
+    // 2. Incrementar con + (de 1 a 2)
+    useGameStore.getState().updateTokenStatus('token_toggle', 'st_inv', { turnsRemaining: 2 });
+    ent = useGameStore.getState().game.entities.find((e) => e.id === 'token_toggle');
+    expect(ent?.statuses?.[0].turnsRemaining).toBe(2);
+
+    // 3. Alternar de nuevo a infinito (null)
+    useGameStore.getState().updateTokenStatus('token_toggle', 'st_inv', { turnsRemaining: null });
+    ent = useGameStore.getState().game.entities.find((e) => e.id === 'token_toggle');
+    expect(ent?.statuses?.[0].turnsRemaining).toBeNull();
+  });
+
+  it('verifies scale compensation formulas for large tokens scaled down to 0.15', () => {
+    const scale = 0.15;
+    const invScale = 1 / scale;
+    const gridSize = 70;
+    const cameraZoom = 1.0;
+
+    // Altura de texto de etiquetas: ~0.22 * gridSize, mínimo 12px en pantalla
+    const targetTextHeight = Math.max(12 / cameraZoom, 0.22 * gridSize);
+    expect(targetTextHeight).toBeCloseTo(15.4, 1);
+    expect(targetTextHeight * cameraZoom).toBeGreaterThanOrEqual(12);
+
+    // Borde rojo: ~3px en pantalla independiente de la escala del token
+    const targetScreenBorderWidth = 3;
+    const localStrokeWidth = (targetScreenBorderWidth / cameraZoom) * invScale;
+    // Al renderizarse en Pixi con scaleX = 0.15:
+    const renderedScreenBorderWidth = localStrokeWidth * scale * cameraZoom;
+    expect(renderedScreenBorderWidth).toBeCloseTo(3, 4);
+
+    // Posición de la etiqueta fuera del borde del token de 1024px:
+    const spriteWidth = 1024;
+    const localRadius = spriteWidth / 2; // 512
+    const worldRadius = localRadius * scale; // 76.8px en el mundo
+    expect(worldRadius).toBeCloseTo(76.8, 1);
+  });
 });

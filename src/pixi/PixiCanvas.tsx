@@ -1648,6 +1648,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           selectedEntityId={selectedEntityIds[0]}
           canvasWidth={canvasDimensions.width}
           canvasHeight={canvasDimensions.height}
+          renderer={rendererRef.current}
         />
       )}
     </div>

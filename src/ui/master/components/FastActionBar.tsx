@@ -4,16 +4,20 @@ import { useGameStore } from '../../../stores/useGameStore';
 import { useUIStore } from '../../../stores/useUIStore';
 import { worldToScreen, localToWorld } from '../../../pixi/utils/coordinates';
 
+import type { PixiRenderer } from '../../../pixi/PixiRenderer';
+
 interface FastActionBarProps {
   selectedEntityId: string;
   canvasWidth: number;
   canvasHeight: number;
+  renderer?: PixiRenderer | null;
 }
 
 export const FastActionBar: React.FC<FastActionBarProps> = ({
   selectedEntityId,
   canvasWidth,
-  canvasHeight
+  canvasHeight,
+  renderer
 }) => {
   const entity = useGameStore((s) => s.game.entities.find((e) => e.id === selectedEntityId));
   const camera = useGameStore((s) => s.game.masterCamera);
@@ -45,24 +49,51 @@ export const FastActionBar: React.FC<FastActionBarProps> = ({
     }
   }
 
-  // Estimar dimensiones en espacio local según el tipo de entidad
-  let halfW = 35 * Math.abs(entity.scaleX || 1);
-  let halfH = 35 * Math.abs(entity.scaleY || 1);
+  // Obtener dimensiones locales exactas desde el Gizmo o fallback
+  let localBounds = {
+    offsetX: -35,
+    offsetY: -35,
+    width: 70,
+    height: 70
+  };
 
-  if (entity.type === 'door' && entity.door) {
-    halfW = ((entity.door.length ?? 70) * Math.abs(entity.scaleX || 1)) / 2;
-    halfH = 12 * Math.abs(entity.scaleY || 1);
+  if (renderer?.gizmoLayer) {
+    localBounds = renderer.gizmoLayer.getEntityLocalBounds(entity);
+  } else if (entity.type === 'door' && entity.door) {
+    const w = entity.door.length ?? 70;
+    const h = 12;
+    localBounds = { offsetX: -w / 2, offsetY: -h / 2, width: w, height: h };
   }
+
+  const { offsetX, offsetY, width, height } = localBounds;
+  const sx = entity.scaleX || 1;
+  const sy = entity.scaleY || 1;
+  const absSy = Math.max(0.001, Math.abs(sy));
 
   const cosR = Math.cos(worldRot);
   const sinR = Math.sin(worldRot);
 
+  // Esquinas de la caja delimitadora en espacio local escalado
   const localCorners = [
-    { x: -halfW, y: -halfH },
-    { x: halfW, y: -halfH },
-    { x: halfW, y: halfH },
-    { x: -halfW, y: halfH }
+    { x: offsetX * sx, y: offsetY * sy },
+    { x: (offsetX + width) * sx, y: offsetY * sy },
+    { x: (offsetX + width) * sx, y: (offsetY + height) * sy },
+    { x: offsetX * sx, y: (offsetY + height) * sy }
   ];
+
+  // Si no está bloqueada, incluir la manija de rotación del gizmo (que sobresale por arriba)
+  if (!entity.locked) {
+    const zoom = Math.max(0.01, camera.zoom);
+    const handleDist = 26 / (zoom * absSy);
+    const rotHandleY = offsetY - handleDist;
+    const centerX = offsetX + width / 2;
+    // La manija tiene un círculo de radio 5px + margen de 2px en pantalla
+    const rotRadiusLocal = 7 / (zoom * absSy);
+    localCorners.push(
+      { x: centerX * sx, y: (rotHandleY - rotRadiusLocal) * sy },
+      { x: centerX * sx, y: (rotHandleY + rotRadiusLocal) * sy }
+    );
+  }
 
   const worldCorners = localCorners.map((c) => ({
     x: worldCenter.x + (c.x * cosR - c.y * sinR),
@@ -74,13 +105,23 @@ export const FastActionBar: React.FC<FastActionBarProps> = ({
   );
 
   const minScreenY = Math.min(...screenCorners.map((p) => p.y));
+  const maxScreenY = Math.max(...screenCorners.map((p) => p.y));
   const minScreenX = Math.min(...screenCorners.map((p) => p.x));
   const maxScreenX = Math.max(...screenCorners.map((p) => p.x));
   const centerScreenX = (minScreenX + maxScreenX) / 2;
 
-  // Ajustar posición en pantalla por encima del gizmo
-  const leftClamped = Math.max(90, Math.min(canvasWidth - 90, centerScreenX));
-  const topClamped = Math.max(50, minScreenY - 14);
+  // Altura aproximada de la barra rápida
+  const BAR_HEIGHT = 42;
+  const TOP_TOOLBAR_HEIGHT = 56;
+  // Colocar por encima del gizmo (incluida la manija de rotación) con 8px de separación.
+  // Si no cabe arriba (chocaría con el borde superior / toolbar), colocar debajo con 8px.
+  const fitsAbove = minScreenY - 8 - BAR_HEIGHT >= TOP_TOOLBAR_HEIGHT;
+
+  const leftClamped = Math.max(110, Math.min(canvasWidth - 110, centerScreenX));
+  const topClamped = fitsAbove
+    ? Math.max(TOP_TOOLBAR_HEIGHT + BAR_HEIGHT, minScreenY - 8)
+    : Math.min(canvasHeight - BAR_HEIGHT - 12, maxScreenY + 8);
+  const transformStyle = fitsAbove ? 'translate(-50%, -100%)' : 'translate(-50%, 0)';
 
   const isVisible = entity.visibleToPlayers !== false;
   const isLocked = !!entity.locked;
@@ -131,7 +172,7 @@ export const FastActionBar: React.FC<FastActionBarProps> = ({
       style={{
         left: `${Math.round(leftClamped)}px`,
         top: `${Math.round(topClamped)}px`,
-        transform: 'translate(-50%, -100%)',
+        transform: transformStyle,
         pointerEvents: 'auto'
       }}
       onPointerDown={handlePointerDown}

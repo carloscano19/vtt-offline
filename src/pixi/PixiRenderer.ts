@@ -298,7 +298,7 @@ export class PixiRenderer {
     const clipGrid = (!this.isMaster || isPlayerPreview) && game.fog.enabled;
     this.gridLayer.update(game.grid, camera, width, height, clipGrid ? worldBounds : undefined);
     this.doorsLayer.update(game.entities, selectedIds, gridSize);
-    this.tokensLayer.syncEntities(game.entities, selectedIds, visibilities, isPlayerPreview, game.fog.enabled);
+    this.tokensLayer.syncEntities(game.entities, selectedIds, visibilities, isPlayerPreview, game.fog.enabled, gridSize, camera.zoom);
     this.effectsLayer.update(game.entities, camera, width, height, 0.016);
     this.ambientLayer.update(game.ambient, lights, worldBounds, 0.016);
     this.fogLayer.update(

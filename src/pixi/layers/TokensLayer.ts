@@ -25,6 +25,8 @@ export class TokensLayer extends Container {
   private containerMap: Map<string, Container> = new Map();
   private fadeMap = new Map<string, { current: number; target: number }>();
   private animTime = 0;
+  private gridSize = 70;
+  private cameraZoom = 1.0;
 
   constructor(isMaster: boolean) {
     super();
@@ -53,8 +55,12 @@ export class TokensLayer extends Container {
     selectedIds: string[] = [],
     visibilities: TokenVisibility[] = [],
     isPlayerPreview = false,
-    fogEnabled = true
+    fogEnabled = true,
+    gridSize = 70,
+    cameraZoom = 1.0
   ) {
+    this.gridSize = gridSize > 0 ? gridSize : 70;
+    this.cameraZoom = cameraZoom > 0 ? cameraZoom : 1.0;
     const tokenEntities = entities.filter((e) => e.type === 'token' || e.type === 'object');
     const currentIds = new Set<string>();
 
@@ -245,8 +251,16 @@ export class TokensLayer extends Container {
 
     if (!sprite || !ring) return;
 
+    const sx = Math.max(0.001, Math.abs(entity.scaleX || 1));
+    const sy = Math.max(0.001, Math.abs(entity.scaleY || 1));
+    const invSx = 1 / sx;
+    const invSy = 1 / sy;
+    const cameraZoom = this.cameraZoom > 0 ? this.cameraZoom : 1.0;
+    const gridSize = this.gridSize > 0 ? this.gridSize : 70;
+
     ring.clear();
     const radius = Math.max(25, (sprite.width || 50) / 2);
+    const worldRadius = radius * sx;
 
     // 1. Filtros visuales (Tono, saturación y brillo)
     if (entity.filters) {
@@ -272,8 +286,10 @@ export class TokensLayer extends Container {
     // 2. Si es token, dibujar anillo según bando
     if (entity.type === 'token') {
       const sideColor = this.getSideColor(entity.side);
-      ring.circle(0, 0, radius + 2);
-      ring.stroke({ width: 3, color: sideColor, alpha: 0.9 });
+      const sideStroke = Math.max(1.5, (3 / cameraZoom) * invSx);
+      const sideOffset = (2 / cameraZoom) * invSx;
+      ring.circle(0, 0, radius + sideOffset);
+      ring.stroke({ width: sideStroke, color: sideColor, alpha: 0.9 });
     }
 
     // 3. Gestión de estados para tokens (borde rojo sutil y badges apilados)
@@ -290,22 +306,37 @@ export class TokensLayer extends Container {
       const visibleStatuses = allStatuses.filter((s) => !isPlayerView || s.visibleToPlayers !== false);
 
       if (visibleStatuses.length > 0) {
-        // Borde rojo sutil alrededor del token
-        ring.circle(0, 0, radius + 3.5);
-        ring.stroke({ width: 2, color: 0xef4444, alpha: 0.85 });
+        // Borde rojo sutil alrededor del token (~3px en pantalla, independiente de la escala del token)
+        const redStroke = Math.max(1.5, (3 / cameraZoom) * invSx);
+        const redOffset = (3.5 / cameraZoom) * invSx;
+        ring.circle(0, 0, radius + redOffset);
+        ring.stroke({ width: redStroke, color: 0xef4444, alpha: 0.9 });
       }
 
       statusesContainer.removeChildren();
       if (visibleStatuses.length > 0) {
         statusesContainer.visible = true;
         statusesContainer.rotation = -entity.rotation;
-        statusesContainer.scale.x = entity.scaleX < 0 ? -1 : 1;
-        statusesContainer.scale.y = entity.scaleY < 0 ? -1 : 1;
+        statusesContainer.scale.x = (entity.scaleX < 0 ? -1 : 1) * invSx;
+        statusesContainer.scale.y = (entity.scaleY < 0 ? -1 : 1) * invSy;
 
-        const badgeSpacing = 18;
-        const totalHeight = visibleStatuses.length * badgeSpacing;
+        // Situar el contenedor a la derecha del token en el espacio del mundo
+        const gap = Math.max(6, 8 / cameraZoom);
+        const worldDx = worldRadius + gap;
+        const rot = entity.rotation;
+        const cosR = Math.cos(rot);
+        const sinR = Math.sin(rot);
+        statusesContainer.x = (worldDx * cosR) / entity.scaleX;
+        statusesContainer.y = (-worldDx * sinR) / entity.scaleY;
+
+        // Altura de texto: ~0.22 * gridSize (mínimo 12 px en pantalla)
+        const targetTextHeight = Math.max(12 / cameraZoom, 0.22 * gridSize);
+        const fontSize = Math.round(targetTextHeight);
+        const pillH = Math.round(fontSize * 1.45);
+        const pillPadX = Math.round(fontSize * 0.45);
+        const badgeSpacing = pillH + Math.max(3, Math.round(fontSize * 0.2));
+        const totalHeight = visibleStatuses.length * badgeSpacing - Math.max(3, Math.round(fontSize * 0.2));
         const startY = -totalHeight / 2;
-        const startX = radius + 6;
 
         visibleStatuses.forEach((status, idx) => {
           const badgeItem = new Container();
@@ -316,25 +347,25 @@ export class TokensLayer extends Container {
             text: labelStr,
             style: new TextStyle({
               fontFamily: 'system-ui, -apple-system, sans-serif',
-              fontSize: 10,
+              fontSize,
               fontWeight: 'bold',
               fill: '#ffffff'
             })
           });
 
-          const pillW = Math.max(46, t.width + 10);
-          const pillH = 16;
+          const pillW = Math.round(t.width + pillPadX * 2);
           const bg = new Graphics();
-          bg.roundRect(0, 0, pillW, pillH, 4);
+          const cornerRadius = Math.max(3, Math.round(fontSize * 0.25));
+          bg.roundRect(0, 0, pillW, pillH, cornerRadius);
           bg.fill({ color: 0x1c1917, alpha: 0.88 });
-          bg.stroke({ width: 1, color: 0xef4444, alpha: 0.85 });
+          bg.stroke({ width: Math.max(1, 1.5 / cameraZoom), color: 0xef4444, alpha: 0.85 });
 
           badgeItem.addChild(bg);
-          t.x = 5;
-          t.y = 1;
+          t.x = pillPadX;
+          t.y = Math.round((pillH - t.height) / 2);
           badgeItem.addChild(t);
 
-          badgeItem.x = startX;
+          badgeItem.x = 0;
           badgeItem.y = startY + idx * badgeSpacing;
 
           if (this.isMaster && !isPlayerPreview && !status.visibleToPlayers) {
@@ -353,34 +384,53 @@ export class TokensLayer extends Container {
 
     // Indicador visual de selección en máster
     if (this.isMaster && isSelected) {
-      ring.circle(0, 0, radius + 6);
-      ring.stroke({ width: 2, color: 0x38bdf8, alpha: 0.95 });
+      const selStroke = Math.max(1.5, (2.5 / cameraZoom) * invSx);
+      const selOffset = (6 / cameraZoom) * invSx;
+      ring.circle(0, 0, radius + selOffset);
+      ring.stroke({ width: selStroke, color: 0x38bdf8, alpha: 0.95 });
     }
 
     // Indicador visual de candado (bloqueado) o de oculto en máster
     if (this.isMaster) {
       if (entity.locked) {
-        ring.circle(radius - 5, -radius + 5, 5);
+        const lockR = (5 / cameraZoom) * invSx;
+        const lockOff = (5 / cameraZoom) * invSx;
+        ring.circle(radius - lockOff, -radius + lockOff, lockR);
         ring.fill({ color: 0xff4444, alpha: 1.0 });
-        ring.stroke({ width: 1, color: 0x000000 });
+        ring.stroke({ width: Math.max(1, (1 / cameraZoom) * invSx), color: 0x000000 });
       }
       if (!entity.visibleToPlayers) {
-        ring.circle(0, 0, radius + 1);
-        ring.stroke({ width: 1.5, color: 0x94a3b8, alpha: 0.7 });
+        ring.circle(0, 0, radius + (1 / cameraZoom) * invSx);
+        ring.stroke({ width: Math.max(1, (1.5 / cameraZoom) * invSx), color: 0x94a3b8, alpha: 0.7 });
       }
       if (entity.side === 'jugador' && entity.vision?.active) {
-        ring.circle(-radius + 5, -radius + 5, 4);
+        const visR = (4 / cameraZoom) * invSx;
+        const visOff = (5 / cameraZoom) * invSx;
+        ring.circle(-radius + visOff, -radius + visOff, visR);
         ring.fill({ color: 0x38bdf8 });
-        ring.stroke({ width: 1, color: 0x0284c7 });
+        ring.stroke({ width: Math.max(1, (1 / cameraZoom) * invSx), color: 0x0284c7 });
       }
     }
 
     if (nameText) {
-      nameText.y = radius + 6;
+      nameText.text = entity.name;
       nameText.visible = entity.type === 'token';
       nameText.rotation = -entity.rotation;
-      nameText.scale.x = entity.scaleX < 0 ? -1 : 1;
-      nameText.scale.y = entity.scaleY < 0 ? -1 : 1;
+      nameText.scale.x = (entity.scaleX < 0 ? -1 : 1) * invSx;
+      nameText.scale.y = (entity.scaleY < 0 ? -1 : 1) * invSy;
+
+      // Situar el nombre debajo del token en el espacio del mundo
+      const nameGap = Math.max(5, 6 / cameraZoom);
+      const worldDy = worldRadius + nameGap;
+      const rot = entity.rotation;
+      const cosR = Math.cos(rot);
+      const sinR = Math.sin(rot);
+      nameText.x = (worldDy * sinR) / entity.scaleX;
+      nameText.y = (worldDy * cosR) / entity.scaleY;
+
+      const nameFontSize = Math.max(11 / cameraZoom, 0.18 * gridSize);
+      nameText.style.fontSize = Math.round(nameFontSize);
+      nameText.style.stroke = { color: '#000000', width: Math.max(2, 3 / cameraZoom) };
     }
   }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Eye, EyeOff, Sparkles, Clock, Infinity as InfinityIcon } from 'lucide-react';
+import { X, Plus, Minus, Trash2, Eye, EyeOff, Sparkles, Clock, Infinity as InfinityIcon } from 'lucide-react';
 import { useGameStore } from '../../../stores/useGameStore';
 import { useUIStore } from '../../../stores/useUIStore';
 import { DEFAULT_STATUS_TYPES } from '../../../types/entity';
@@ -102,9 +102,52 @@ export const TokenStatusesModal: React.FC = () => {
                 >
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-white">{st.type}</span>
-                    <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-slate-900 text-amber-300 border border-slate-700">
-                      {st.turnsRemaining !== null ? `${st.turnsRemaining} t.` : '∞'}
-                    </span>
+                    <div className="inline-flex items-center gap-0.5 bg-slate-900 border border-slate-700 rounded p-0.5">
+                      {/* Botón decrementar turnos (elimina si llega a 0) */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (st.turnsRemaining === null) {
+                            updateTokenStatus(token.id, st.id, { turnsRemaining: 1 });
+                          } else if (st.turnsRemaining <= 1) {
+                            removeTokenStatus(token.id, st.id);
+                            addToast(`Estado "${st.type}" eliminado de ${token.name}`, 'info', 1500);
+                          } else {
+                            updateTokenStatus(token.id, st.id, { turnsRemaining: st.turnsRemaining - 1 });
+                          }
+                        }}
+                        className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                        title={st.turnsRemaining === 1 ? 'Reducir a 0 (elimina el estado)' : 'Reducir 1 turno'}
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+
+                      {/* Botón alternar infinito y número */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = st.turnsRemaining === null ? 1 : null;
+                          updateTokenStatus(token.id, st.id, { turnsRemaining: nextVal });
+                        }}
+                        className="text-[11px] font-mono px-1.5 py-0.5 rounded text-amber-300 hover:text-amber-200 hover:bg-slate-800 transition-colors cursor-pointer"
+                        title={st.turnsRemaining === null ? 'Pulsar para asignar turnos (inicia en 1)' : 'Pulsar para duración infinita (∞)'}
+                      >
+                        {st.turnsRemaining !== null ? `${st.turnsRemaining} t.` : '∞'}
+                      </button>
+
+                      {/* Botón incrementar turnos */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = st.turnsRemaining === null ? 1 : st.turnsRemaining + 1;
+                          updateTokenStatus(token.id, st.id, { turnsRemaining: nextVal });
+                        }}
+                        className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                        title="Aumentar 1 turno"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-1.5">
