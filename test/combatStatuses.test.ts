@@ -180,7 +180,7 @@ describe('Token Statuses & Turn Management', () => {
     expect(duplicated?.statuses?.[0].type).toBe('Asustado');
   });
 
-  it('contains the 15 standard D&D condition types in DEFAULT_STATUS_TYPES', () => {
+  it('contains the standard D&D conditions and additional status types in DEFAULT_STATUS_TYPES', () => {
     const expected = [
       'Cegado',
       'Hechizado',
@@ -196,7 +196,12 @@ describe('Token Statuses & Turn Management', () => {
       'Restringido',
       'Aturdido',
       'Inconsciente',
-      'Agotamiento'
+      'Agotamiento',
+      'Congelado',
+      'Quemado',
+      'Sangrando',
+      'Bendecido',
+      'Acelerado'
     ];
     for (const cond of expected) {
       expect(DEFAULT_STATUS_TYPES).toContain(cond);

@@ -17,7 +17,12 @@ export const DEFAULT_STATUS_TYPES = [
   'Restringido',
   'Aturdido',
   'Inconsciente',
-  'Agotamiento'
+  'Agotamiento',
+  'Congelado',
+  'Quemado',
+  'Sangrando',
+  'Bendecido',
+  'Acelerado'
 ] as const;
 
 export type DefaultStatusType = (typeof DEFAULT_STATUS_TYPES)[number];
