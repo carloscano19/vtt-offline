@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, EyeOff, Lock, Unlock, Copy, Trash2, Sparkles } from 'lucide-react';
+import { Eye, EyeOff, Lock, Unlock, Copy, Trash2, Sparkles, FlipHorizontal, FlipVertical } from 'lucide-react';
 import { useGameStore } from '../../../stores/useGameStore';
 import { useUIStore } from '../../../stores/useUIStore';
 import { worldToScreen, localToWorld } from '../../../pixi/utils/coordinates';
@@ -156,6 +156,16 @@ export const FastActionBar: React.FC<FastActionBarProps> = ({
     }
   };
 
+  const handleFlipHorizontal = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    useGameStore.getState().flipEntitiesHorizontal([entity.id]);
+  };
+
+  const handleFlipVertical = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    useGameStore.getState().flipEntitiesVertical([entity.id]);
+  };
+
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     removeEntities([entity.id]);
@@ -216,6 +226,26 @@ export const FastActionBar: React.FC<FastActionBarProps> = ({
         title="Duplicar entidad"
       >
         <Copy className="w-4 h-4" />
+      </button>
+
+      {/* Botón Voltear horizontal */}
+      <button
+        type="button"
+        onClick={handleFlipHorizontal}
+        className="p-1.5 rounded-md text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+        title="Voltear horizontal (espejo izquierda-derecha) [F]"
+      >
+        <FlipHorizontal className="w-4 h-4" />
+      </button>
+
+      {/* Botón Voltear vertical */}
+      <button
+        type="button"
+        onClick={handleFlipVertical}
+        className="p-1.5 rounded-md text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+        title="Voltear vertical (espejo arriba-abajo) [Shift+F]"
+      >
+        <FlipVertical className="w-4 h-4" />
       </button>
 
       {/* Botón Borrar */}

@@ -63,6 +63,19 @@ export function useKeyboardShortcuts() {
         redo();
         return;
       }
+
+      // 6. Volteo horizontal (F) y vertical (Shift+F)
+      if ((e.key === 'f' || e.key === 'F') && !isInput && !isCtrlOrCmd) {
+        if (selectedEntityIds.length > 0) {
+          e.preventDefault();
+          if (e.shiftKey) {
+            useGameStore.getState().flipEntitiesVertical(selectedEntityIds);
+          } else {
+            useGameStore.getState().flipEntitiesHorizontal(selectedEntityIds);
+          }
+        }
+        return;
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);

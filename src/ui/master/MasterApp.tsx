@@ -78,7 +78,7 @@ export const MasterApp: React.FC = () => {
       ) {
         return;
       }
-      if (e.key === 'f' || e.key === 'F') {
+      if ((e.key === 'p' || e.key === 'P') && e.shiftKey) {
         setShowFps((prev) => !prev);
       }
     };

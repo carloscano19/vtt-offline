@@ -139,6 +139,8 @@ interface GameStoreState {
   toggleEntityLock: (id: string) => void;
   toggleEntityVisibility: (id: string) => void;
   reorderEntity: (id: string, toIndex: number) => void;
+  flipEntitiesHorizontal: (ids: string[]) => void;
+  flipEntitiesVertical: (ids: string[]) => void;
 
   // Cámaras
   setMasterCamera: (camera: Partial<CameraState>) => void;
@@ -410,6 +412,46 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       return {
         game: { ...state.game, entities: newEntities, updatedAt: Date.now() },
         past: [...state.past, state.game.entities],
+        future: []
+      };
+    });
+  },
+
+  flipEntitiesHorizontal: (ids) => {
+    if (ids.length === 0) return;
+    set((state) => {
+      const idSet = new Set(ids);
+      const past = [...state.past, state.game.entities];
+      const entities = state.game.entities.map((ent) => {
+        if (!idSet.has(ent.id) || ent.type === 'wall') return ent;
+        const currentScaleX = ent.scaleX ?? 1;
+        return { ...ent, scaleX: -currentScaleX };
+      });
+      const updatedGame = { ...state.game, entities, updatedAt: Date.now() };
+      syncChannel.sendState(updatedGame, true);
+      return {
+        game: updatedGame,
+        past,
+        future: []
+      };
+    });
+  },
+
+  flipEntitiesVertical: (ids) => {
+    if (ids.length === 0) return;
+    set((state) => {
+      const idSet = new Set(ids);
+      const past = [...state.past, state.game.entities];
+      const entities = state.game.entities.map((ent) => {
+        if (!idSet.has(ent.id) || ent.type === 'wall') return ent;
+        const currentScaleY = ent.scaleY ?? 1;
+        return { ...ent, scaleY: -currentScaleY };
+      });
+      const updatedGame = { ...state.game, entities, updatedAt: Date.now() };
+      syncChannel.sendState(updatedGame, true);
+      return {
+        game: updatedGame,
+        past,
         future: []
       };
     });

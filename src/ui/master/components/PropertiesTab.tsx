@@ -19,7 +19,9 @@ import {
   Pipette,
   RotateCw,
   RefreshCcw,
-  Sparkles
+  Sparkles,
+  FlipHorizontal,
+  FlipVertical
 } from 'lucide-react';
 import { TokenSide, recalculateDoorEndpoints, getDefaultSnapToGrid } from '../../../types/entity';
 import { getAsset, db } from '../../../db/dexie';
@@ -477,7 +479,27 @@ export const PropertiesTab: React.FC = () => {
 
       {/* Rotación y Escala */}
       <div className="space-y-1.5">
-        <label className="text-slate-400 font-medium">Rotación ({degrees}°)</label>
+        <div className="flex items-center justify-between">
+          <label className="text-slate-400 font-medium">Rotación ({degrees}°)</label>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => useGameStore.getState().flipEntitiesHorizontal([selectedEntity.id])}
+              title="Voltear horizontal (espejo izquierda-derecha) [F]"
+              className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors"
+            >
+              <FlipHorizontal className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => useGameStore.getState().flipEntitiesVertical([selectedEntity.id])}
+              title="Voltear vertical (espejo arriba-abajo) [Shift+F]"
+              className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors"
+            >
+              <FlipVertical className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
         <input
           type="range"
           min="0"
@@ -1176,16 +1198,18 @@ export const PropertiesTab: React.FC = () => {
                   { label: '3x3', val: 3 }
                 ].map((sz) => {
                   const targetScale = getScaleForCells(sz.val);
-                  const isCurrent = Math.abs(selectedEntity.scaleX - targetScale) < 0.05;
+                  const isCurrent = Math.abs(Math.abs(selectedEntity.scaleX) - targetScale) < 0.05;
 
                   return (
                     <button
                       key={sz.val}
                       type="button"
                       onClick={() => {
+                        const signX = Math.sign(selectedEntity.scaleX || 1) || 1;
+                        const signY = Math.sign(selectedEntity.scaleY || 1) || 1;
                         const upd: any = {
-                          scaleX: targetScale,
-                          scaleY: targetScale
+                          scaleX: targetScale * signX,
+                          scaleY: targetScale * signY
                         };
                         if (selectedEntity.effect?.emitsLight && selectedEntity.light) {
                           upd.light = {
@@ -1222,7 +1246,7 @@ export const PropertiesTab: React.FC = () => {
                 checked={selectedEntity.effect.emitsLight}
                 onChange={(e) => {
                   const emits = e.target.checked;
-                  const scale = Math.max(selectedEntity.scaleX || 1, selectedEntity.scaleY || 1);
+                  const scale = Math.max(Math.abs(selectedEntity.scaleX || 1), Math.abs(selectedEntity.scaleY || 1));
                   const isFireOrTorch =
                     selectedEntity.effect?.preset === 'torch' ||
                     selectedEntity.effect?.preset === 'campfire' ||
@@ -1263,7 +1287,7 @@ export const PropertiesTab: React.FC = () => {
                       value={selectedEntity.effect.baseLightRadius}
                       onChange={(e) => {
                         const newRad = Math.max(1, parseInt(e.target.value) || 1);
-                        const scale = Math.max(selectedEntity.scaleX || 1, selectedEntity.scaleY || 1);
+                        const scale = Math.max(Math.abs(selectedEntity.scaleX || 1), Math.abs(selectedEntity.scaleY || 1));
                         handleUpdate({
                           effect: { ...selectedEntity.effect!, baseLightRadius: newRad },
                           light: {
@@ -1294,6 +1318,7 @@ export const PropertiesTab: React.FC = () => {
                       value={selectedEntity.light?.dimRadiusInSquares ?? 2}
                       onChange={(e) => {
                         const newDim = Math.max(0, parseInt(e.target.value) || 0);
+                        const scale = Math.max(Math.abs(selectedEntity.scaleX || 1), Math.abs(selectedEntity.scaleY || 1));
                         handleUpdate({
                           light: {
                             ...(selectedEntity.light || {
@@ -1301,7 +1326,7 @@ export const PropertiesTab: React.FC = () => {
                               intensity: selectedEntity.effect!.intensity,
                               edgeHardness: 0.5,
                               flicker: true,
-                              brightRadiusInSquares: (selectedEntity.effect?.baseLightRadius || 3) * Math.max(selectedEntity.scaleX || 1, selectedEntity.scaleY || 1)
+                              brightRadiusInSquares: (selectedEntity.effect?.baseLightRadius || 3) * scale
                             }),
                             dimRadiusInSquares: newDim
                           }
@@ -1318,13 +1343,14 @@ export const PropertiesTab: React.FC = () => {
                     type="checkbox"
                     checked={selectedEntity.light?.flicker ?? true}
                     onChange={(e) => {
+                      const scale = Math.max(Math.abs(selectedEntity.scaleX || 1), Math.abs(selectedEntity.scaleY || 1));
                       handleUpdate({
                         light: {
                           ...(selectedEntity.light || {
                             color: selectedEntity.effect!.color,
                             intensity: selectedEntity.effect!.intensity,
                             edgeHardness: 0.5,
-                            brightRadiusInSquares: (selectedEntity.effect?.baseLightRadius || 3) * Math.max(selectedEntity.scaleX || 1, selectedEntity.scaleY || 1),
+                            brightRadiusInSquares: (selectedEntity.effect?.baseLightRadius || 3) * scale,
                             dimRadiusInSquares: 2
                           }),
                           flicker: e.target.checked
@@ -1346,21 +1372,22 @@ export const PropertiesTab: React.FC = () => {
                   <div className="grid grid-cols-2 gap-1.5 mb-2">
                     <button
                       type="button"
-                      onClick={() =>
+                      onClick={() => {
+                        const scale = Math.max(Math.abs(selectedEntity.scaleX || 1), Math.abs(selectedEntity.scaleY || 1));
                         handleUpdate({
                           light: {
                             ...(selectedEntity.light || {
                               color: selectedEntity.effect!.color,
                               intensity: selectedEntity.effect!.intensity,
                               edgeHardness: 0.5,
-                              brightRadiusInSquares: (selectedEntity.effect?.baseLightRadius || 3) * Math.max(selectedEntity.scaleX || 1, selectedEntity.scaleY || 1),
+                              brightRadiusInSquares: (selectedEntity.effect?.baseLightRadius || 3) * scale,
                               dimRadiusInSquares: 2,
                               flicker: true
                             }),
                             shape: 'circle'
                           }
-                        })
-                      }
+                        });
+                      }}
                       className={`py-1 text-xs rounded font-medium border transition-colors ${
                         (selectedEntity.light?.shape ?? 'circle') === 'circle'
                           ? 'bg-amber-950/80 border-amber-500 text-amber-300'
@@ -1371,14 +1398,15 @@ export const PropertiesTab: React.FC = () => {
                     </button>
                     <button
                       type="button"
-                      onClick={() =>
+                      onClick={() => {
+                        const scale = Math.max(Math.abs(selectedEntity.scaleX || 1), Math.abs(selectedEntity.scaleY || 1));
                         handleUpdate({
                           light: {
                             ...(selectedEntity.light || {
                               color: selectedEntity.effect!.color,
                               intensity: selectedEntity.effect!.intensity,
                               edgeHardness: 0.5,
-                              brightRadiusInSquares: (selectedEntity.effect?.baseLightRadius || 3) * Math.max(selectedEntity.scaleX || 1, selectedEntity.scaleY || 1),
+                              brightRadiusInSquares: (selectedEntity.effect?.baseLightRadius || 3) * scale,
                               dimRadiusInSquares: 2,
                               flicker: true
                             }),
@@ -1386,8 +1414,8 @@ export const PropertiesTab: React.FC = () => {
                             coneAngle: selectedEntity.light?.coneAngle ?? 60,
                             directionOffset: selectedEntity.light?.directionOffset ?? 0
                           }
-                        })
-                      }
+                        });
+                      }}
                       className={`py-1 text-xs rounded font-medium border transition-colors ${
                         selectedEntity.light?.shape === 'cone'
                           ? 'bg-amber-950/80 border-amber-500 text-amber-300'
