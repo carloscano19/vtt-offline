@@ -17,6 +17,7 @@ import { revealRect, hideRect } from '../modules/vision/fogMemory';
 import { normalizeEntity, normalizeGameState } from '../modules/persistence/normalizer';
 import { fitMapInViewport } from '../modules/camera/cameraUtils';
 import { syncChannel } from '../modules/sync/syncChannel';
+import { useUIStore } from './useUIStore';
 
 /**
  * Reescala proporcionalmente las entidades existentes cuando cambia el tamaño de la cuadrícula.
@@ -340,12 +341,31 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       const past = [...state.past, state.game.entities];
       const entities = state.game.entities.filter((ent) => !idSet.has(ent.id));
 
+      const updatedGame = {
+        ...state.game,
+        entities,
+        updatedAt: Date.now()
+      };
+
+      // Limpiar selección y estado de edición en la UI si corresponde
+      try {
+        const ui = useUIStore.getState();
+        if (ui.selectedEntityIds.some((id) => idSet.has(id))) {
+          ui.setSelectedEntityIds(ui.selectedEntityIds.filter((id) => !idSet.has(id)));
+        }
+        if (ui.editingTokenStatusesId && idSet.has(ui.editingTokenStatusesId)) {
+          ui.setEditingTokenStatusesId(null);
+        }
+      } catch {
+        // Ignorar si se ejecuta fuera de entorno React/Zustand
+      }
+
+      // Cancelar cualquier arrastre y forzar sincronización inmediata con la tele
+      syncChannel.setDraggingActive(false);
+      syncChannel.sendState(updatedGame, true);
+
       return {
-        game: {
-          ...state.game,
-          entities,
-          updatedAt: Date.now()
-        },
+        game: updatedGame,
         past,
         future: []
       };

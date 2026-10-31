@@ -111,6 +111,8 @@ export const PlayersApp: React.FC = () => {
 
     // 1b. Recibir sincronización ligera de movimiento durante arrastre
     const cleanupEntityPos = syncChannel.onEntityPos(({ id, x, y }) => {
+      const exists = useGameStore.getState().game.entities.some((ent) => ent.id === id);
+      if (!exists) return;
       useGameStore.getState().updateEntity(id, { x, y }, false);
     });
 

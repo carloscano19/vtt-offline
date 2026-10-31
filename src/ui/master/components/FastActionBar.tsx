@@ -159,6 +159,7 @@ export const FastActionBar: React.FC<FastActionBarProps> = ({
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     removeEntities([entity.id]);
+    useUIStore.getState().clearSelection();
   };
 
   const handleOpenStatuses = (e: React.MouseEvent) => {

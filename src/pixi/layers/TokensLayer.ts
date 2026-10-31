@@ -24,6 +24,7 @@ export class TokensLayer extends Container {
   private isMaster: boolean;
   private containerMap: Map<string, Container> = new Map();
   private fadeMap = new Map<string, { current: number; target: number }>();
+  private currentEntityIds = new Set<string>();
   private animTime = 0;
   private gridSize = 70;
   private cameraZoom = 1.0;
@@ -47,6 +48,20 @@ export class TokensLayer extends Container {
           container.visible = fade.current > 0.001;
         }
       }
+
+      // Si ha terminado de desvanecerse (fade.target === 0 y fade.current <= 0.001) y la entidad ya no existe
+      if (fade.target === 0.0 && fade.current <= 0.001) {
+        if (!this.currentEntityIds.has(id)) {
+          const container = this.containerMap.get(id);
+          if (container) {
+            videoManager.unregisterActiveEntityVideo(id);
+            this.removeChild(container);
+            container.destroy({ children: true });
+            this.containerMap.delete(id);
+          }
+          this.fadeMap.delete(id);
+        }
+      }
     }
   }
 
@@ -63,6 +78,7 @@ export class TokensLayer extends Container {
     this.cameraZoom = cameraZoom > 0 ? cameraZoom : 1.0;
     const tokenEntities = entities.filter((e) => e.type === 'token' || e.type === 'object');
     const currentIds = new Set<string>();
+    this.currentEntityIds = currentIds;
 
     const evaluatePlayerVisibility = !this.isMaster || (this.isMaster && isPlayerPreview);
 
@@ -227,9 +243,17 @@ export class TokensLayer extends Container {
     // Eliminar entidades que ya no existan o se hayan ocultado completamente
     for (const [id, container] of this.containerMap.entries()) {
       if (!currentIds.has(id)) {
-        const fade = this.fadeMap.get(id);
-        if (!this.isMaster && fade && fade.current > 0.001) {
-          continue; // Mantener contenedor visible mientras se desvanece
+        let fade = this.fadeMap.get(id);
+        if (!this.isMaster) {
+          if (!fade) {
+            fade = { current: 1.0, target: 0.0 };
+            this.fadeMap.set(id, fade);
+          } else {
+            fade.target = 0.0;
+          }
+          if (fade.current > 0.001) {
+            continue; // Mantener contenedor visible mientras se desvanece
+          }
         }
         videoManager.unregisterActiveEntityVideo(id);
         this.removeChild(container);
