@@ -597,7 +597,7 @@ describe('Asset download reactive reload and video management', () => {
     unsub();
   });
 
-  it('GizmoLayer eye button always calculates screen top-right regardless of entity rotation', () => {
+  it('GizmoLayer gets local bounds cleanly for entities without loose eye button', () => {
     const gizmo = new GizmoLayer(true);
     // 1. Horizontal token at (100, 100), size 70x70, rot 0
     const horizontalToken: Entity = {
@@ -614,41 +614,11 @@ describe('Asset download reactive reload and video management', () => {
       locked: false
     };
     gizmo.update([horizontalToken], [horizontalToken], 1, 70);
-    const posH = gizmo.getEyeButtonWorldPos(horizontalToken);
-    // Right edge is 100 + 35 = 135; with offset 14 => x = 149
-    // Top edge is 100 - 35 = 65; with offset 14 => y = 51
-    expect(posH.x).toBeCloseTo(149, 1);
-    expect(posH.y).toBeCloseTo(51, 1);
-
-    // 2. Vertical door: rotation Math.PI / 2 (90 degrees), length 70
-    // Center at (200, 200). Local bounds: [-35, -5, 70, 10]
-    const verticalDoor: Entity = {
-      id: 'door_v',
-      type: 'door',
-      name: 'Puerta Vertical',
-      x: 200,
-      y: 200,
-      rotation: Math.PI / 2,
-      scaleX: 1,
-      scaleY: 1,
-      zIndex: 40,
-      visibleToPlayers: true,
-      locked: false,
-      door: {
-        isOpen: false,
-        isLocked: false,
-        length: 70,
-        p1: { x: 200, y: 165 },
-        p2: { x: 200, y: 235 },
-        openAngle: Math.PI / 2
-      }
-    };
-    gizmo.update([verticalDoor], [verticalDoor], 1, 70);
-    const posV = gizmo.getEyeButtonWorldPos(verticalDoor);
-    // En pantalla, la esquina superior derecha del recuadro envolvente:
-    // x debe ser mayor que el centro (200) y y debe ser menor que el extremo superior (165)
-    expect(posV.x).toBeGreaterThan(200);
-    expect(posV.y).toBeLessThan(165);
+    const bounds = gizmo.getEntityLocalBounds(horizontalToken);
+    expect(bounds.width).toBe(70);
+    expect(bounds.height).toBe(70);
+    expect(bounds.offsetX).toBe(-35);
+    expect(bounds.offsetY).toBe(-35);
   });
 
   it('generates cached radial gradient textures without errors', () => {

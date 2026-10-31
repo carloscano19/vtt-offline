@@ -15,7 +15,6 @@ export type TransformHandleType = 'rotate' | 'scale-tl' | 'scale-tr' | 'scale-br
 export class GizmoLayer extends Container {
   private graphics: Graphics;
   private coneGfx: Graphics;
-  private eyeGfx: Graphics;
   private isMaster: boolean;
   private tokensLayer?: any;
   private effectsLayer?: any;
@@ -27,10 +26,8 @@ export class GizmoLayer extends Container {
     this.isMaster = isMaster;
     this.coneGfx = new Graphics();
     this.graphics = new Graphics();
-    this.eyeGfx = new Graphics();
     this.addChild(this.coneGfx);
     this.addChild(this.graphics);
-    this.addChild(this.eyeGfx);
   }
 
   public setTokensLayer(layer: any) {
@@ -46,7 +43,6 @@ export class GizmoLayer extends Container {
   public update(selectedEntities: Entity[], allEntities: Entity[] = [], cameraZoom: number = 1, gridSize: number = 70) {
     this.coneGfx.clear();
     this.graphics.clear();
-    this.eyeGfx.clear();
     this.allEntities = allEntities;
     this.cameraZoom = Math.max(0.05, cameraZoom || 1);
     this.gridSize = Math.max(20, gridSize || 70);
@@ -279,9 +275,6 @@ export class GizmoLayer extends Container {
       this.graphics.fill({ color: 0xffffff });
       this.graphics.stroke({ width: cornerStroke, color: 0x0284c7 });
     }
-
-    // Botón de visibilidad (ojo) en la esquina superior derecha en pantalla
-    this.drawEyeButton(entity);
   }
 
   private drawLockedOutline(entity: Entity) {
@@ -316,98 +309,5 @@ export class GizmoLayer extends Container {
     const lockedStroke = 2 / (zoom * sx);
     this.graphics.rect(bounds.offsetX, bounds.offsetY, bounds.width, bounds.height);
     this.graphics.stroke({ width: lockedStroke, color: 0xef4444, alpha: 0.75 });
-
-    // Botón de visibilidad (ojo) también en entidades bloqueadas seleccionadas
-    this.drawEyeButton(entity);
-  }
-
-  private drawEyeButton(entity: Entity) {
-    const { x: cx, y: cy } = this.getEyeButtonWorldPos(entity);
-    const zoom = this.cameraZoom;
-    const r = 11 / zoom;
-    const strokeW = 1.5 / zoom;
-    const isVisible = entity.visibleToPlayers !== false;
-
-    // Fondo del botón
-    this.eyeGfx.circle(cx, cy, r);
-    this.eyeGfx.fill({ color: 0x0f172a, alpha: 0.95 });
-    this.eyeGfx.stroke({ width: strokeW, color: isVisible ? 0x38bdf8 : 0xef4444 });
-
-    // Icono del ojo (siempre derecho y horizontal)
-    const eyeW = r * 0.65;
-    const eyeH = r * 0.42;
-    const iconStroke = 1.2 / zoom;
-
-    // Contorno del ojo (dos curvas suaves horizontales)
-    this.eyeGfx.moveTo(cx - eyeW, cy);
-    this.eyeGfx.quadraticCurveTo(cx, cy - eyeH, cx + eyeW, cy);
-    this.eyeGfx.quadraticCurveTo(cx, cy + eyeH, cx - eyeW, cy);
-    this.eyeGfx.stroke({ width: iconStroke, color: isVisible ? 0xffffff : 0x94a3b8 });
-
-    // Pupila central
-    this.eyeGfx.circle(cx, cy, r * 0.22);
-    this.eyeGfx.fill({ color: isVisible ? 0x38bdf8 : 0x94a3b8 });
-
-    // Si está oculto, dibujar línea diagonal tachada
-    if (!isVisible) {
-      const slash = r * 0.65;
-      this.eyeGfx.moveTo(cx - slash, cy - slash);
-      this.eyeGfx.lineTo(cx + slash, cy + slash);
-      this.eyeGfx.stroke({ width: 1.5 / zoom, color: 0xef4444 });
-    }
-  }
-
-  public getEyeButtonWorldPos(entity: Entity): { x: number; y: number } {
-    const bounds = this.getEntityLocalBounds(entity);
-    const zoom = this.cameraZoom;
-
-    let posX = entity.x;
-    let posY = entity.y;
-    let rotation = entity.rotation;
-
-    if (entity.type === 'door' && entity.mapId && this.allEntities.length > 0) {
-      const parentMap = this.allEntities.find((e) => e.id === entity.mapId);
-      if (parentMap) {
-        const wp = localToWorld(
-          { x: entity.x, y: entity.y },
-          { x: parentMap.x, y: parentMap.y },
-          parentMap.rotation,
-          parentMap.scaleX,
-          parentMap.scaleY
-        );
-        posX = wp.x;
-        posY = wp.y;
-        rotation = entity.rotation + parentMap.rotation;
-      }
-    }
-
-    const { offsetX, offsetY, width, height } = bounds;
-    const localCorners = [
-      { x: offsetX, y: offsetY },
-      { x: offsetX + width, y: offsetY },
-      { x: offsetX + width, y: offsetY + height },
-      { x: offsetX, y: offsetY + height }
-    ];
-
-    const cosR = Math.cos(rotation);
-    const sinR = Math.sin(rotation);
-    const scX = entity.scaleX || 1;
-    const scY = entity.scaleY || 1;
-
-    let maxX = -Infinity;
-    let minY = Infinity;
-
-    for (const c of localCorners) {
-      const wx = posX + (c.x * scX * cosR - c.y * scY * sinR);
-      const wy = posY + (c.x * scX * sinR + c.y * scY * cosR);
-      if (wx > maxX) maxX = wx;
-      if (wy < minY) minY = wy;
-    }
-
-    const eyeBtnOffsetScreen = 14;
-    return {
-      x: maxX + eyeBtnOffsetScreen / zoom,
-      y: minY - eyeBtnOffsetScreen / zoom
-    };
   }
 }
