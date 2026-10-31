@@ -93,9 +93,9 @@ function createDefaultGame(): GameState {
     },
     playerViewport: { width: 1920, height: 1080 },
     ambient: {
-      preset: 'noon',
-      color: '#ffffff',
-      intensity: 1.0
+      preset: 'dusk',
+      color: '#c84224',
+      intensity: 35
     },
     weather: {
       rain: { enabled: false, intensity: 50, direction: 90 },
@@ -607,13 +607,15 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
   },
 
   setAmbientConfig: (partial) => {
-    set((state) => ({
-      game: {
+    set((state) => {
+      const updatedGame: GameState = {
         ...state.game,
         ambient: { ...state.game.ambient, ...partial },
         updatedAt: Date.now()
-      }
-    }));
+      };
+      syncChannel.sendState(updatedGame, true);
+      return { game: updatedGame };
+    });
   },
 
   setWeatherConfig: (partial) => {

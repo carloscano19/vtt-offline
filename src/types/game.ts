@@ -53,7 +53,7 @@ export type AmbientPreset = 'dawn' | 'noon' | 'dusk' | 'night' | 'custom';
 export interface AmbientConfig {
   preset: AmbientPreset;
   color: string; // Hex color
-  intensity: number; // 0.0 a 1.0 (1.0 = neutral/sin oscuridad)
+  intensity: number; // 0 a 100 (% de oscuridad: 0% = pleno día, 100% = noche cerrada)
 }
 
 export interface WeatherConfig {

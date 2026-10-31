@@ -332,9 +332,9 @@ export function normalizeGameState(game: GameState): GameState {
         ...game.ambient,
         color: colorToHex(parseColor(game.ambient.color, 0xffffff).rgb)
       } : {
-        preset: 'noon',
-        color: '#ffffff',
-        intensity: 1.0
+        preset: 'dusk',
+        color: '#c84224',
+        intensity: 35
       },
       grid: game.grid ? {
         ...game.grid,

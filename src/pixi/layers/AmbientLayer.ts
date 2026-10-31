@@ -8,11 +8,11 @@ import { getDimRadialGradientTexture, getTintRadialGradientTexture, getConeTintG
 import { DarknessInvertFilter } from '../filters/DarknessInvertFilter';
 
 export const AMBIENT_PRESET_CONFIGS: Record<string, { color: string; intensity: number }> = {
-  dawn: { color: '#ff9d55', intensity: 0.80 },
-  noon: { color: '#ffffff', intensity: 1.00 },
-  dusk: { color: '#c84224', intensity: 0.65 },
-  night: { color: '#091124', intensity: 0.15 },
-  custom: { color: '#ffffff', intensity: 1.00 }
+  dawn: { color: '#ff9d55', intensity: 20 },
+  noon: { color: '#ffffff', intensity: 0 },
+  dusk: { color: '#c84224', intensity: 35 },
+  night: { color: '#091124', intensity: 85 },
+  custom: { color: '#c84224', intensity: 35 }
 };
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
@@ -47,16 +47,16 @@ export class AmbientLayer extends Container {
   private tintDimSpritesContainer = new Container();
   private tintDimSprites: Sprite[] = [];
 
-  // Estado para la transición suave de 2 segundos
-  private currentR = 255;
-  private currentG = 255;
-  private currentB = 255;
-  private currentIntensity = 1.0;
+  // Estado para la transición suave
+  private currentR = 200;
+  private currentG = 66;
+  private currentB = 36;
+  private currentDarkness = 0.35;
 
-  private targetR = 255;
-  private targetG = 255;
-  private targetB = 255;
-  private targetIntensity = 1.0;
+  private targetR = 200;
+  private targetG = 66;
+  private targetB = 36;
+  private targetDarkness = 0.35;
 
   private lastGeometryKey = '';
   private cachedRegions: {
@@ -124,25 +124,28 @@ export class AmbientLayer extends Container {
     this.timeSec += deltaSeconds;
 
     // 1. Determinar valores objetivo según preset o personalizado
-    const preset = ambientConfig?.preset || 'noon';
-    const presetData = AMBIENT_PRESET_CONFIGS[preset] || AMBIENT_PRESET_CONFIGS.noon;
-    const targetColorStr = preset === 'custom' ? ambientConfig.color || '#ffffff' : presetData.color;
-    const targetTargetIntensity = preset === 'custom' ? (ambientConfig.intensity ?? 1.0) : presetData.intensity;
+    const preset = ambientConfig?.preset || 'dusk';
+    const presetData = AMBIENT_PRESET_CONFIGS[preset] || AMBIENT_PRESET_CONFIGS.dusk;
+    const targetColorStr = ambientConfig?.color || presetData.color;
+    const rawIntensity = preset === 'custom'
+      ? (typeof ambientConfig?.intensity === 'number' ? ambientConfig.intensity : presetData.intensity)
+      : presetData.intensity;
+    // Si intensity viniera en formato legacy <= 1.0 (ej. 0.35 o 0.85):
+    const targetDarkness = (rawIntensity > 1.0 ? rawIntensity : rawIntensity * 100) / 100;
 
     const targetRgb = hexToRgb(targetColorStr);
     this.targetR = targetRgb.r;
     this.targetG = targetRgb.g;
     this.targetB = targetRgb.b;
-    this.targetIntensity = targetTargetIntensity;
+    this.targetDarkness = Math.max(0, Math.min(1.0, targetDarkness));
 
-    // 2. Interpolar suavemente durante 2 segundos (tasa dt / 2.0)
-    const factor = Math.min(1.0, deltaSeconds / 2.0);
+    // 2. Interpolar suavemente (2s para presets, 0.2s para ajustes manuales en custom)
+    const transitionDuration = preset === 'custom' ? 0.2 : 2.0;
+    const factor = Math.min(1.0, deltaSeconds / transitionDuration);
     this.currentR += (this.targetR - this.currentR) * factor;
     this.currentG += (this.targetG - this.currentG) * factor;
     this.currentB += (this.targetB - this.currentB) * factor;
-    this.currentIntensity += (this.targetIntensity - this.currentIntensity) * factor;
-
-    const currentDarkness = Math.max(0, 1.0 - this.currentIntensity);
+    this.currentDarkness += (this.targetDarkness - this.currentDarkness) * factor;
 
     // 3. Clave para invalidar cálculo de polígonos (solo si cambian luces o bounds)
     const bx = Number.isFinite(bounds.x) ? Math.round(bounds.x) : -2000;
@@ -279,10 +282,13 @@ export class AmbientLayer extends Container {
     }
 
     // 6. Animación ligera por fotograma: ÚNICAMENTE actualizar alfas, tintes y parpadeo (sin tocar geometría ni máscaras)
-    const darkColorHex = rgbToHex(this.currentR * 0.15, this.currentG * 0.15, this.currentB * 0.25);
-    const darknessAlpha = currentDarkness * 0.95;
+    const tintR = Math.round(this.currentR * 0.22);
+    const tintG = Math.round(this.currentG * 0.22);
+    const tintB = Math.round(this.currentB * 0.22);
+    const darkColorHex = rgbToHex(tintR, tintG, tintB);
+    const darknessAlpha = this.currentDarkness * 0.95;
 
-    if (currentDarkness > 0.01) {
+    if (this.currentDarkness > 0.005) {
       this.darknessGfx.visible = true;
       this.darknessGfx.tint = darkColorHex;
       this.darknessGfx.alpha = darknessAlpha;
@@ -290,9 +296,9 @@ export class AmbientLayer extends Container {
       this.dimContainer.visible = true;
       if (this.darknessFilter) {
         this.darknessFilter.setDarknessColor(
-          (this.currentR * 0.15) / 255,
-          (this.currentG * 0.15) / 255,
-          (this.currentB * 0.25) / 255
+          tintR / 255,
+          tintG / 255,
+          tintB / 255
         );
         this.darknessFilter.setDarknessAlpha(darknessAlpha);
       } else {
@@ -309,7 +315,7 @@ export class AmbientLayer extends Container {
     }
 
     // Modular tinte de luces según oscuridad ambiental, parpadeo de antorchas y fundido de 0.6s
-    const darknessFactor = 0.05 + 0.95 * Math.pow(Math.min(1.0, currentDarkness / 0.85), 1.5);
+    const darknessFactor = 0.05 + 0.95 * Math.pow(Math.min(1.0, this.currentDarkness / 0.85), 1.5);
 
     let activeTintIdx = 0;
     let activeDimIdx = 0;

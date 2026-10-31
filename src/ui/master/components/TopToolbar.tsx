@@ -765,10 +765,10 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
               <div className="font-semibold text-slate-300 border-b border-slate-800 pb-1">Luz ambiental global</div>
               <div className="grid grid-cols-2 gap-1.5">
                 {[
-                  { id: 'dawn', label: 'Amanecer', icon: Sunrise },
-                  { id: 'noon', label: 'Mediodía', icon: Sun },
-                  { id: 'dusk', label: 'Atardecer', icon: Sunset },
-                  { id: 'night', label: 'Noche', icon: Moon }
+                  { id: 'dawn', label: 'Amanecer', icon: Sunrise, color: '#ff9d55', intensity: 20 },
+                  { id: 'noon', label: 'Mediodía', icon: Sun, color: '#ffffff', intensity: 0 },
+                  { id: 'dusk', label: 'Atardecer', icon: Sunset, color: '#c84224', intensity: 35 },
+                  { id: 'night', label: 'Noche', icon: Moon, color: '#091124', intensity: 85 }
                 ].map((p) => {
                   const Icon = p.icon;
                   const isSelected = game.ambient.preset === p.id;
@@ -776,7 +776,11 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
                     <button
                       key={p.id}
                       onClick={() => {
-                        setAmbientConfig({ preset: p.id as AmbientPreset });
+                        setAmbientConfig({
+                          preset: p.id as AmbientPreset,
+                          color: p.color,
+                          intensity: p.intensity
+                        });
                       }}
                       className={`p-1.5 rounded flex items-center gap-1.5 border transition-all ${
                         isSelected
@@ -798,11 +802,12 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
                   <div className="flex items-center gap-1.5">
                     <input
                       type="color"
-                      value={game.ambient.color}
+                      value={game.ambient.color || '#c84224'}
                       onChange={(e) =>
                         setAmbientConfig({
                           preset: 'custom',
-                          color: e.target.value
+                          color: e.target.value,
+                          intensity: game.ambient.intensity ?? 35
                         })
                       }
                       className="w-6 h-6 rounded cursor-pointer border border-slate-600 bg-transparent"
@@ -811,22 +816,24 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
                       onColorSelect={(color) =>
                         setAmbientConfig({
                           preset: 'custom',
-                          color
+                          color,
+                          intensity: game.ambient.intensity ?? 35
                         })
                       }
                     />
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Intensidad ({game.ambient.intensity}%)</span>
+                  <span className="text-slate-400">Intensidad ({game.ambient.intensity ?? 0}%)</span>
                   <input
                     type="range"
                     min="0"
                     max="100"
-                    value={game.ambient.intensity}
+                    value={game.ambient.intensity ?? 0}
                     onChange={(e) =>
                       setAmbientConfig({
                         preset: 'custom',
+                        color: game.ambient.color || '#c84224',
                         intensity: parseInt(e.target.value) || 0
                       })
                     }

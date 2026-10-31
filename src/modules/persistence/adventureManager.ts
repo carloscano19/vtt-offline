@@ -60,9 +60,9 @@ export async function clearAdventure(): Promise<void> {
       revealed: []
     },
     ambient: {
-      preset: 'noon',
-      color: '#ffffff',
-      intensity: 1.0
+      preset: 'dusk',
+      color: '#c84224',
+      intensity: 35
     },
     weather: {
       rain: { enabled: false, intensity: 50, direction: 90 },
