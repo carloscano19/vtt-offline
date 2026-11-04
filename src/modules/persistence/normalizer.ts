@@ -334,7 +334,7 @@ export function normalizeGameState(game: GameState): GameState {
       } : {
         preset: 'dusk',
         color: '#c84224',
-        intensity: 35
+        intensity: 60
       },
       grid: game.grid ? {
         ...game.grid,

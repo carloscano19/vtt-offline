@@ -767,7 +767,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
                 {[
                   { id: 'dawn', label: 'Amanecer', icon: Sunrise, color: '#ff9d55', intensity: 20 },
                   { id: 'noon', label: 'Mediodía', icon: Sun, color: '#ffffff', intensity: 0 },
-                  { id: 'dusk', label: 'Atardecer', icon: Sunset, color: '#c84224', intensity: 35 },
+                  { id: 'dusk', label: 'Atardecer', icon: Sunset, color: '#c84224', intensity: 60 },
                   { id: 'night', label: 'Noche', icon: Moon, color: '#091124', intensity: 85 }
                 ].map((p) => {
                   const Icon = p.icon;
@@ -807,7 +807,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
                         setAmbientConfig({
                           preset: 'custom',
                           color: e.target.value,
-                          intensity: game.ambient.intensity ?? 35
+                          intensity: game.ambient.intensity ?? 60
                         })
                       }
                       className="w-6 h-6 rounded cursor-pointer border border-slate-600 bg-transparent"
@@ -817,7 +817,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
                         setAmbientConfig({
                           preset: 'custom',
                           color,
-                          intensity: game.ambient.intensity ?? 35
+                          intensity: game.ambient.intensity ?? 60
                         })
                       }
                     />

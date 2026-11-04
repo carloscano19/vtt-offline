@@ -5,11 +5,11 @@ import { AmbientLayer } from '../src/pixi/layers/AmbientLayer';
 import { syncChannel } from '../src/modules/sync/syncChannel';
 
 describe('Global ambient light (Luz global)', () => {
-  it('new games start in dusk (Atardecer) with 35% darkness and color #c84224', () => {
+  it('new games start in dusk (Atardecer) with 60% darkness and color #c84224', () => {
     const initialStoreState = useGameStore.getState().game;
     expect(initialStoreState.ambient.preset).toBe('dusk');
     expect(initialStoreState.ambient.color).toBe('#c84224');
-    expect(initialStoreState.ambient.intensity).toBe(35);
+    expect(initialStoreState.ambient.intensity).toBe(60);
   });
 
   it('normalizer does not change ambient preset of existing games', () => {
@@ -54,8 +54,8 @@ describe('Global ambient light (Luz global)', () => {
     const bounds = { x: 0, y: 0, width: 1000, height: 1000 };
 
     // Update with dusk
-    layer.update({ preset: 'dusk', color: '#c84224', intensity: 35 }, [], bounds, 2.0);
-    expect((layer as any).targetDarkness).toBeCloseTo(0.35, 2);
+    layer.update({ preset: 'dusk', color: '#c84224', intensity: 60 }, [], bounds, 2.0);
+    expect((layer as any).targetDarkness).toBeCloseTo(0.60, 2);
 
     // Update with custom color and intensity
     layer.update({ preset: 'custom', color: '#ff4400', intensity: 60 }, [], bounds, 2.0);

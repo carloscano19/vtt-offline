@@ -10,9 +10,9 @@ import { DarknessInvertFilter } from '../filters/DarknessInvertFilter';
 export const AMBIENT_PRESET_CONFIGS: Record<string, { color: string; intensity: number }> = {
   dawn: { color: '#ff9d55', intensity: 20 },
   noon: { color: '#ffffff', intensity: 0 },
-  dusk: { color: '#c84224', intensity: 35 },
+  dusk: { color: '#c84224', intensity: 60 },
   night: { color: '#091124', intensity: 85 },
-  custom: { color: '#c84224', intensity: 35 }
+  custom: { color: '#c84224', intensity: 60 }
 };
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
@@ -51,12 +51,12 @@ export class AmbientLayer extends Container {
   private currentR = 200;
   private currentG = 66;
   private currentB = 36;
-  private currentDarkness = 0.35;
+  private currentDarkness = 0.60;
 
   private targetR = 200;
   private targetG = 66;
   private targetB = 36;
-  private targetDarkness = 0.35;
+  private targetDarkness = 0.60;
 
   private lastGeometryKey = '';
   private cachedRegions: {
