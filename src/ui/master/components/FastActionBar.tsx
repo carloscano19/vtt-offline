@@ -87,12 +87,24 @@ export const FastActionBar: React.FC<FastActionBarProps> = ({
     const handleDist = 26 / (zoom * absSy);
     const rotHandleY = offsetY - handleDist;
     const centerX = offsetX + width / 2;
-    // La manija tiene un círculo de radio 5px + margen de 2px en pantalla
-    const rotRadiusLocal = 7 / (zoom * absSy);
+    // La manija tiene un círculo de radio 6px + margen de 2px en pantalla
+    const rotRadiusLocal = 8 / (zoom * absSy);
     localCorners.push(
       { x: centerX * sx, y: (rotHandleY - rotRadiusLocal) * sy },
       { x: centerX * sx, y: (rotHandleY + rotRadiusLocal) * sy }
     );
+  }
+
+  // Si es token y tiene estados visibles, incluir la altura de los estados apilados arriba
+  if (entity.type === 'token' && Array.isArray(entity.statuses) && entity.statuses.length > 0) {
+    const zoom = Math.max(0.01, camera.zoom);
+    const gap = Math.max(6, 8 / zoom);
+    const targetTextHeight = Math.max(12 / zoom, 0.22 * 70);
+    const pillH = Math.round(targetTextHeight * 1.45);
+    const badgeSpacing = pillH + Math.max(3, Math.round(targetTextHeight * 0.2));
+    const totalStatusesH = entity.statuses.length * badgeSpacing;
+    const statusTopLocalY = offsetY - (gap + totalStatusesH) / absSy;
+    localCorners.push({ x: 0, y: statusTopLocalY * sy });
   }
 
   const worldCorners = localCorners.map((c) => ({

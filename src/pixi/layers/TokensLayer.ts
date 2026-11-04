@@ -20,6 +20,29 @@ function isPointInPolygon(point: Point2D, vs: Point2D[]): boolean {
   return inside;
 }
 
+const STATUS_ABBREVIATIONS: Record<string, string> = {
+  Aturdido: 'Atur.',
+  Cegado: 'Ceg.',
+  Hechizado: 'Hech.',
+  Ensordecido: 'Ensor.',
+  Asustado: 'Asust.',
+  Agarrado: 'Agarr.',
+  Incapacitado: 'Incap.',
+  Invisible: 'Invis.',
+  Paralizado: 'Paral.',
+  Petrificado: 'Petrif.',
+  Envenenado: 'Enven.',
+  Derribado: 'Derrib.',
+  Restringido: 'Restr.',
+  Inconsciente: 'Inconc.',
+  Agotamiento: 'Agot.',
+  Congelado: 'Cong.',
+  Quemado: 'Quem.',
+  Sangrando: 'Sangr.',
+  Bendecido: 'Bend.',
+  Acelerado: 'Acel.'
+};
+
 export class TokensLayer extends Container {
   private isMaster: boolean;
   private containerMap: Map<string, Container> = new Map();
@@ -344,14 +367,14 @@ export class TokensLayer extends Container {
         statusesContainer.scale.x = (entity.scaleX < 0 ? -1 : 1) * invSx;
         statusesContainer.scale.y = (entity.scaleY < 0 ? -1 : 1) * invSy;
 
-        // Situar el contenedor a la derecha del token en el espacio del mundo
+        // Situar el contenedor ENCIMA del token en el espacio del mundo
         const gap = Math.max(6, 8 / cameraZoom);
-        const worldDx = worldRadius + gap;
+        const worldDy = worldRadius + gap;
         const rot = entity.rotation;
         const cosR = Math.cos(rot);
         const sinR = Math.sin(rot);
-        statusesContainer.x = (worldDx * cosR) / entity.scaleX;
-        statusesContainer.y = (-worldDx * sinR) / entity.scaleY;
+        statusesContainer.x = (-worldDy * sinR) / entity.scaleX;
+        statusesContainer.y = (-worldDy * cosR) / entity.scaleY;
 
         // Altura de texto: ~0.22 * gridSize (mínimo 12 px en pantalla)
         const targetTextHeight = Math.max(12 / cameraZoom, 0.22 * gridSize);
@@ -359,13 +382,14 @@ export class TokensLayer extends Container {
         const pillH = Math.round(fontSize * 1.45);
         const pillPadX = Math.round(fontSize * 0.45);
         const badgeSpacing = pillH + Math.max(3, Math.round(fontSize * 0.2));
-        const totalHeight = visibleStatuses.length * badgeSpacing - Math.max(3, Math.round(fontSize * 0.2));
-        const startY = -totalHeight / 2;
+
+        // Ancho máximo: ancho del token en mundo más un margen pequeño
+        const maxBadgeWidth = Math.max(gridSize * 0.9, worldRadius * 2 + Math.max(8, 12 / cameraZoom));
 
         visibleStatuses.forEach((status, idx) => {
           const badgeItem = new Container();
           const turnsText = status.turnsRemaining !== null ? status.turnsRemaining : '∞';
-          const labelStr = `${status.type} ${turnsText}`;
+          let labelStr = `${status.type} ${turnsText}`;
 
           const t = new Text({
             text: labelStr,
@@ -377,20 +401,36 @@ export class TokensLayer extends Container {
             })
           });
 
-          const pillW = Math.round(t.width + pillPadX * 2);
+          // Si no cabe en el ancho del token más margen, usar versión abreviada
+          if (t.width + pillPadX * 2 > maxBadgeWidth) {
+            const abbrev =
+              STATUS_ABBREVIATIONS[status.type] ||
+              (status.type.length > 5 ? status.type.slice(0, 4) + '.' : status.type);
+            labelStr = `${abbrev} ${turnsText}`;
+            t.text = labelStr;
+          }
+
+          // Si aún excede, recortar para que no sobrepase maxBadgeWidth
+          if (t.width + pillPadX * 2 > maxBadgeWidth && labelStr.length > 6) {
+            labelStr = `${labelStr.slice(0, 5)}… ${turnsText}`;
+            t.text = labelStr;
+          }
+
+          const pillW = Math.round(Math.min(maxBadgeWidth, t.width + pillPadX * 2));
           const bg = new Graphics();
           const cornerRadius = Math.max(3, Math.round(fontSize * 0.25));
           bg.roundRect(0, 0, pillW, pillH, cornerRadius);
-          bg.fill({ color: 0x1c1917, alpha: 0.88 });
-          bg.stroke({ width: Math.max(1, 1.5 / cameraZoom), color: 0xef4444, alpha: 0.85 });
+          bg.fill({ color: 0xdc2626, alpha: 0.85 });
+          bg.stroke({ width: Math.max(1, 1.5 / cameraZoom), color: 0xffffff, alpha: 0.35 });
 
           badgeItem.addChild(bg);
-          t.x = pillPadX;
+          t.x = Math.max(pillPadX / 2, Math.round((pillW - t.width) / 2));
           t.y = Math.round((pillH - t.height) / 2);
           badgeItem.addChild(t);
 
-          badgeItem.x = 0;
-          badgeItem.y = startY + idx * badgeSpacing;
+          // Centrado horizontalmente y apilado hacia arriba
+          badgeItem.x = -Math.round(pillW / 2);
+          badgeItem.y = -(idx * badgeSpacing + pillH);
 
           if (this.isMaster && !isPlayerPreview && !status.visibleToPlayers) {
             badgeItem.alpha = 0.5;
