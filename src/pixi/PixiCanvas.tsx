@@ -16,6 +16,8 @@ import { visionManager } from '../modules/vision/visionManager';
 import { getMediaDimensions, persistAssetDimensions } from '../utils/mediaDimensions';
 import { FastActionBar } from '../ui/master/components/FastActionBar';
 
+const ROTATE_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8' fill='none' stroke='%23000' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpolyline points='21 3 21 8 16 8' fill='none' stroke='%23000' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpolyline points='21 3 21 8 16 8' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 12 12, crosshair`;
+
 interface PixiCanvasProps {
   isMaster: boolean;
 }
@@ -93,6 +95,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     startMouse: Point2D;
     startEntityPos: Point2D;
     startEntityRotation: number;
+    startRotationMouseAngle?: number;
     startEntityScale: { x: number; y: number };
     startCamera: Point2D;
     lastPosSyncTime: number;
@@ -303,13 +306,14 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         return;
       }
 
-      // Rotación rápida con teclado R / Shift+R (90 grados para puertas, tokens y objetos seleccionados)
+      // Rotación rápida con teclado R / Shift+R (15 grados para puertas, tokens y objetos seleccionados)
       if (e.key.toLowerCase() === 'r' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         if (selectedEntityIds.length > 0) {
           const selectedEntity = game.entities.find((ent) => selectedEntityIds.includes(ent.id) && !ent.locked);
           if (selectedEntity) {
             e.preventDefault();
-            const delta = e.shiftKey ? -Math.PI / 2 : Math.PI / 2;
+            const step = (15 * Math.PI) / 180;
+            const delta = e.shiftKey ? -step : step;
             let newRot = selectedEntity.rotation + delta;
             newRot = (newRot % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
 
@@ -723,17 +727,26 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           };
         };
 
-        // Manija de rotación (arriba de la caja)
+        // Manija de rotación (arriba de la caja con área de clic de al menos 16px en pantalla)
         const rotDistLocal = 26 / (camera.zoom * Math.abs(selectedEntity.scaleY || 1));
         const rotLocalX = offX + bW / 2;
         const rotLocalY = offY - rotDistLocal;
         const rotWorld = localToWorldPos(rotLocalX, rotLocalY);
+        const rotHitRadius = Math.max(16, 18 / camera.zoom);
 
-        if (Math.hypot(worldPos.x - rotWorld.x, worldPos.y - rotWorld.y) <= handleHitRadius) {
+        if (Math.hypot(worldPos.x - rotWorld.x, worldPos.y - rotWorld.y) <= rotHitRadius) {
           interactionState.current.isTransforming = 'rotate';
           interactionState.current.dragEntityId = selectedEntity.id;
           interactionState.current.startMouse = localMouse;
           interactionState.current.startEntityRotation = worldRotation;
+
+          let pivot = worldCenter;
+          if (selectedEntity.type === 'door' && selectedEntity.door) {
+            pivot = parentMap
+              ? localToWorld(selectedEntity.door.p1, { x: parentMap.x, y: parentMap.y }, parentMap.rotation, parentMap.scaleX, parentMap.scaleY)
+              : selectedEntity.door.p1;
+          }
+          interactionState.current.startRotationMouseAngle = Math.atan2(worldPos.y - pivot.y, worldPos.x - pivot.x);
           return;
         }
 
@@ -956,22 +969,39 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     if (interactionState.current.isTransforming === 'rotate' && interactionState.current.dragEntityId) {
       const entity = game.entities.find((ent) => ent.id === interactionState.current.dragEntityId);
       if (entity) {
+        const parentMap = entity.mapId ? game.entities.find((m) => m.id === entity.mapId) : undefined;
+        const parentRot = parentMap ? parentMap.rotation : 0;
+
+        let pivot: Point2D;
         if (entity.type === 'door' && entity.door) {
-          const parentMap = entity.mapId ? game.entities.find((m) => m.id === entity.mapId) : undefined;
-          const worldP1 = parentMap
+          pivot = parentMap
             ? localToWorld(entity.door.p1, { x: parentMap.x, y: parentMap.y }, parentMap.rotation, parentMap.scaleX, parentMap.scaleY)
             : entity.door.p1;
+        } else {
+          pivot = parentMap
+            ? localToWorld({ x: entity.x, y: entity.y }, { x: parentMap.x, y: parentMap.y }, parentMap.rotation, parentMap.scaleX, parentMap.scaleY)
+            : { x: entity.x, y: entity.y };
+        }
 
-          let worldAngle = Math.atan2(worldPos.y - worldP1.y, worldPos.x - worldP1.x);
-          if (entity.door.isHingeInverted) {
-            worldAngle += Math.PI;
-          }
-          if (game.grid.snapToGrid && !e.altKey) {
-            const step = Math.PI / 4; // 45 grados
-            worldAngle = Math.round(worldAngle / step) * step;
-          }
+        const currentMouseAngle = Math.atan2(worldPos.y - pivot.y, worldPos.x - pivot.x);
+        const startMouseAngle = interactionState.current.startRotationMouseAngle ?? currentMouseAngle;
+        let deltaAngle = currentMouseAngle - startMouseAngle;
 
-          const localRotation = parentMap ? worldAngle - parentMap.rotation : worldAngle;
+        // Normalizar deltaAngle en [-PI, PI] para evitar saltos al cruzar límites angulares
+        while (deltaAngle > Math.PI) deltaAngle -= 2 * Math.PI;
+        while (deltaAngle < -Math.PI) deltaAngle += 2 * Math.PI;
+
+        let newWorldRot = interactionState.current.startEntityRotation + deltaAngle;
+
+        // Manteniendo Shift mientras se gira, se ajusta a pasos de 15°
+        if (e.shiftKey) {
+          const step = (15 * Math.PI) / 180;
+          newWorldRot = Math.round(newWorldRot / step) * step;
+        }
+
+        const localRotation = newWorldRot - parentRot;
+
+        if (entity.type === 'door' && entity.door) {
           const length = entity.door.length ?? 70;
           const isInv = entity.door.isHingeInverted ?? false;
           const rotated = rotateDoorAroundHinge(entity.door.p1, localRotation, length, isInv);
@@ -992,13 +1022,6 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
             false
           );
         } else {
-          const parentMap = entity.mapId ? game.entities.find((m) => m.id === entity.mapId) : undefined;
-          const worldCenter = parentMap
-            ? localToWorld({ x: entity.x, y: entity.y }, { x: parentMap.x, y: parentMap.y }, parentMap.rotation, parentMap.scaleX, parentMap.scaleY)
-            : { x: entity.x, y: entity.y };
-
-          let worldAngle = Math.atan2(worldPos.y - worldCenter.y, worldPos.x - worldCenter.x) + Math.PI / 2;
-          const localRotation = parentMap ? worldAngle - parentMap.rotation : worldAngle;
           updateEntity(entity.id, { rotation: localRotation }, false);
         }
       }
@@ -1204,8 +1227,9 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
         const rotDistLocal = 26 / (camera.zoom * Math.abs(selectedEntity.scaleY || 1));
         const rotWorld = localToWorldPos(offX + bW / 2, offY - rotDistLocal);
-        if (Math.hypot(worldPos.x - rotWorld.x, worldPos.y - rotWorld.y) <= handleHitRadius) {
-          newCursor = 'grab';
+        const rotHitRadius = Math.max(16, 18 / camera.zoom);
+        if (Math.hypot(worldPos.x - rotWorld.x, worldPos.y - rotWorld.y) <= rotHitRadius) {
+          newCursor = 'rotate';
         } else {
           const corners = [
             { x: offX, y: offY, cursor: 'nwse-resize' },
@@ -1589,10 +1613,14 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
   // Determinar cursor CSS dinámico
   let activeCursor = 'default';
+  let cursorStyle: React.CSSProperties = {};
   if (!isMaster) {
     activeCursor = interactionState.current.isPanning ? 'cursor-grabbing' : 'cursor-grab';
   } else if (isSpacePressed || interactionState.current.isPanning) {
     activeCursor = 'cursor-grab active:cursor-grabbing';
+  } else if (interactionState.current.isTransforming === 'rotate' || hoverCursor === 'rotate') {
+    activeCursor = '';
+    cursorStyle = { cursor: ROTATE_CURSOR };
   } else if (
     activeTool === 'wall' ||
     activeTool === 'door' ||
@@ -1611,6 +1639,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       <div
         ref={containerRef}
         className={`w-full h-full ${activeCursor}`}
+        style={cursorStyle}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}

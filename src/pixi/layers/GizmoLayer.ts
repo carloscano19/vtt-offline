@@ -252,8 +252,8 @@ export class GizmoLayer extends Container {
     this.graphics.lineTo(centerX, rotHandleY);
     this.graphics.stroke({ width: rotLineWidth, color: 0x38bdf8, alpha: 0.8 });
 
-    // Círculo de rotación (radio de 5px en pantalla, diámetro aprox 10px)
-    const rotRadius = 5 / (zoom * sx);
+    // Círculo de rotación (radio de 6px en pantalla)
+    const rotRadius = 6 / (zoom * sx);
     const rotStroke = 1.5 / (zoom * sx);
     this.graphics.circle(centerX, rotHandleY, rotRadius);
     this.graphics.fill({ color: 0x38bdf8 });
