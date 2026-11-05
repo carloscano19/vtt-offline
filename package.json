@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "preview": "vite preview",
     "dist:dir": "tsc && vite build && electron-builder --dir",
     "dist:win": "tsc && vite build && electron-builder --win",
     "dist:mac": "tsc && vite build && electron-builder --mac",

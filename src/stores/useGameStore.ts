@@ -116,7 +116,10 @@ function createDefaultGame(): GameState {
       loopTrack: false
     },
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
+    cloudSavedId: null,
+    cloudSavedName: null,
+    cloudSavedOwner: null
   };
 }
 

@@ -96,6 +96,9 @@ export interface GameState {
   updatedAt: number;
   appVersion?: string;
   appBuildTime?: number;
+  cloudSavedId?: string | null;
+  cloudSavedName?: string | null;
+  cloudSavedOwner?: string | null;
 }
 
 export type AssetType = 'image' | 'gif' | 'video' | 'map' | 'audio';

@@ -370,6 +370,9 @@ export function normalizeGameState(game: GameState): GameState {
           }
         }
         return cam;
-      })()
+      })(),
+      cloudSavedId: game.cloudSavedId ?? null,
+      cloudSavedName: game.cloudSavedName ?? null,
+      cloudSavedOwner: game.cloudSavedOwner ?? null
     };
 }

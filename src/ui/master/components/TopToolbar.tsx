@@ -530,6 +530,17 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           <Save className="w-5 h-5" />
         </button>
 
+        {game.cloudSavedName && (
+          <button
+            onClick={() => setShowSaveLoadModal(true)}
+            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 bg-sky-950/80 hover:bg-sky-900 border border-sky-500/50 rounded-full text-xs text-sky-200 transition-colors shadow-xs"
+            title={`Partida en la nube: "${game.cloudSavedName}"${game.cloudSavedOwner ? ` (${game.cloudSavedOwner})` : ''} - Clic para gestionar partidas`}
+          >
+            <Cloud className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+            <span className="font-medium truncate max-w-[150px]">{game.cloudSavedName}</span>
+          </button>
+        )}
+
         <button
           onClick={() => setShowAuthModal(true)}
           className={`btn-icon transition-colors ${
