@@ -333,6 +333,67 @@ describe('Bloque 2: Dice System with Master Authority', () => {
     diceManager.dismissRoll(roll2.id);
     expect(diceManager.getActiveRolls().some((r) => r.id === roll2.id)).toBe(false);
   });
+
+  it('permite tiradas rápidas de 1 solo clic por tipo de dado conservando modificador y aplicando ventaja solo si es d20', () => {
+    // 1. Tirada rápida de 1d6 con modificador +3 y ventaja activada en panel
+    // La ventaja SOLO debe aplicarse si es d20; para d6 debe ignorarse y ser 'none'
+    const reqD6: DiceRollRequest = {
+      requestId: 'quick_d6',
+      rollerName: 'Gandalf',
+      dieType: 'd6',
+      count: 1,
+      dicePool: [{ dieType: 'd6', count: 1 }],
+      modifier: 3,
+      advantage: 'none' // handleQuickRoll envía 'none' para dados != d20
+    };
+    const rollD6 = diceManager.executeMasterRoll(reqD6);
+    expect(rollD6.dice.length).toBe(1);
+    expect(rollD6.dice[0].sides).toBe(6);
+    expect(rollD6.modifier).toBe(3);
+    expect(rollD6.advantage).toBe('none');
+
+    // 2. Tirada rápida de 1d20 con el mismo modificador +3 y ventaja 'advantage'
+    const reqD20: DiceRollRequest = {
+      requestId: 'quick_d20',
+      rollerName: 'Gandalf',
+      dieType: 'd20',
+      count: 1,
+      dicePool: [{ dieType: 'd20', count: 1 }],
+      modifier: 3,
+      advantage: 'advantage'
+    };
+    const rollD20 = diceManager.executeMasterRoll(reqD20);
+    // Con ventaja, debe haber 2 dados (uno descartado)
+    expect(rollD20.dice.length).toBe(2);
+    expect(rollD20.dice.some((d) => d.dropped)).toBe(true);
+    expect(rollD20.modifier).toBe(3);
+    expect(rollD20.advantage).toBe('advantage');
+  });
+
+  it('soporta repetición de la última tirada exacta con los mismos parámetros', () => {
+    const originalReq: DiceRollRequest = {
+      requestId: 'orig_1',
+      rollerName: 'Legolas',
+      dieType: 'd8',
+      count: 2,
+      dicePool: [{ dieType: 'd8', count: 2 }],
+      modifier: 4,
+      advantage: 'none'
+    };
+    const firstRoll = diceManager.executeMasterRoll(originalReq);
+    expect(firstRoll.dice.length).toBe(2);
+    expect(firstRoll.modifier).toBe(4);
+
+    // Al repetir la tirada con una nueva ID pero mismos datos
+    const repeatReq: DiceRollRequest = {
+      ...originalReq,
+      requestId: 'orig_repeat'
+    };
+    const repeatedRoll = diceManager.executeMasterRoll(repeatReq);
+    expect(repeatedRoll.dice.length).toBe(2);
+    expect(repeatedRoll.modifier).toBe(4);
+    expect(repeatedRoll.dice.every((d) => d.sides === 8)).toBe(true);
+  });
 });
 
 
