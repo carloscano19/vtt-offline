@@ -169,6 +169,7 @@ export interface EntityAnimations {
 }
 
 export interface LightConfig {
+  enabled?: boolean; // Activa/desactiva la emisión de luz (especialmente para tokens)
   color: string; // Hex e.g. '#ffaa44'
   intensity: number; // 0 a 100 (%)
   brightRadiusInSquares: number; // Radio de luz clara en casillas (default 4)

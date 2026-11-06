@@ -69,6 +69,24 @@ export function normalizeEntity(entity: Entity): Entity {
       ...entity,
       statuses
     };
+
+    if (!entity.light) {
+      entity = {
+        ...entity,
+        light: {
+          enabled: false,
+          color: '#fbbf24',
+          intensity: 80,
+          brightRadiusInSquares: 4,
+          dimRadiusInSquares: 2,
+          edgeHardness: 0.5,
+          flicker: false,
+          shape: 'circle',
+          coneAngle: 60,
+          directionOffset: 0
+        }
+      };
+    }
   }
   // Normalizar animaciones si existen
   const rawAnim: any = entity.animations || (entity as any).animation;
@@ -169,11 +187,31 @@ export function normalizeEntity(entity: Entity): Entity {
     };
   }
 
-  if (entity.light) {
-    const parsed = parseColor(entity.light?.color, 0xffaa44);
+  if (entity.type === 'light' && !entity.light) {
     entity = {
       ...entity,
       light: {
+        enabled: true,
+        color: '#ffaa44',
+        intensity: 100,
+        brightRadiusInSquares: 4,
+        dimRadiusInSquares: 2,
+        edgeHardness: 0.5,
+        flicker: false,
+        shape: 'circle',
+        coneAngle: 60,
+        directionOffset: 0
+      }
+    };
+  }
+
+  if (entity.light) {
+    const parsed = parseColor(entity.light?.color, 0xffaa44);
+    const defaultEnabled = entity.type === 'token' ? false : true;
+    entity = {
+      ...entity,
+      light: {
+        enabled: typeof entity.light.enabled === 'boolean' ? entity.light.enabled : defaultEnabled,
         color: colorToHex(parsed.rgb),
         intensity: entity.light.intensity ?? 100,
         brightRadiusInSquares: entity.light.brightRadiusInSquares ?? 4,

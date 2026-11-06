@@ -24,7 +24,8 @@ import {
   FlipVertical,
   Crop,
   Check,
-  RefreshCw
+  RefreshCw,
+  Sun
 } from 'lucide-react';
 import { TokenSide, recalculateDoorEndpoints, getDefaultSnapToGrid } from '../../../types/entity';
 import { getAsset, db } from '../../../db/dexie';
@@ -579,6 +580,390 @@ export const PropertiesTab: React.FC = () => {
                           })
                         }
                         className="w-full accent-emerald-500 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Luz propia en Token */}
+      {selectedEntity.type === 'token' && (
+        <div className="bg-slate-900 border border-slate-700/80 rounded-lg p-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <label
+                className="text-amber-400 font-medium text-xs flex items-center gap-1.5 cursor-pointer"
+                title="Emite luz alrededor del token. Ilumina el entorno e interactúa con la visión de los jugadores y las paredes."
+              >
+                <Sun className="w-3.5 h-3.5 text-amber-400" />
+                Luz propia
+              </label>
+            </div>
+            <input
+              type="checkbox"
+              checked={Boolean(selectedEntity.light?.enabled)}
+              onChange={(e) => {
+                const isEnabled = e.target.checked;
+                const currentLight = selectedEntity.light ?? {
+                  color: '#fbbf24',
+                  intensity: 80,
+                  brightRadiusInSquares: 4,
+                  dimRadiusInSquares: 2,
+                  edgeHardness: 0.5,
+                  flicker: false,
+                  shape: 'circle',
+                  coneAngle: 60,
+                  directionOffset: 0
+                };
+                handleUpdate({
+                  light: {
+                    ...currentLight,
+                    enabled: isEnabled
+                  }
+                });
+              }}
+              className="rounded border-slate-700 text-amber-500 focus:ring-amber-500 bg-slate-800 h-4 w-4 cursor-pointer"
+            />
+          </div>
+
+          {Boolean(selectedEntity.light?.enabled) && (
+            <div className="space-y-3 pt-2 border-t border-slate-800 text-xs">
+              {/* Color e Intensidad */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-[10px] text-slate-400 block mb-1">Color</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={selectedEntity.light?.color ?? '#fbbf24'}
+                      onChange={(e) =>
+                        handleUpdate({
+                          light: {
+                            ...(selectedEntity.light ?? {
+                              intensity: 80,
+                              brightRadiusInSquares: 4,
+                              dimRadiusInSquares: 2,
+                              edgeHardness: 0.5,
+                              flicker: false,
+                              shape: 'circle'
+                            }),
+                            enabled: true,
+                            color: e.target.value
+                          }
+                        })
+                      }
+                      className="w-7 h-7 rounded cursor-pointer border border-slate-600 bg-transparent"
+                    />
+                    <EyeDropperButton
+                      onColorSelect={(hex) =>
+                        handleUpdate({
+                          light: {
+                            ...(selectedEntity.light ?? {
+                              intensity: 80,
+                              brightRadiusInSquares: 4,
+                              dimRadiusInSquares: 2,
+                              edgeHardness: 0.5,
+                              flicker: false,
+                              shape: 'circle'
+                            }),
+                            enabled: true,
+                            color: hex
+                          }
+                        })
+                      }
+                    />
+                    <span className="font-mono text-[11px] text-slate-300 uppercase">
+                      {selectedEntity.light?.color ?? '#fbbf24'}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-[10px] text-slate-400 block mb-1">
+                    Intensidad ({selectedEntity.light?.intensity ?? 80}%)
+                  </span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={selectedEntity.light?.intensity ?? 80}
+                    onChange={(e) =>
+                      handleUpdate({
+                        light: {
+                          ...(selectedEntity.light ?? {
+                            color: '#fbbf24',
+                            brightRadiusInSquares: 4,
+                            dimRadiusInSquares: 2,
+                            edgeHardness: 0.5,
+                            flicker: false,
+                            shape: 'circle'
+                          }),
+                          enabled: true,
+                          intensity: parseInt(e.target.value) || 0
+                        }
+                      })
+                    }
+                    className="w-full accent-amber-500 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* Radios Claro y Tenue */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                    <span>Radio claro</span>
+                    <span className="text-white font-mono">{selectedEntity.light?.brightRadiusInSquares ?? 4} cas.</span>
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    max="50"
+                    value={selectedEntity.light?.brightRadiusInSquares ?? 4}
+                    onChange={(e) =>
+                      handleUpdate({
+                        light: {
+                          ...(selectedEntity.light ?? {
+                            color: '#fbbf24',
+                            intensity: 80,
+                            dimRadiusInSquares: 2,
+                            edgeHardness: 0.5,
+                            flicker: false,
+                            shape: 'circle'
+                          }),
+                          enabled: true,
+                          brightRadiusInSquares: Math.max(0, parseInt(e.target.value) || 0)
+                        }
+                      })
+                    }
+                    className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                    <span>Radio tenue</span>
+                    <span className="text-white font-mono">+{selectedEntity.light?.dimRadiusInSquares ?? 2} cas.</span>
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    max="50"
+                    value={selectedEntity.light?.dimRadiusInSquares ?? 2}
+                    onChange={(e) =>
+                      handleUpdate({
+                        light: {
+                          ...(selectedEntity.light ?? {
+                            color: '#fbbf24',
+                            intensity: 80,
+                            brightRadiusInSquares: 4,
+                            edgeHardness: 0.5,
+                            flicker: false,
+                            shape: 'circle'
+                          }),
+                          enabled: true,
+                          dimRadiusInSquares: Math.max(0, parseInt(e.target.value) || 0)
+                        }
+                      })
+                    }
+                    className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200"
+                  />
+                </div>
+              </div>
+
+              {/* Dureza del borde y Parpadeo */}
+              <div className="space-y-2 pt-1 border-t border-slate-700/60">
+                <div>
+                  <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                    <span>Dureza del borde</span>
+                    <span className="text-white font-mono">{Math.round((selectedEntity.light?.edgeHardness ?? 0.5) * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={selectedEntity.light?.edgeHardness ?? 0.5}
+                    onChange={(e) =>
+                      handleUpdate({
+                        light: {
+                          ...(selectedEntity.light ?? {
+                            color: '#fbbf24',
+                            intensity: 80,
+                            brightRadiusInSquares: 4,
+                            dimRadiusInSquares: 2,
+                            flicker: false,
+                            shape: 'circle'
+                          }),
+                          enabled: true,
+                          edgeHardness: parseFloat(e.target.value) || 0.5
+                        }
+                      })
+                    }
+                    className="w-full accent-amber-500 cursor-pointer"
+                  />
+                  <span className="text-[10px] text-slate-500">0 = Suave / difuso, 1 = Nítido</span>
+                </div>
+
+                <label className="flex items-center justify-between cursor-pointer pt-1">
+                  <span className="text-slate-300">Parpadeo de antorcha</span>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(selectedEntity.light?.flicker)}
+                    onChange={(e) =>
+                      handleUpdate({
+                        light: {
+                          ...(selectedEntity.light ?? {
+                            color: '#fbbf24',
+                            intensity: 80,
+                            brightRadiusInSquares: 4,
+                            dimRadiusInSquares: 2,
+                            edgeHardness: 0.5,
+                            shape: 'circle'
+                          }),
+                          enabled: true,
+                          flicker: e.target.checked
+                        }
+                      })
+                    }
+                    className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                  />
+                </label>
+              </div>
+
+              {/* Forma de la luz */}
+              <div className="space-y-2 pt-1 border-t border-slate-700/60">
+                <div className="flex justify-between text-[11px] text-slate-400 mb-1">
+                  <span>Forma de la luz</span>
+                  <span className="text-white font-mono capitalize">
+                    {(selectedEntity.light?.shape ?? 'circle') === 'cone' ? 'Cono' : 'Círculo'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 mb-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleUpdate({
+                        light: {
+                          ...(selectedEntity.light ?? {
+                            color: '#fbbf24',
+                            intensity: 80,
+                            brightRadiusInSquares: 4,
+                            dimRadiusInSquares: 2,
+                            edgeHardness: 0.5,
+                            flicker: false
+                          }),
+                          enabled: true,
+                          shape: 'circle'
+                        }
+                      })
+                    }
+                    className={`py-1 text-xs rounded font-medium border transition-colors ${
+                      (selectedEntity.light?.shape ?? 'circle') === 'circle'
+                        ? 'bg-amber-950/80 border-amber-500 text-amber-300'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Círculo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleUpdate({
+                        light: {
+                          ...(selectedEntity.light ?? {
+                            color: '#fbbf24',
+                            intensity: 80,
+                            brightRadiusInSquares: 4,
+                            dimRadiusInSquares: 2,
+                            edgeHardness: 0.5,
+                            flicker: false
+                          }),
+                          enabled: true,
+                          shape: 'cone',
+                          coneAngle: selectedEntity.light?.coneAngle ?? 60,
+                          directionOffset: selectedEntity.light?.directionOffset ?? 0
+                        }
+                      })
+                    }
+                    className={`py-1 text-xs rounded font-medium border transition-colors ${
+                      selectedEntity.light?.shape === 'cone'
+                        ? 'bg-amber-950/80 border-amber-500 text-amber-300'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Cono
+                  </button>
+                </div>
+
+                {selectedEntity.light?.shape === 'cone' && (
+                  <div className="space-y-2 pt-1 border-t border-slate-700/60">
+                    <div>
+                      <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                        <span>Apertura</span>
+                        <span className="text-white font-mono">{selectedEntity.light?.coneAngle ?? 60}°</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="10"
+                        max="180"
+                        step="5"
+                        value={selectedEntity.light?.coneAngle ?? 60}
+                        onChange={(e) =>
+                          handleUpdate({
+                            light: {
+                              ...(selectedEntity.light ?? {
+                                color: '#fbbf24',
+                                intensity: 80,
+                                brightRadiusInSquares: 4,
+                                dimRadiusInSquares: 2,
+                                edgeHardness: 0.5,
+                                flicker: false,
+                                shape: 'cone',
+                                directionOffset: 0
+                              }),
+                              enabled: true,
+                              coneAngle: parseInt(e.target.value) || 60
+                            }
+                          })
+                        }
+                        className="w-full accent-amber-500 cursor-pointer"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                        <span>Desfase de dirección</span>
+                        <span className="text-white font-mono">{selectedEntity.light?.directionOffset ?? 0}°</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="360"
+                        step="5"
+                        value={selectedEntity.light?.directionOffset ?? 0}
+                        onChange={(e) =>
+                          handleUpdate({
+                            light: {
+                              ...(selectedEntity.light ?? {
+                                color: '#fbbf24',
+                                intensity: 80,
+                                brightRadiusInSquares: 4,
+                                dimRadiusInSquares: 2,
+                                edgeHardness: 0.5,
+                                flicker: false,
+                                shape: 'cone',
+                                coneAngle: 60
+                              }),
+                              enabled: true,
+                              directionOffset: parseInt(e.target.value) || 0
+                            }
+                          })
+                        }
+                        className="w-full accent-amber-500 cursor-pointer"
                       />
                     </div>
                   </div>

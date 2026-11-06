@@ -53,15 +53,22 @@ export class LightManager {
       .join(';');
   }
 
+  private isLightActive(e: Entity): boolean {
+    if (!e.light) return false;
+    if (e.light.enabled === false) return false;
+    if (e.type === 'light') return true;
+    if (e.type === 'effect') return !!e.effect?.emitsLight;
+    if (e.type === 'token') return e.light.enabled === true;
+    return false;
+  }
+
   /**
    * Genera una clave de estado para invalidar la caché de polígonos de luz
    * SOLO cuando cambian posiciones, radios de luz o paredes/puertas/mapas.
    * El parpadeo visual (flicker) NO invalida la geometría.
    */
   private generateStateKey(entities: Entity[], gridSize: number, wallPart: string): string {
-    const lightEntities = entities.filter(
-      (e) => (e.type === 'light' || (e.type === 'effect' && e.effect?.emitsLight)) && e.light
-    );
+    const lightEntities = entities.filter((e) => this.isLightActive(e));
 
     const lightPart = lightEntities
       .map((l) => {
@@ -90,9 +97,7 @@ export class LightManager {
       return this.cachedLights;
     }
 
-    const lightEntities = entities.filter(
-      (e) => (e.type === 'light' || (e.type === 'effect' && e.effect?.emitsLight)) && e.light
-    );
+    const lightEntities = entities.filter((e) => this.isLightActive(e));
 
     if (lightEntities.length === 0) {
       this.lastCacheKey = stateKey;

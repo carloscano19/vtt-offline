@@ -83,7 +83,9 @@ export class GizmoLayer extends Container {
       color = 0x38bdf8;
       hasCone = totalRangePx > 0;
     } else if (
-      (entity.type === 'light' || (entity.type === 'effect' && entity.effect?.emitsLight)) &&
+      (entity.type === 'light' ||
+        (entity.type === 'effect' && entity.effect?.emitsLight) ||
+        (entity.type === 'token' && entity.light?.enabled)) &&
       entity.light?.shape === 'cone'
     ) {
       const scaleMultiplier =
