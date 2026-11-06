@@ -72,7 +72,6 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
   const setActiveTool = useUIStore((s) => s.setActiveTool);
   const wallDrawMode = useUIStore((s) => s.wallDrawMode);
   const setWallDrawMode = useUIStore((s) => s.setWallDrawMode);
-  const addToast = useUIStore((s) => s.addToast);
   const activeSidebarTab = useUIStore((s) => s.activeSidebarTab);
   const setActiveSidebarTab = useUIStore((s) => s.setActiveSidebarTab);
   const showDebugVttOverlay = useUIStore((s) => s.showDebugVttOverlay);

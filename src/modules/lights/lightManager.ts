@@ -41,7 +41,7 @@ export class LightManager {
       .filter((e) => e.type === 'wall' || e.type === 'door' || e.type === 'map')
       .map((e) => {
         if (e.type === 'door') {
-          return `d:${e.id}:${doorAnimationManager.isFullyOpen(e.id, e.door?.isOpen)}:${e.door?.isLocked}:${Math.round(e.door?.p1.x || 0)}:${Math.round(e.door?.p1.y || 0)}`;
+          return `d:${e.id}:${doorAnimationManager.isFullyOpen(e.id, Boolean(e.door?.isOpen))}:${e.door?.isLocked}:${Math.round(e.door?.p1.x || 0)}:${Math.round(e.door?.p1.y || 0)}`;
         }
         if (e.type === 'wall') {
           return `w:${e.id}:${Math.round(e.x)}:${Math.round(e.y)}:${e.points?.length}`;

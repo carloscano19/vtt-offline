@@ -370,7 +370,7 @@ export const PropertiesTab: React.FC = () => {
             <button
               type="button"
               onClick={() => {
-                const gSize = game.grid.size > 0 ? game.grid.size : 70;
+                const gSize = gridSizeSetting > 0 ? gridSizeSetting : 70;
                 handleUpdate({
                   x: Math.round(selectedEntity.x / gSize) * gSize,
                   y: Math.round(selectedEntity.y / gSize) * gSize
