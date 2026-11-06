@@ -161,8 +161,8 @@ export const LibraryTab: React.FC = () => {
       mapData: isMap && asset.mapData?.portals && asset.mapData.portals.length > 0
         ? { ...asset.mapData, portals: [] }
         : asset.mapData,
-      side: isMap ? undefined : 'jugador',
-      vision: isMap ? undefined : { active: true, brightRangeInSquares: 4, dimRangeInSquares: 2, hardness: 0.5 },
+      side: isMap ? undefined : 'neutral',
+      vision: isMap ? undefined : { active: false, brightRangeInSquares: 6, dimRangeInSquares: 2, hardness: 0.5, illuminates: true },
       statuses: []
     };
 

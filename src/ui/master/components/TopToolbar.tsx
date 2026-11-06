@@ -453,12 +453,13 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
             zIndex: 10,
             visibleToPlayers: false, // Tokens ocultos para jugadores por defecto
             locked: false,
-            side: 'jugador',
+            side: 'neutral',
             vision: {
-              active: true,
-              brightRangeInSquares: 4,
+              active: false,
+              brightRangeInSquares: 6,
               dimRangeInSquares: 2,
-              hardness: 0.5
+              hardness: 0.5,
+              illuminates: true
             },
             statuses: []
           };

@@ -279,10 +279,32 @@ describe('Phase 2: Vision and Doors', () => {
     let enemyToken = useGameStore.getState().game.entities.find((e) => e.id === 'token_enemy_raw');
     expect(enemyToken?.vision?.active).toBe(false);
 
-    // Al cambiar bando a jugador si no tiene vision definida, se crea activada
-    useGameStore.getState().updateEntity('token_enemy_raw', { side: 'jugador', vision: undefined });
+    // Al cambiar bando a jugador, se activa su visión con los valores por defecto (6+2, ilumina su entorno)
+    useGameStore.getState().updateEntity('token_enemy_raw', { side: 'jugador' });
     enemyToken = useGameStore.getState().game.entities.find((e) => e.id === 'token_enemy_raw');
     expect(enemyToken?.vision?.active).toBe(true);
+    expect(enemyToken?.vision?.brightRangeInSquares).toBe(6);
+    expect(enemyToken?.vision?.dimRangeInSquares).toBe(2);
+    expect(enemyToken?.vision?.illuminates).toBe(true);
+
+    // Al cambiarlo a neutral o enemigo, su visión se desactiva
+    useGameStore.getState().updateEntity('token_enemy_raw', { side: 'neutral' });
+    enemyToken = useGameStore.getState().game.entities.find((e) => e.id === 'token_enemy_raw');
+    expect(enemyToken?.vision?.active).toBe(false);
+
+    // Al duplicar un token, la copia conserva el bando y la visión del original
+    const duplicatedId = useGameStore.getState().duplicateEntity('token_enemy_raw');
+    expect(duplicatedId).toBeDefined();
+    const duplicatedToken = useGameStore.getState().game.entities.find((e) => e.id === duplicatedId);
+    expect(duplicatedToken?.side).toBe('neutral');
+    expect(duplicatedToken?.vision?.active).toBe(false);
+
+    // Duplicar un jugador conserva bando jugador y visión activa
+    useGameStore.getState().updateEntity('token_enemy_raw', { side: 'jugador' });
+    const duplicatedPlayerId = useGameStore.getState().duplicateEntity('token_enemy_raw');
+    const duplicatedPlayer = useGameStore.getState().game.entities.find((e) => e.id === duplicatedPlayerId);
+    expect(duplicatedPlayer?.side).toBe('jugador');
+    expect(duplicatedPlayer?.vision?.active).toBe(true);
   });
 
   it('isMovementBlockedByWall blocks straight-line movement through a wall or closed door', () => {

@@ -346,14 +346,36 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       const entities = state.game.entities.map((ent) => {
         if (ent.id !== id) return ent;
         const updated = { ...ent, ...partial };
-        if (updated.type === 'token' && updated.side === 'jugador' && !updated.vision) {
-          updated.vision = {
-            active: true,
-            brightRangeInSquares: 4,
-            dimRangeInSquares: 2,
-            hardness: 0.5,
-            illuminates: true
-          };
+        if (updated.type === 'token') {
+          if (partial.side !== undefined) {
+            if (partial.side === 'jugador') {
+              updated.vision = {
+                active: true,
+                brightRangeInSquares: 6,
+                dimRangeInSquares: 2,
+                hardness: 0.5,
+                shape: updated.vision?.shape ?? 'circle',
+                coneAngle: updated.vision?.coneAngle ?? 60,
+                directionOffset: updated.vision?.directionOffset ?? 0,
+                illuminates: true
+              };
+            } else if (partial.side === 'enemigo' || partial.side === 'neutral') {
+              if (updated.vision) {
+                updated.vision = {
+                  ...updated.vision,
+                  active: false
+                };
+              }
+            }
+          } else if (updated.side === 'jugador' && !updated.vision) {
+            updated.vision = {
+              active: true,
+              brightRangeInSquares: 6,
+              dimRangeInSquares: 2,
+              hardness: 0.5,
+              illuminates: true
+            };
+          }
         }
         return updated;
       });

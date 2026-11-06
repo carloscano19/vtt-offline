@@ -319,26 +319,11 @@ export const PropertiesTab: React.FC = () => {
           <label className="text-slate-400 font-medium">Bando</label>
           <div className="grid grid-cols-3 gap-1.5">
             {(['jugador', 'enemigo', 'neutral'] as TokenSide[]).map((side) => {
-              const isSelected = (selectedEntity.side || 'jugador') === side;
+              const isSelected = (selectedEntity.side || 'neutral') === side;
               return (
                 <button
                   key={side}
-                  onClick={() => {
-                    if (side === 'jugador' && !selectedEntity.vision) {
-                      handleUpdate({
-                        side,
-                        vision: {
-                          active: true,
-                          brightRangeInSquares: 4,
-                          dimRangeInSquares: 2,
-                          hardness: 0.5,
-                          illuminates: true
-                        }
-                      });
-                    } else {
-                      handleUpdate({ side });
-                    }
-                  }}
+                  onClick={() => handleUpdate({ side })}
                   className={`py-1.5 px-2 rounded font-medium capitalize text-center border transition-all ${
                     isSelected
                       ? side === 'jugador'

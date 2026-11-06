@@ -1589,8 +1589,8 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         visibleToPlayers: entityType === 'map',
         locked: false,
         mapData: asset.mapData,
-        side: entityType === 'token' ? 'jugador' : undefined,
-        vision: entityType === 'token' ? { active: true, brightRangeInSquares: 4, dimRangeInSquares: 2, hardness: 0.5 } : undefined,
+        side: entityType === 'token' ? 'neutral' : undefined,
+        vision: entityType === 'token' ? { active: false, brightRangeInSquares: 6, dimRangeInSquares: 2, hardness: 0.5, illuminates: true } : undefined,
         statuses: []
       };
 
