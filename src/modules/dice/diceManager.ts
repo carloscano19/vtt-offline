@@ -168,7 +168,8 @@ class DiceManager {
               dieType: 'd10',
               sides: 10,
               value: is100 ? 0 : rawUnits,
-              displayValue: `${rawUnits}`
+              displayValue: `${rawUnits}`,
+              isUnitsPercentile: true
             });
           }
         } else {
@@ -192,12 +193,30 @@ class DiceManager {
     const sumKept = keptDice.reduce((acc, d) => acc + d.value, 0);
     const total = sumKept + (req.modifier || 0);
 
-    // Construcción de la fórmula textual
+    // Construcción de la fórmula textual con desglose explícito de decenas y unidades para d100
     const modStr = req.modifier > 0 ? `+${req.modifier}` : req.modifier < 0 ? `${req.modifier}` : '';
     const advStr = advantage === 'advantage' ? ' (Ventaja)' : advantage === 'disadvantage' ? ' (Desventaja)' : '';
 
     const poolFormula = pool.map((p) => `${p.count}${p.dieType}`).join(' + ') || `${req.count || 1}${req.dieType || 'd20'}`;
-    const diceStr = keptDice.map((d) => d.displayValue !== undefined ? d.displayValue : d.value).join(' + ');
+
+    const tokens: string[] = [];
+    for (let i = 0; i < keptDice.length; i++) {
+      const d = keptDice[i];
+      const val = d.displayValue !== undefined ? d.displayValue : d.value;
+      if (d.isTensPercentile) {
+        tokens.push(`Decenas ${val}`);
+      } else if (d.isUnitsPercentile) {
+        if (tokens.length > 0 && keptDice[i - 1]?.isTensPercentile) {
+          const prev = tokens.pop();
+          tokens.push(`${prev} · Unidades ${val}`);
+        } else {
+          tokens.push(`Unidades ${val}`);
+        }
+      } else {
+        tokens.push(`${val}`);
+      }
+    }
+    const diceStr = tokens.join(' + ');
     const detailStr = req.modifier !== 0 ? `${diceStr} ${modStr}` : diceStr;
     const formula = `${req.rollerName}: ${poolFormula}${modStr}${advStr} → ${detailStr} = ${total}`;
 

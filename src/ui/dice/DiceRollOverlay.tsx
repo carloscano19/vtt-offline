@@ -96,7 +96,15 @@ const ActiveRollItem: React.FC<ActiveRollItemProps> = ({ roll }) => {
       {/* Desglose gráfico de cada dado */}
       <div className="flex items-center justify-center gap-2.5 py-1.5 flex-wrap">
         {roll.dice.map((die, idx) => (
-          <DiceShape key={idx} dieType={die.dieType || roll.dieType || 'd20'} die={die} isRolling={false} />
+          <div key={idx} className="flex flex-col items-center gap-0.5">
+            <DiceShape dieType={die.dieType || roll.dieType || 'd20'} die={die} isRolling={false} />
+            {die.isTensPercentile && (
+              <span className="text-[10px] text-sky-400 font-semibold tracking-wide">Decenas</span>
+            )}
+            {die.isUnitsPercentile && (
+              <span className="text-[10px] text-sky-400 font-semibold tracking-wide">Unidades</span>
+            )}
+          </div>
         ))}
       </div>
 

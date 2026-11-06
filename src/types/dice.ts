@@ -11,6 +11,7 @@ export interface SingleDieResult {
   value: number;
   displayValue?: string | number;
   isTensPercentile?: boolean;
+  isUnitsPercentile?: boolean;
   dropped?: boolean;
   isNat20?: boolean;
   isNat1?: boolean;

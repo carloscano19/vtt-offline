@@ -19,18 +19,28 @@ export const DicePanel: React.FC<DicePanelProps> = ({
   isMaster = false,
   playerName = 'Máster'
 }) => {
-  // Modo combinar (por defecto desactivado: un clic en un dado tira al instante)
-  const [isCombineMode, setIsCombineMode] = useState(false);
+  // Selector de modo: 'single' (Un dado) o 'multiple' (Varios)
+  const [mode, setMode] = useState<'single' | 'multiple'>('single');
 
-  // Contadores por cada tipo de dado (para el modo combinar)
-  const [pool, setPool] = useState<Record<DieType, number>>({
-    d4: 0,
-    d6: 0,
-    d8: 0,
-    d10: 0,
-    d12: 0,
-    d20: 0,
-    d100: 0
+  // Estado para el modo Varios: casillas marcadas y contadores (por defecto cantidad 1)
+  const [selectedDice, setSelectedDice] = useState<Record<DieType, boolean>>({
+    d4: false,
+    d6: false,
+    d8: false,
+    d10: false,
+    d12: false,
+    d20: false,
+    d100: false
+  });
+
+  const [counts, setCounts] = useState<Record<DieType, number>>({
+    d4: 1,
+    d6: 1,
+    d8: 1,
+    d10: 1,
+    d12: 1,
+    d20: 1,
+    d100: 1
   });
 
   const [modifier, setModifier] = useState<number>(0);
@@ -51,37 +61,53 @@ export const DicePanel: React.FC<DicePanelProps> = ({
     diceManager.setMuted(next);
   };
 
-  const handleDieClick = (die: DieType) => {
-    setPool((prev) => ({
+  const getDieLabel = (die: DieType) => (die === 'd100' ? 'd100 (%)' : die);
+
+  const toggleSelectDie = (die: DieType) => {
+    setSelectedDice((prev) => ({
       ...prev,
-      [die]: Math.min(20, (prev[die] || 0) + 1)
+      [die]: !prev[die]
     }));
   };
 
   const updateDieCount = (die: DieType, delta: number) => {
-    setPool((prev) => ({
-      ...prev,
-      [die]: Math.max(0, Math.min(20, (prev[die] || 0) + delta))
-    }));
+    setCounts((prev) => {
+      const cur = prev[die] ?? 1;
+      const next = Math.max(1, Math.min(20, cur + delta));
+      return { ...prev, [die]: next };
+    });
+    // Si incrementamos un dado que no estaba marcado, lo marcamos para mayor comodidad
+    if (delta > 0) {
+      setSelectedDice((prev) => ({ ...prev, [die]: true }));
+    }
   };
 
-  // Limpiar solo los dados seleccionados del pool; modificador y ventaja se conservan siempre
+  // Limpiar selecciones en modo Varios (modificador y ventaja se conservan siempre)
   const handleClear = () => {
-    setPool({
-      d4: 0,
-      d6: 0,
-      d8: 0,
-      d10: 0,
-      d12: 0,
-      d20: 0,
-      d100: 0
+    setSelectedDice({
+      d4: false,
+      d6: false,
+      d8: false,
+      d10: false,
+      d12: false,
+      d20: false,
+      d100: false
+    });
+    setCounts({
+      d4: 1,
+      d6: 1,
+      d8: 1,
+      d10: 1,
+      d12: 1,
+      d20: 1,
+      d100: 1
     });
   };
 
-  // Extraer dados activos para la tirada en modo combinar
+  // Extraer dados activos para la tirada en modo Varios
   const activeDice: DiePoolItem[] = DICE_LIST
-    .filter((d) => (pool[d] || 0) > 0)
-    .map((d) => ({ dieType: d, count: pool[d] }));
+    .filter((d) => selectedDice[d] && (counts[d] || 0) > 0)
+    .map((d) => ({ dieType: d, count: counts[d] || 1 }));
 
   const totalDice = activeDice.reduce((acc, d) => acc + d.count, 0);
   const isSingleD20 = activeDice.length === 1 && activeDice[0].dieType === 'd20' && activeDice[0].count === 1;
@@ -89,24 +115,24 @@ export const DicePanel: React.FC<DicePanelProps> = ({
   // Modificador en texto
   const modStr = modifier > 0 ? ` + ${modifier}` : modifier < 0 ? ` - ${Math.abs(modifier)}` : '';
 
-  // En modo combinar, ventaja/desventaja solo aplica a 1d20
-  const advStrCombine = isSingleD20 && advantage === 'advantage'
+  // En modo varios, ventaja/desventaja solo aplica si es exactamente 1d20
+  const advStrMultiple = isSingleD20 && advantage === 'advantage'
     ? ' (Ventaja)'
     : isSingleD20 && advantage === 'disadvantage'
     ? ' (Desventaja)'
     : '';
 
   // Texto o fórmula en la barra superior
-  const formulaPreview = isCombineMode
+  const formulaPreview = mode === 'multiple'
     ? activeDice.length > 0
-      ? `${activeDice.map((d) => `${d.count}${d.dieType}`).join(' + ')}${modStr}${advStrCombine}`
-      : 'Selecciona dados para combinar'
+      ? `${activeDice.map((d) => `${d.count}${d.dieType === 'd100' ? 'd100 (%)' : d.dieType}`).join(' + ')}${modStr}${advStrMultiple}`
+      : 'Marca los dados que quieras tirar'
     : `Tirada rápida (haz clic en un dado)${modStr !== '' ? ` [${modStr.trim()}]` : ''}${
         advantage === 'advantage' ? ' · Ventaja en d20' : advantage === 'disadvantage' ? ' · Desventaja en d20' : ''
       }`;
 
   const handleRoll = async (overrideReq?: Omit<DiceRollRequest, 'requestId'>) => {
-    if (!overrideReq && totalDice === 0) return;
+    if (!overrideReq && activeDice.length === 0) return;
 
     setWaitingWarning(null);
     setIsRolling(true);
@@ -123,10 +149,7 @@ export const DicePanel: React.FC<DicePanelProps> = ({
 
     setLastRequest(req);
 
-    // Al tirar en modo combinar, la combinación se limpia sola
-    if (!overrideReq && isCombineMode) {
-      handleClear();
-    }
+    // En modo Varios, las marcas se mantienen para poder repetir la tirada
 
     try {
       if (isMaster) {
@@ -142,7 +165,7 @@ export const DicePanel: React.FC<DicePanelProps> = ({
     }
   };
 
-  // Tirada rápida de 1 dado al instante (modo por defecto)
+  // Tirada rápida de 1 dado al instante (modo "Un dado")
   const handleQuickRoll = (die: DieType) => {
     if (isRolling || (!isMaster && isFrozen)) return;
     const isD20 = die === 'd20';
@@ -161,15 +184,15 @@ export const DicePanel: React.FC<DicePanelProps> = ({
   const handleRepeatLast = () => {
     if (lastRequest) {
       handleRoll(lastRequest);
-    } else if (!isCombineMode) {
+    } else if (mode === 'single') {
       handleQuickRoll('d20');
-    } else {
+    } else if (activeDice.length > 0) {
       handleRoll();
     }
   };
 
-  // Ventaja/Desventaja: visible en modo rápido (para d20) o en modo combinar si es exactamente 1d20
-  const showAdvantageSelector = !isCombineMode || isSingleD20;
+  // Ventaja/Desventaja: visible en modo Un dado (para cuando se pulse d20) o en modo Varios si es exactamente 1d20
+  const showAdvantageSelector = mode === 'single' || isSingleD20;
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 select-none animate-in fade-in">
@@ -200,6 +223,32 @@ export const DicePanel: React.FC<DicePanelProps> = ({
           </div>
         </div>
 
+        {/* Selector de modo: Un dado y Varios */}
+        <div className="grid grid-cols-2 p-1 bg-slate-950 rounded-lg border border-slate-800 text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => setMode('single')}
+            className={`py-1.5 rounded-md transition-all cursor-pointer font-medium ${
+              mode === 'single'
+                ? 'bg-sky-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Un dado
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('multiple')}
+            className={`py-1.5 rounded-md transition-all cursor-pointer font-medium ${
+              mode === 'multiple'
+                ? 'bg-sky-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Varios
+          </button>
+        </div>
+
         {/* Aviso de espera al máster */}
         {waitingWarning && (
           <div className="bg-amber-950/80 border border-amber-600/60 rounded-lg p-2.5 text-xs text-amber-200 flex items-center gap-2">
@@ -213,13 +262,13 @@ export const DicePanel: React.FC<DicePanelProps> = ({
           <div className="font-mono text-xs font-bold text-sky-300 truncate" title={formulaPreview}>
             {formulaPreview}
           </div>
-          {isCombineMode && (
+          {mode === 'multiple' && (
             <button
               type="button"
               onClick={handleClear}
-              disabled={totalDice === 0}
+              disabled={totalDice === 0 && !Object.values(selectedDice).some(Boolean)}
               className="text-[11px] font-medium text-slate-400 hover:text-rose-400 disabled:opacity-30 disabled:hover:text-slate-400 flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
-              title="Limpiar todos los dados seleccionados"
+              title="Limpiar todos los dados marcados"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>Limpiar</span>
@@ -227,96 +276,99 @@ export const DicePanel: React.FC<DicePanelProps> = ({
           )}
         </div>
 
-        {/* Selector de dados con interruptor Combinar */}
+        {/* Lista de dados */}
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-slate-300 block">
-              {isCombineMode ? 'Dados en la tirada:' : 'Tirada rápida (1 clic):'}
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer select-none group">
-              <span className={`text-xs font-semibold transition-colors ${isCombineMode ? 'text-sky-400' : 'text-slate-400 group-hover:text-slate-300'}`}>
-                Combinar
-              </span>
-              <div className="relative inline-flex items-center">
-                <input
-                  type="checkbox"
-                  checked={isCombineMode}
-                  onChange={(e) => setIsCombineMode(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-8 h-4 bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-sky-500"></div>
-              </div>
-            </label>
-          </div>
+          <label className="text-xs font-semibold text-slate-300 block">
+            {mode === 'single' ? 'Tirada rápida (haz clic para tirar):' : 'Marca los dados y ajusta cantidades:'}
+          </label>
 
-          {!isCombineMode ? (
-            /* Modo Rápido (por defecto): Un clic tira ese dado al momento */
+          {mode === 'single' ? (
+            /* Modo "Un dado": Un clic tira ese dado al momento */
             <div className="grid grid-cols-4 gap-1.5">
               {DICE_LIST.map((die) => {
                 const isD20 = die === 'd20';
+                const label = getDieLabel(die);
                 return (
                   <button
                     key={die}
                     type="button"
                     disabled={isRolling || (!isMaster && isFrozen)}
                     onClick={() => handleQuickRoll(die)}
-                    className={`h-11 flex items-center justify-center rounded-lg border text-xs font-mono font-bold transition-all active:scale-95 cursor-pointer disabled:opacity-40 shadow-sm ${
+                    className={`h-11 flex items-center justify-center rounded-lg border font-mono font-bold transition-all active:scale-95 cursor-pointer disabled:opacity-40 shadow-sm ${
+                      die === 'd100' ? 'text-xs' : 'text-sm'
+                    } ${
                       isD20
                         ? 'bg-sky-950/60 border-sky-500/70 text-sky-200 hover:bg-sky-600 hover:text-white hover:border-sky-400'
                         : 'bg-slate-800/90 border-slate-700 text-slate-200 hover:bg-sky-600 hover:text-white hover:border-sky-400'
                     }`}
-                    title={`Tirar 1${die}${modStr}${isD20 && advantage !== 'none' ? ` (${advantage === 'advantage' ? 'Ventaja' : 'Desventaja'})` : ''}`}
+                    title={`Tirar 1${label}${modStr}${isD20 && advantage !== 'none' ? ` (${advantage === 'advantage' ? 'Ventaja' : 'Desventaja'})` : ''}`}
                   >
-                    <span className="text-sm">{die}</span>
+                    <span>{label}</span>
                   </button>
                 );
               })}
             </div>
           ) : (
-            /* Modo Combinar: Pulsar dados los añade a la tirada con contadores - / + */
-            <div className="grid grid-cols-4 gap-1.5">
+            /* Modo "Varios": Cada dado con casilla para marcarlo y contador de cantidad (- / +) */
+            <div className="grid grid-cols-2 gap-2 max-h-[220px] overflow-y-auto pr-0.5">
               {DICE_LIST.map((die) => {
-                const count = pool[die] || 0;
-                const hasCount = count > 0;
+                const isChecked = Boolean(selectedDice[die]);
+                const count = counts[die] || 1;
+                const label = getDieLabel(die);
+
                 return (
                   <div
                     key={die}
-                    className={`rounded-lg border p-1 flex flex-col items-center gap-1 transition-all ${
-                      hasCount
-                        ? 'bg-sky-950/50 border-sky-500/70 shadow-sm'
+                    onClick={() => toggleSelectDie(die)}
+                    className={`rounded-lg border p-1.5 flex items-center justify-between gap-1.5 transition-all cursor-pointer select-none ${
+                      die === 'd100' ? 'col-span-2' : ''
+                    } ${
+                      isChecked
+                        ? 'bg-sky-950/60 border-sky-500/80 shadow-sm'
                         : 'bg-slate-800/80 border-slate-700/80 hover:bg-slate-800'
                     }`}
                   >
-                    <button
-                      type="button"
-                      onClick={() => handleDieClick(die)}
-                      className="w-full text-center py-1 text-xs font-mono font-bold text-slate-200 hover:text-white cursor-pointer active:scale-95"
-                      title={`Pulsar para añadir 1${die}`}
+                    <label
+                      className="flex items-center gap-1.5 cursor-pointer min-w-0"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      {die}
-                    </button>
-                    <div className="flex items-center justify-between w-full bg-slate-950/80 rounded border border-slate-800 px-0.5 py-0.5 text-[11px]">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleSelectDie(die)}
+                        className="accent-sky-500 w-3.5 h-3.5 rounded cursor-pointer"
+                      />
+                      <span
+                        className={`font-mono font-bold truncate ${
+                          die === 'd100' ? 'text-xs' : 'text-xs'
+                        } ${isChecked ? 'text-sky-300' : 'text-slate-300'}`}
+                      >
+                        {label}
+                      </span>
+                    </label>
+
+                    <div
+                      className="flex items-center bg-slate-950/90 rounded border border-slate-800 px-1 py-0.5 text-xs gap-1 shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <button
                         type="button"
-                        disabled={count === 0}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          updateDieCount(die, -1);
-                        }}
+                        onClick={() => updateDieCount(die, -1)}
+                        disabled={count <= 1}
                         className="w-4 h-4 flex items-center justify-center rounded text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-20 cursor-pointer font-bold leading-none"
+                        title="Reducir cantidad"
                       >
                         -
                       </button>
-                      <span className="font-mono font-semibold text-slate-100 text-[11px] leading-none">
+                      <span className="font-mono font-bold text-slate-100 min-w-[14px] text-center text-xs">
                         {count}
                       </span>
                       <button
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          updateDieCount(die, 1);
-                        }}
-                        className="w-4 h-4 flex items-center justify-center rounded text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer font-bold leading-none"
+                        onClick={() => updateDieCount(die, 1)}
+                        disabled={count >= 20}
+                        className="w-4 h-4 flex items-center justify-center rounded text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-20 cursor-pointer font-bold leading-none"
+                        title="Aumentar cantidad"
                       >
                         +
                       </button>
@@ -424,17 +476,17 @@ export const DicePanel: React.FC<DicePanelProps> = ({
         <div className="pt-2 flex items-center gap-2">
           <button
             type="button"
-            disabled={isRolling || (!isMaster && isFrozen) || (isCombineMode && totalDice === 0)}
-            onClick={() => (isCombineMode ? handleRoll() : handleQuickRoll('d20'))}
+            disabled={isRolling || (!isMaster && isFrozen) || (mode === 'multiple' && activeDice.length === 0)}
+            onClick={() => (mode === 'multiple' ? handleRoll() : handleQuickRoll('d20'))}
             className="flex-1 py-2.5 px-4 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-40 text-white font-bold text-sm shadow-lg transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
           >
             <Dices className="w-4 h-4" />
-            <span>{isRolling ? 'Tirando...' : isCombineMode ? 'Tirar' : 'Tirar 1d20'}</span>
+            <span>{isRolling ? 'Tirando...' : mode === 'multiple' ? 'Tirar' : 'Tirar 1d20'}</span>
           </button>
 
           <button
             type="button"
-            disabled={isRolling || (!isMaster && isFrozen) || (!lastRequest && isCombineMode && totalDice === 0)}
+            disabled={isRolling || (!isMaster && isFrozen) || (!lastRequest && mode === 'multiple' && activeDice.length === 0)}
             onClick={handleRepeatLast}
             className="py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 border border-slate-700 text-slate-200 text-xs font-semibold shadow transition-colors cursor-pointer flex items-center gap-1.5"
             title="Repetir la última tirada"

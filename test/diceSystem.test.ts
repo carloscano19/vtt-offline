@@ -72,9 +72,13 @@ describe('Bloque 2: Dice System with Master Authority', () => {
       expect(tensDie.dieType).toBe('d100');
       expect(tensDie.isTensPercentile).toBe(true);
       expect(unitsDie.dieType).toBe('d10');
+      expect(unitsDie.isUnitsPercentile).toBe(true);
 
       expect(result.total).toBeGreaterThanOrEqual(1);
       expect(result.total).toBeLessThanOrEqual(100);
+
+      // La fórmula debe formatear el desglose como "Decenas XX · Unidades X = Total"
+      expect(result.formula).toContain(`Decenas ${tensDie.displayValue} · Unidades ${unitsDie.displayValue}`);
 
       if (tensDie.displayValue === '00' && unitsDie.displayValue === '0') {
         expect(result.total).toBe(100);
