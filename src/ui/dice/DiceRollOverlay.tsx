@@ -40,7 +40,7 @@ const ActiveRollItem: React.FC<ActiveRollItemProps> = ({ roll }) => {
       {/* Dados rodando */}
       <div className="flex items-center justify-center gap-3 py-1 flex-wrap">
         {roll.dice.map((die, idx) => (
-          <DiceShape key={idx} dieType={roll.dieType} die={die} isRolling={isRolling} />
+          <DiceShape key={idx} dieType={die.dieType || roll.dieType || 'd20'} die={die} isRolling={isRolling} />
         ))}
       </div>
 

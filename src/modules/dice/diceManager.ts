@@ -104,21 +104,30 @@ class DiceManager {
    * Generación autoritaria de tiradas (ejecutada exclusivamente por el máster)
    */
   public generateRoll(req: DiceRollRequest): DiceRollResult {
-    const sides = DIE_SIDES[req.dieType] || 20;
+    // Normalizar el pool de dados: usar dicePool si existe, o construir a partir de dieType y count
+    const pool: { dieType: DieType; count: number }[] = req.dicePool && req.dicePool.length > 0
+      ? req.dicePool.filter((item) => item.count > 0)
+      : [{ dieType: req.dieType || 'd20', count: req.count || 1 }];
+
+    const totalDiceCount = pool.reduce((acc, item) => acc + item.count, 0);
+    const isSingleD20 = pool.length === 1 && pool[0].dieType === 'd20' && pool[0].count === 1;
+    const advantage = isSingleD20 ? (req.advantage || 'none') : 'none';
+
     const dice: SingleDieResult[] = [];
 
-    if (req.dieType === 'd20' && (req.advantage === 'advantage' || req.advantage === 'disadvantage')) {
+    if (isSingleD20 && (advantage === 'advantage' || advantage === 'disadvantage')) {
       const v1 = generateRandomInteger(1, 20);
       const v2 = generateRandomInteger(1, 20);
 
       let keepFirst = true;
-      if (req.advantage === 'advantage') {
+      if (advantage === 'advantage') {
         keepFirst = v1 >= v2;
       } else {
         keepFirst = v1 <= v2;
       }
 
       const d1: SingleDieResult = {
+        dieType: 'd20',
         sides: 20,
         value: v1,
         dropped: !keepFirst,
@@ -127,6 +136,7 @@ class DiceManager {
       };
 
       const d2: SingleDieResult = {
+        dieType: 'd20',
         sides: 20,
         value: v2,
         dropped: keepFirst,
@@ -136,15 +146,19 @@ class DiceManager {
 
       dice.push(d1, d2);
     } else {
-      const count = Math.max(1, Math.min(20, req.count || 1));
-      for (let i = 0; i < count; i++) {
-        const val = generateRandomInteger(1, sides);
-        dice.push({
-          sides,
-          value: val,
-          isNat20: sides === 20 && val === 20,
-          isNat1: sides === 20 && val === 1
-        });
+      for (const item of pool) {
+        const sides = DIE_SIDES[item.dieType] || 20;
+        const count = Math.max(1, Math.min(20, item.count));
+        for (let i = 0; i < count; i++) {
+          const val = generateRandomInteger(1, sides);
+          dice.push({
+            dieType: item.dieType,
+            sides,
+            value: val,
+            isNat20: item.dieType === 'd20' && val === 20,
+            isNat1: item.dieType === 'd20' && val === 1
+          });
+        }
       }
     }
 
@@ -154,22 +168,24 @@ class DiceManager {
 
     // Construcción de la fórmula textual
     const modStr = req.modifier > 0 ? `+${req.modifier}` : req.modifier < 0 ? `${req.modifier}` : '';
-    const advStr = req.advantage === 'advantage' ? ' (Ventaja)' : req.advantage === 'disadvantage' ? ' (Desventaja)' : '';
+    const advStr = advantage === 'advantage' ? ' (Ventaja)' : advantage === 'disadvantage' ? ' (Desventaja)' : '';
+
+    const poolFormula = pool.map((p) => `${p.count}${p.dieType}`).join(' + ') || `${req.count || 1}${req.dieType || 'd20'}`;
     const diceStr = keptDice.map((d) => d.value).join(' + ');
     const detailStr = req.modifier !== 0 ? `${diceStr} ${modStr}` : diceStr;
-    const countPrefix = req.dieType === 'd20' && req.advantage !== 'none' ? '1' : `${req.count || 1}`;
-    const formula = `${req.rollerName}: ${countPrefix}${req.dieType}${modStr}${advStr} → ${detailStr} = ${total}`;
+    const formula = `${req.rollerName}: ${poolFormula}${modStr}${advStr} → ${detailStr} = ${total}`;
 
     return {
       id: req.requestId || `roll_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       rollerName: req.rollerName,
       isSecret: req.isSecret,
       formula,
-      dieType: req.dieType,
+      dieType: pool[0]?.dieType || 'd20',
+      dicePool: pool,
       dice,
       modifier: req.modifier || 0,
       total,
-      advantage: req.advantage,
+      advantage,
       timestamp: Date.now()
     };
   }

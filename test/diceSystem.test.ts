@@ -162,4 +162,37 @@ describe('Bloque 2: Dice System with Master Authority', () => {
     expect(history[0].rollerName).toBe('Roller_59');
     expect(history[49].rollerName).toBe('Roller_10');
   });
+
+  it('soporta tiradas mixtas con múltiples tipos de dados (ej. 2d6 + 1d8 + 3) y desactiva ventaja', () => {
+    const req: DiceRollRequest = {
+      requestId: 'test_mixed',
+      rollerName: 'Gandalf',
+      dicePool: [
+        { dieType: 'd6', count: 2 },
+        { dieType: 'd8', count: 1 }
+      ],
+      modifier: 3,
+      advantage: 'advantage' // Debe ser ignorado porque no es exactamente 1d20
+    };
+
+    const result = diceManager.generateRoll(req);
+    expect(result.dice.length).toBe(3);
+
+    const d6Dice = result.dice.filter((d) => d.dieType === 'd6');
+    const d8Dice = result.dice.filter((d) => d.dieType === 'd8');
+
+    expect(d6Dice.length).toBe(2);
+    expect(d8Dice.length).toBe(1);
+
+    expect(d6Dice[0].sides).toBe(6);
+    expect(d6Dice[1].sides).toBe(6);
+    expect(d8Dice[0].sides).toBe(8);
+
+    expect(result.advantage).toBe('none');
+    expect(result.formula).toContain('Gandalf: 2d6 + 1d8+3');
+
+    const sum = result.dice.reduce((acc, d) => acc + d.value, 0);
+    expect(result.total).toBe(sum + 3);
+  });
 });
+

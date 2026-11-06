@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { DieType, DiceRollRequest } from '../../types/dice';
+import { DieType, DiceRollRequest, DiePoolItem } from '../../types/dice';
 import { diceManager } from '../../modules/dice/diceManager';
 import { useGameStore } from '../../stores/useGameStore';
-import { Dices, Volume2, VolumeX, EyeOff, RotateCcw, AlertCircle, X } from 'lucide-react';
+import { Dices, Volume2, VolumeX, EyeOff, RotateCcw, AlertCircle, X, Trash2 } from 'lucide-react';
 
 interface DicePanelProps {
   isOpen: boolean;
@@ -19,8 +19,17 @@ export const DicePanel: React.FC<DicePanelProps> = ({
   isMaster = false,
   playerName = 'Máster'
 }) => {
-  const [selectedDie, setSelectedDie] = useState<DieType>('d20');
-  const [count, setCount] = useState<number>(1);
+  // Contadores por cada tipo de dado
+  const [pool, setPool] = useState<Record<DieType, number>>({
+    d4: 0,
+    d6: 0,
+    d8: 0,
+    d10: 0,
+    d12: 0,
+    d20: 1,
+    d100: 0
+  });
+
   const [modifier, setModifier] = useState<number>(0);
   const [advantage, setAdvantage] = useState<'none' | 'advantage' | 'disadvantage'>('none');
   const [isSecret, setIsSecret] = useState(false);
@@ -39,16 +48,61 @@ export const DicePanel: React.FC<DicePanelProps> = ({
     diceManager.setMuted(next);
   };
 
+  const handleDieClick = (die: DieType) => {
+    setPool((prev) => ({
+      ...prev,
+      [die]: Math.min(20, (prev[die] || 0) + 1)
+    }));
+  };
+
+  const updateDieCount = (die: DieType, delta: number) => {
+    setPool((prev) => ({
+      ...prev,
+      [die]: Math.max(0, Math.min(20, (prev[die] || 0) + delta))
+    }));
+  };
+
+  const handleClear = () => {
+    setPool({
+      d4: 0,
+      d6: 0,
+      d8: 0,
+      d10: 0,
+      d12: 0,
+      d20: 0,
+      d100: 0
+    });
+    setAdvantage('none');
+  };
+
+  // Extraer dados activos para la tirada
+  const activeDice: DiePoolItem[] = DICE_LIST
+    .filter((d) => (pool[d] || 0) > 0)
+    .map((d) => ({ dieType: d, count: pool[d] }));
+
+  const totalDice = activeDice.reduce((acc, d) => acc + d.count, 0);
+  const isSingleD20 = activeDice.length === 1 && activeDice[0].dieType === 'd20' && activeDice[0].count === 1;
+
+  // Construcción de la fórmula visible arriba
+  const modStr = modifier > 0 ? ` + ${modifier}` : modifier < 0 ? ` - ${Math.abs(modifier)}` : '';
+  const advStr = isSingleD20 && advantage === 'advantage' ? ' (Ventaja)' : isSingleD20 && advantage === 'disadvantage' ? ' (Desventaja)' : '';
+  const formulaPreview = activeDice.length > 0
+    ? `${activeDice.map((d) => `${d.count}${d.dieType}`).join(' + ')}${modStr}${advStr}`
+    : 'Selecciona dados para tirar';
+
   const handleRoll = async (overrideReq?: Omit<DiceRollRequest, 'requestId'>) => {
+    if (!overrideReq && totalDice === 0) return;
+
     setWaitingWarning(null);
     setIsRolling(true);
 
     const req: Omit<DiceRollRequest, 'requestId'> = overrideReq || {
       rollerName: playerName,
-      dieType: selectedDie,
-      count,
+      dieType: activeDice[0]?.dieType || 'd20',
+      count: activeDice[0]?.count || 1,
+      dicePool: activeDice,
       modifier,
-      advantage: selectedDie === 'd20' ? advantage : 'none',
+      advantage: isSingleD20 ? advantage : 'none',
       isSecret: isMaster ? isSecret : false
     };
 
@@ -113,79 +167,105 @@ export const DicePanel: React.FC<DicePanelProps> = ({
           </div>
         )}
 
-        {/* Selector de dado */}
+        {/* Barra superior con fórmula en tiempo real y botón Limpiar */}
+        <div className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 flex items-center justify-between gap-2 shadow-inner">
+          <div className="font-mono text-xs font-bold text-sky-300 truncate" title={formulaPreview}>
+            {formulaPreview}
+          </div>
+          <button
+            type="button"
+            onClick={handleClear}
+            disabled={totalDice === 0 && modifier === 0}
+            className="text-[11px] font-medium text-slate-400 hover:text-rose-400 disabled:opacity-30 disabled:hover:text-slate-400 flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
+            title="Limpiar todos los dados seleccionados"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Limpiar</span>
+          </button>
+        </div>
+
+        {/* Selector de dados: al pulsar un dado se añade, con botones - y + */}
         <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-slate-300">Tipo de dado:</label>
+          <label className="text-xs font-semibold text-slate-300 block">Dados en la tirada:</label>
           <div className="grid grid-cols-4 gap-1.5">
-            {DICE_LIST.map((die) => (
-              <button
-                key={die}
-                type="button"
-                onClick={() => {
-                  setSelectedDie(die);
-                  if (die !== 'd20') setAdvantage('none');
-                }}
-                className={`py-2 px-1 rounded-lg text-xs font-mono font-bold border transition-all cursor-pointer ${
-                  selectedDie === die
-                    ? 'bg-sky-600 border-sky-400 text-white shadow-sm'
-                    : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300'
-                }`}
-              >
-                {die}
-              </button>
-            ))}
+            {DICE_LIST.map((die) => {
+              const count = pool[die] || 0;
+              const hasCount = count > 0;
+              return (
+                <div
+                  key={die}
+                  className={`rounded-lg border p-1 flex flex-col items-center gap-1 transition-all ${
+                    hasCount
+                      ? 'bg-sky-950/50 border-sky-500/70 shadow-sm'
+                      : 'bg-slate-800/80 border-slate-700/80 hover:bg-slate-800'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleDieClick(die)}
+                    className="w-full text-center py-1 text-xs font-mono font-bold text-slate-200 hover:text-white cursor-pointer active:scale-95"
+                    title={`Pulsar para añadir 1${die}`}
+                  >
+                    {die}
+                  </button>
+                  <div className="flex items-center justify-between w-full bg-slate-950/80 rounded border border-slate-800 px-0.5 py-0.5 text-[11px]">
+                    <button
+                      type="button"
+                      disabled={count === 0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        updateDieCount(die, -1);
+                      }}
+                      className="w-4 h-4 flex items-center justify-center rounded text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-20 cursor-pointer font-bold leading-none"
+                    >
+                      -
+                    </button>
+                    <span className="font-mono font-semibold text-slate-100 text-[11px] leading-none">
+                      {count}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        updateDieCount(die, 1);
+                      }}
+                      className="w-4 h-4 flex items-center justify-center rounded text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer font-bold leading-none"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* Cantidad y Modificador */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="text-xs text-slate-300">Cantidad:</label>
-            <div className="flex items-center gap-1 bg-slate-950 border border-slate-700 rounded-lg p-1">
-              <button
-                type="button"
-                onClick={() => setCount((c) => Math.max(1, c - 1))}
-                className="w-7 h-7 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded text-slate-200 text-sm font-bold cursor-pointer"
-              >
-                -
-              </button>
-              <span className="flex-1 text-center font-mono text-sm font-semibold">{count}</span>
-              <button
-                type="button"
-                onClick={() => setCount((c) => Math.min(20, c + 1))}
-                className="w-7 h-7 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded text-slate-200 text-sm font-bold cursor-pointer"
-              >
-                +
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs text-slate-300">Modificador:</label>
-            <div className="flex items-center gap-1 bg-slate-950 border border-slate-700 rounded-lg p-1">
-              <button
-                type="button"
-                onClick={() => setModifier((m) => m - 1)}
-                className="w-7 h-7 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded text-slate-200 text-sm font-bold cursor-pointer"
-              >
-                -
-              </button>
-              <span className="flex-1 text-center font-mono text-sm font-semibold">
-                {modifier > 0 ? `+${modifier}` : modifier}
-              </span>
-              <button
-                type="button"
-                onClick={() => setModifier((m) => m + 1)}
-                className="w-7 h-7 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded text-slate-200 text-sm font-bold cursor-pointer"
-              >
-                +
-              </button>
-            </div>
+        {/* Modificador */}
+        <div className="space-y-1">
+          <label className="text-xs font-semibold text-slate-300 block">Modificador:</label>
+          <div className="flex items-center gap-1 bg-slate-950 border border-slate-700 rounded-lg p-1">
+            <button
+              type="button"
+              onClick={() => setModifier((m) => m - 1)}
+              className="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded text-slate-200 text-sm font-bold cursor-pointer"
+            >
+              -
+            </button>
+            <span className="flex-1 text-center font-mono text-sm font-semibold">
+              {modifier > 0 ? `+${modifier}` : modifier}
+            </span>
+            <button
+              type="button"
+              onClick={() => setModifier((m) => m + 1)}
+              className="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded text-slate-200 text-sm font-bold cursor-pointer"
+            >
+              +
+            </button>
           </div>
         </div>
 
-        {/* Ventaja / Desventaja (solo para d20) */}
-        {selectedDie === 'd20' && (
+        {/* Ventaja / Desventaja (solo para exactamente 1d20) */}
+        {isSingleD20 && (
           <div className="space-y-1.5 pt-1">
             <label className="text-xs font-semibold text-slate-300">Modo d20:</label>
             <div className="grid grid-cols-3 gap-1.5">
@@ -256,9 +336,9 @@ export const DicePanel: React.FC<DicePanelProps> = ({
         <div className="pt-2 flex items-center gap-2">
           <button
             type="button"
-            disabled={isRolling || (!isMaster && isFrozen)}
+            disabled={isRolling || (!isMaster && isFrozen) || totalDice === 0}
             onClick={() => handleRoll()}
-            className="flex-1 py-2.5 px-4 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-bold text-sm shadow-lg transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
+            className="flex-1 py-2.5 px-4 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-40 text-white font-bold text-sm shadow-lg transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
           >
             <Dices className="w-4 h-4" />
             <span>{isRolling ? 'Tirando...' : 'Tirar'}</span>
@@ -266,9 +346,9 @@ export const DicePanel: React.FC<DicePanelProps> = ({
 
           <button
             type="button"
-            disabled={isRolling || (!isMaster && isFrozen)}
+            disabled={isRolling || (!isMaster && isFrozen) || (!lastRequest && totalDice === 0)}
             onClick={handleRepeatLast}
-            className="py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 border border-slate-700 text-slate-200 text-xs font-semibold shadow transition-colors cursor-pointer flex items-center gap-1.5"
+            className="py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 border border-slate-700 text-slate-200 text-xs font-semibold shadow transition-colors cursor-pointer flex items-center gap-1.5"
             title="Repetir la última tirada"
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -279,3 +359,4 @@ export const DicePanel: React.FC<DicePanelProps> = ({
     </div>
   );
 };
+
