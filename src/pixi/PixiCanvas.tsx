@@ -7,7 +7,7 @@ import { Entity, Point2D, recalculateDoorEndpoints, rotateDoorAroundHinge, getDe
 import { CameraState } from '../types/game';
 import { syncChannel } from '../modules/sync/syncChannel';
 import { getZoomSensitivity } from '../modules/settings/zoomSensitivity';
-import { isMovementBlockedByWall } from '../modules/walls/wallManager';
+import { isMovementBlockedByWall, getAllWallSegments } from '../modules/walls/wallManager';
 import { getAsset, db } from '../db/dexie';
 import { cloudSync } from '../modules/sync/cloudSync';
 import { cloudGameSync } from '../modules/persistence/cloudGameSync';
@@ -17,6 +17,24 @@ import { getMediaDimensions, persistAssetDimensions } from '../utils/mediaDimens
 import { FastActionBar } from '../ui/master/components/FastActionBar';
 
 const ROTATE_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8' fill='none' stroke='%23000' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpolyline points='21 3 21 8 16 8' fill='none' stroke='%23000' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpolyline points='21 3 21 8 16 8' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 12 12, crosshair`;
+
+function findMagnetSnapPoint(worldPt: Point2D, entities: Entity[], maxDistWorld: number): Point2D | null {
+  const wallSegments = getAllWallSegments(entities);
+  let closest: Point2D | null = null;
+  let minDist = maxDistWorld;
+
+  for (const seg of wallSegments) {
+    for (const ep of [seg.p1, seg.p2]) {
+      const d = Math.hypot(worldPt.x - ep.x, worldPt.y - ep.y);
+      if (d <= minDist) {
+        minDist = d;
+        closest = ep;
+      }
+    }
+  }
+
+  return closest;
+}
 
 interface PixiCanvasProps {
   isMaster: boolean;
@@ -32,10 +50,13 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
   const setPlayerCamera = useGameStore((s) => s.setPlayerCamera);
   const updateEntity = useGameStore((s) => s.updateEntity);
   const addEntity = useGameStore((s) => s.addEntity);
+  const removeEntities = useGameStore((s) => s.removeEntities);
+  const undo = useGameStore((s) => s.undo);
   const toggleDoor = useGameStore((s) => s.toggleDoor);
   const setDoorLocked = useGameStore((s) => s.setDoorLocked);
 
   const activeTool = useUIStore((s) => s.activeTool);
+  const wallDrawMode = useUIStore((s) => s.wallDrawMode);
   const setActiveTool = useUIStore((s) => s.setActiveTool);
   const selectedEntityIds = useUIStore((s) => s.selectedEntityIds);
   const selectEntity = useUIStore((s) => s.selectEntity);
@@ -55,6 +76,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [hoveredStatusToken, setHoveredStatusToken] = useState<{ entity: Entity; screenX: number; screenY: number } | null>(null);
   const capturedPointerRef = useRef<{ element: HTMLElement; pointerId: number } | null>(null);
+  const createdWallIdsRef = useRef<string[]>([]);
 
   const [canvasDimensions, setCanvasDimensions] = useState({
     width: typeof window !== 'undefined' ? window.innerWidth : 1920,
@@ -95,6 +117,8 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     startDoorP1: Point2D;
     startDoorP2: Point2D;
     doorClickToggled: boolean;
+    isDrawingWall: boolean;
+    wallStartPoint: Point2D | null;
     startMouse: Point2D;
     startEntityPos: Point2D;
     startEntityRotation: number;
@@ -118,6 +142,8 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     startDoorP1: { x: 0, y: 0 },
     startDoorP2: { x: 0, y: 0 },
     doorClickToggled: false,
+    isDrawingWall: false,
+    wallStartPoint: null,
     startMouse: { x: 0, y: 0 },
     startEntityPos: { x: 0, y: 0 },
     startEntityRotation: 0,
@@ -379,6 +405,29 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         return;
       }
 
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z') && !e.shiftKey) {
+        if (activeTool === 'wall') {
+          e.preventDefault();
+          if (createdWallIdsRef.current.length > 0) {
+            const lastId = createdWallIdsRef.current.pop();
+            if (lastId && game.entities.some((ent) => ent.id === lastId)) {
+              removeEntities([lastId]);
+              clearSelection();
+              return;
+            }
+          }
+          const wallEntities = game.entities.filter((ent) => ent.type === 'wall');
+          if (wallEntities.length > 0) {
+            const lastWall = wallEntities[wallEntities.length - 1];
+            removeEntities([lastWall.id]);
+            clearSelection();
+            return;
+          }
+          undo();
+          return;
+        }
+      }
+
       if (e.code === 'Space' && !e.repeat) {
         setIsSpacePressed(true);
       } else if (e.code === 'Enter') {
@@ -389,6 +438,8 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       } else if (e.code === 'Escape') {
         if (activeTool === 'wall') {
           e.preventDefault();
+          interactionState.current.isDrawingWall = false;
+          interactionState.current.wallStartPoint = null;
           setDraftWallPoints([]);
         } else if (activeTool === 'fogReveal' || activeTool === 'fogHide') {
           e.preventDefault();
@@ -657,23 +708,19 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       return;
     }
 
-    // Herramienta Pared invisible
+    // Herramienta Pared invisible (dibujo por arrastre)
     if (activeTool === 'wall') {
-      let ptToAdd = worldPos;
-      if (game.grid.snapToGrid && game.grid.size > 0 && !e.altKey) {
-        ptToAdd = snapPointToGrid(worldPos, game.grid.size);
+      const snapDist = 10 / camera.zoom;
+      const magnetPt = findMagnetSnapPoint(worldPos, game.entities, snapDist);
+      let startPt = magnetPt || worldPos;
+      if (!magnetPt && game.grid.snapToGrid && game.grid.size > 0 && !e.altKey) {
+        startPt = snapPointToGrid(worldPos, game.grid.size);
       }
 
-      // Si es doble clic en el mismo punto, finalizar pared
-      if (
-        draftWallPoints.length > 0 &&
-        Math.hypot(ptToAdd.x - draftWallPoints[draftWallPoints.length - 1].x, ptToAdd.y - draftWallPoints[draftWallPoints.length - 1].y) < 5
-      ) {
-        finishDraftWall();
-        return;
-      }
-
-      setDraftWallPoints((prev) => [...prev, ptToAdd]);
+      interactionState.current.isDrawingWall = true;
+      interactionState.current.wallStartPoint = startPt;
+      setDraftWallPoints([startPt, startPt]);
+      setIsDragging(true);
       return;
     }
 
@@ -1018,6 +1065,52 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     // 5. Rectángulo de revelado/ocultación de niebla
     if ((activeTool === 'fogReveal' || activeTool === 'fogHide') && fogDragRect) {
       setFogDragRect((prev) => (prev ? { ...prev, current: worldPos } : null));
+      return;
+    }
+
+    // 5.b. Arrastre para dibujar pared
+    if (interactionState.current.isDrawingWall && interactionState.current.wallStartPoint) {
+      const startPt = interactionState.current.wallStartPoint;
+      let rawEnd = worldPos;
+
+      // Restricción con Shift: ángulos rectos (0, 90) o 45° en línea, cuadrado en rectángulo
+      if (e.shiftKey) {
+        const dx = rawEnd.x - startPt.x;
+        const dy = rawEnd.y - startPt.y;
+        if (wallDrawMode === 'rectangle') {
+          const side = Math.max(Math.abs(dx), Math.abs(dy));
+          rawEnd = {
+            x: startPt.x + Math.sign(dx || 1) * side,
+            y: startPt.y + Math.sign(dy || 1) * side
+          };
+        } else {
+          const angle = Math.atan2(dy, dx);
+          const snappedAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+          const dist = Math.hypot(dx, dy);
+          rawEnd = {
+            x: startPt.x + Math.cos(snappedAngle) * dist,
+            y: startPt.y + Math.sin(snappedAngle) * dist
+          };
+        }
+      }
+
+      // Imán a extremos de paredes existentes (a menos de 10px en pantalla)
+      const snapDist = 10 / camera.zoom;
+      const magnetPt = findMagnetSnapPoint(rawEnd, game.entities, snapDist);
+      let endPt = magnetPt || rawEnd;
+      if (!magnetPt && game.grid.snapToGrid && game.grid.size > 0 && !e.altKey) {
+        endPt = snapPointToGrid(rawEnd, game.grid.size);
+      }
+
+      if (wallDrawMode === 'rectangle') {
+        const p1 = startPt;
+        const p2 = { x: endPt.x, y: startPt.y };
+        const p3 = endPt;
+        const p4 = { x: startPt.x, y: endPt.y };
+        setDraftWallPoints([p1, p2, p3, p4, p1]);
+      } else {
+        setDraftWallPoints([startPt, endPt]);
+      }
       return;
     }
 
@@ -1401,6 +1494,107 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         else hideFogRect(rect);
       }
       setFogDragRect(null);
+    }
+
+    // Finalizar dibujo de pared al soltar el ratón
+    if (interactionState.current.isDrawingWall && interactionState.current.wallStartPoint) {
+      const startPt = interactionState.current.wallStartPoint;
+      interactionState.current.isDrawingWall = false;
+      interactionState.current.wallStartPoint = null;
+      setDraftWallPoints([]);
+
+      let rawEnd = worldPos;
+
+      // Restricción con Shift
+      if (e.shiftKey) {
+        const dx = rawEnd.x - startPt.x;
+        const dy = rawEnd.y - startPt.y;
+        if (wallDrawMode === 'rectangle') {
+          const side = Math.max(Math.abs(dx), Math.abs(dy));
+          rawEnd = {
+            x: startPt.x + Math.sign(dx || 1) * side,
+            y: startPt.y + Math.sign(dy || 1) * side
+          };
+        } else {
+          const angle = Math.atan2(dy, dx);
+          const snappedAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+          const dist = Math.hypot(dx, dy);
+          rawEnd = {
+            x: startPt.x + Math.cos(snappedAngle) * dist,
+            y: startPt.y + Math.sin(snappedAngle) * dist
+          };
+        }
+      }
+
+      // Imán a extremos de paredes existentes (a menos de 10px en pantalla)
+      const snapDist = 10 / camera.zoom;
+      const magnetPt = findMagnetSnapPoint(rawEnd, game.entities, snapDist);
+      let endPt = magnetPt || rawEnd;
+      if (!magnetPt && game.grid.snapToGrid && game.grid.size > 0 && !e.altKey) {
+        endPt = snapPointToGrid(rawEnd, game.grid.size);
+      }
+
+      // Comprobar distancia mínima de arrastre
+      const dragDist = Math.hypot(endPt.x - startPt.x, endPt.y - startPt.y);
+      if (dragDist >= 5) {
+        let wallPoints: Point2D[] = [];
+        let isClosed = false;
+
+        if (wallDrawMode === 'rectangle') {
+          const p1 = startPt;
+          const p2 = { x: endPt.x, y: startPt.y };
+          const p3 = endPt;
+          const p4 = { x: startPt.x, y: endPt.y };
+          wallPoints = [p1, p2, p3, p4];
+          isClosed = true;
+        } else {
+          wallPoints = [startPt, endPt];
+          isClosed = false;
+        }
+
+        // Vincular al mapa que tenga debajo
+        const firstPt = wallPoints[0];
+        const maps = game.entities.filter((ent) => ent.type === 'map');
+        const containingMap = maps.find((m) => {
+          const mW = (m.mapData?.gridWidth ?? 10) * (m.mapData?.pixelsPerGrid ?? 70) * m.scaleX;
+          const mH = (m.mapData?.gridHeight ?? 10) * (m.mapData?.pixelsPerGrid ?? 70) * m.scaleY;
+          return firstPt.x >= m.x && firstPt.x <= m.x + mW && firstPt.y >= m.y && firstPt.y <= m.y + mH;
+        });
+
+        let finalPoints = wallPoints;
+        let mapId: string | undefined = undefined;
+
+        if (containingMap) {
+          mapId = containingMap.id;
+          const mapPos = { x: containingMap.x, y: containingMap.y };
+          finalPoints = wallPoints.map((p) =>
+            worldToLocal(p, mapPos, containingMap.rotation, containingMap.scaleX, containingMap.scaleY)
+          );
+        }
+
+        const wallId = `wall_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const wallEntity: Entity = {
+          id: wallId,
+          type: 'wall',
+          name: `Pared ${game.entities.filter((ent) => ent.type === 'wall').length + 1}`,
+          x: containingMap ? containingMap.x : 0,
+          y: containingMap ? containingMap.y : 0,
+          rotation: 0,
+          scaleX: 1,
+          scaleY: 1,
+          zIndex: 50,
+          visibleToPlayers: false,
+          locked: false,
+          points: finalPoints,
+          closed: isClosed,
+          mapId
+        };
+
+        addEntity(wallEntity);
+        createdWallIdsRef.current.push(wallId);
+        selectEntity(wallEntity.id);
+      }
+      return;
     }
 
     // Si estábamos arrastrando una entidad y snapToGrid está activo, ajustar posición al soltar
@@ -1829,6 +2023,15 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
               );
             })}
           </div>
+        </div>
+      )}
+      {isMaster && !isPlayerPreviewMode && activeTool === 'wall' && (
+        <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 z-30 bg-slate-900/90 border border-slate-700/80 text-slate-300 text-xs px-3.5 py-1.5 rounded-full shadow-lg backdrop-blur-xs flex items-center gap-2 select-none animate-in fade-in duration-150">
+          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+          <span>
+            Arrastra para crear una pared · <strong className="text-white font-semibold">Shift</strong>: recta ·{' '}
+            <strong className="text-white font-semibold">Cmd+Z</strong>: deshacer
+          </span>
         </div>
       )}
     </div>

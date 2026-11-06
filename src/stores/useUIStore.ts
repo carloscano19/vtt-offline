@@ -3,6 +3,7 @@ import { Point2D } from '../types/entity';
 import { DiagonalRule, RulerMode, RulerState } from '../types/game';
 
 export type ActiveTool = 'select' | 'pan' | 'ruler' | 'wall' | 'door' | 'fogReveal' | 'fogHide' | 'light';
+export type WallDrawMode = 'line' | 'rectangle';
 export type SidebarTab = 'properties' | 'layers' | 'library' | 'effects' | 'music';
 
 export interface ToastNotification {
@@ -13,6 +14,7 @@ export interface ToastNotification {
 
 interface UIStoreState {
   activeTool: ActiveTool;
+  wallDrawMode: WallDrawMode;
   selectedEntityIds: string[];
   activeSidebarTab: SidebarTab | null;
 
@@ -57,12 +59,14 @@ interface UIStoreState {
   setShowAuthModal: (show: boolean) => void;
   setShowCreditsModal: (show: boolean) => void;
   setEditingTokenStatusesId: (id: string | null) => void;
+  setWallDrawMode: (mode: WallDrawMode) => void;
   addToast: (message: string, type?: 'info' | 'success' | 'warning', durationMs?: number) => void;
   removeToast: (id: string) => void;
 }
 
 export const useUIStore = create<UIStoreState>((set) => ({
   activeTool: 'select',
+  wallDrawMode: 'line',
   selectedEntityIds: [],
   activeSidebarTab: 'properties',
 
@@ -100,6 +104,8 @@ export const useUIStore = create<UIStoreState>((set) => ({
       }
     }));
   },
+
+  setWallDrawMode: (mode) => set({ wallDrawMode: mode }),
 
   setSelectedEntityIds: (ids) => set({ selectedEntityIds: ids }),
 

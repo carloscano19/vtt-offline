@@ -70,6 +70,9 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
 
   const activeTool = useUIStore((s) => s.activeTool);
   const setActiveTool = useUIStore((s) => s.setActiveTool);
+  const wallDrawMode = useUIStore((s) => s.wallDrawMode);
+  const setWallDrawMode = useUIStore((s) => s.setWallDrawMode);
+  const addToast = useUIStore((s) => s.addToast);
   const activeSidebarTab = useUIStore((s) => s.activeSidebarTab);
   const setActiveSidebarTab = useUIStore((s) => s.setActiveSidebarTab);
   const showDebugVttOverlay = useUIStore((s) => s.showDebugVttOverlay);
@@ -174,6 +177,8 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
     setActiveTool(tool);
     if (tool === 'ruler') {
       onOpenRulerModal();
+    } else if (tool === 'wall') {
+      addToast('Arrastra para crear una pared · Shift: recta · Cmd+Z: deshacer', 'info', 3500);
     }
   };
 
@@ -515,13 +520,43 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           <Ruler className="w-5 h-5" />
         </button>
 
-        <button
-          onClick={() => handleToolChange('wall')}
-          className={`btn-icon ${activeTool === 'wall' ? 'active' : ''}`}
-          title="Pared invisible (W): clic para añadir nodos, doble clic o Enter para terminar, Esc para cancelar"
-        >
-          <BrickWall className="w-5 h-5" />
-        </button>
+        <div className="flex items-center">
+          <button
+            onClick={() => handleToolChange('wall')}
+            className={`btn-icon ${activeTool === 'wall' ? 'active' : ''}`}
+            title="Pared invisible (W): arrastra para crear una pared, Shift para línea recta/cuadrado, Cmd+Z para deshacer"
+          >
+            <BrickWall className="w-5 h-5" />
+          </button>
+          {activeTool === 'wall' && (
+            <div className="flex items-center bg-slate-800/90 rounded p-0.5 border border-slate-700/80 ml-1 text-xs animate-in fade-in zoom-in-95 duration-100">
+              <button
+                type="button"
+                onClick={() => setWallDrawMode('line')}
+                className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
+                  wallDrawMode === 'line'
+                    ? 'bg-sky-500 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Modo Línea: arrastra para crear un tramo recto de pared"
+              >
+                Línea
+              </button>
+              <button
+                type="button"
+                onClick={() => setWallDrawMode('rectangle')}
+                className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
+                  wallDrawMode === 'rectangle'
+                    ? 'bg-sky-500 text-white shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Modo Rectángulo: arrastra una caja para crear 4 paredes cerradas"
+              >
+                Rectángulo
+              </button>
+            </div>
+          )}
+        </div>
 
         <button
           onClick={() => handleToolChange('door')}
