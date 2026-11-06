@@ -327,7 +327,8 @@ export function normalizeEntity(entity: Entity): Entity {
     opacity: Math.max(0, Math.min(1, rawOpacity)),
     snapToGrid: getDefaultSnapToGrid(entity),
     showAnimation,
-    playOnceOnShow: entity.playOnceOnShow ? true : undefined
+    playOnceOnShow: entity.playOnceOnShow ? true : undefined,
+    hideName: entity.hideName ? true : undefined
   };
 
   return entity;
@@ -466,6 +467,9 @@ export function normalizeGameState(game: GameState): GameState {
         }
         return cam;
       })(),
+      tokenNameVisibility: (game.tokenNameVisibility === 'all' || game.tokenNameVisibility === 'none')
+        ? game.tokenNameVisibility
+        : 'master_only',
       cloudSavedId: game.cloudSavedId ?? null,
       cloudSavedName: game.cloudSavedName ?? null,
       cloudSavedOwner: game.cloudSavedOwner ?? null,

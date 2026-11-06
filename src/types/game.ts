@@ -77,6 +77,8 @@ export interface PlayerViewport {
   height: number;
 }
 
+export type TokenNameVisibility = 'all' | 'master_only' | 'none';
+
 export interface GameState {
   id: string;
   name: string;
@@ -92,6 +94,7 @@ export interface GameState {
   weather: WeatherConfig;
   combat: CombatState;
   music: MusicState;
+  tokenNameVisibility?: TokenNameVisibility;
   createdAt: number;
   updatedAt: number;
   appVersion?: string;

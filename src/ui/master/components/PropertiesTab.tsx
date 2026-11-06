@@ -271,6 +271,17 @@ export const PropertiesTab: React.FC = () => {
           className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-sm font-medium text-white focus:outline-none focus:border-sky-500"
           placeholder="Nombre de la entidad"
         />
+        {selectedEntity.type === 'token' && (
+          <label className="flex items-center gap-2 mt-2 text-xs text-slate-300 cursor-pointer hover:text-white select-none">
+            <input
+              type="checkbox"
+              checked={selectedEntity.hideName ?? false}
+              onChange={(e) => handleUpdate({ hideName: e.target.checked })}
+              className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-800 text-sky-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+            />
+            <span>Ocultar nombre en el tablero</span>
+          </label>
+        )}
       </div>
 
       {/* Opacidad (0–100%) para cualquier entidad */}

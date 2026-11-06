@@ -3,7 +3,7 @@ import { PixiRenderer } from './PixiRenderer';
 import { useGameStore } from '../stores/useGameStore';
 import { useUIStore } from '../stores/useUIStore';
 import { screenToWorld, snapPointToGrid, snapPointToGridOrMidpoint, localToWorld, worldToLocal } from './utils/coordinates';
-import { Entity, Point2D, recalculateDoorEndpoints, rotateDoorAroundHinge, getDefaultSnapToGrid } from '../types/entity';
+import { Entity, Point2D, recalculateDoorEndpoints, rotateDoorAroundHinge, getDefaultSnapToGrid, DEFAULT_STATUS_DESCRIPTIONS } from '../types/entity';
 import { CameraState } from '../types/game';
 import { syncChannel } from '../modules/sync/syncChannel';
 import { getZoomSensitivity } from '../modules/settings/zoomSensitivity';
@@ -53,6 +53,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
   const [fogDragRect, setFogDragRect] = useState<{ start: Point2D; current: Point2D } | null>(null);
   const [hoverCursor, setHoverCursor] = useState<string>('default');
   const [isDragging, setIsDragging] = useState(false);
+  const [hoveredStatusToken, setHoveredStatusToken] = useState<{ entity: Entity; screenX: number; screenY: number } | null>(null);
   const capturedPointerRef = useRef<{ element: HTMLElement; pointerId: number } | null>(null);
 
   const [canvasDimensions, setCanvasDimensions] = useState({
@@ -513,6 +514,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     const { width, height } = getCanvasDimensions();
     const camera = getCamera();
     const localMouse = getLocalPointer(e);
+    setHoveredStatusToken(null);
 
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
@@ -1317,6 +1319,34 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
       setHoverCursor(newCursor);
     }
+
+    // Detección de token con estados bajo el cursor para la tarjeta flotante del máster
+    if (isMaster && !isDragging && e.buttons === 0) {
+      const hovered = game.entities.find((ent) => {
+        if (ent.type !== 'token') return false;
+        const statuses = Array.isArray(ent.statuses) ? ent.statuses : [];
+        if (statuses.length === 0) return false;
+
+        let baseRadius = 35;
+        if (rendererRef.current?.gizmoLayer) {
+          const lb = rendererRef.current.gizmoLayer.getEntityLocalBounds(ent);
+          if (lb) baseRadius = Math.max(lb.width, lb.height) / 2;
+        } else if (rendererRef.current?.tokensLayer) {
+          const tb = rendererRef.current.tokensLayer.getEntityBounds(ent.id);
+          if (tb) baseRadius = tb.radius;
+        }
+        const effectiveRadius = Math.max(25, baseRadius * Math.max(Math.abs(ent.scaleX), Math.abs(ent.scaleY)));
+        return Math.hypot(worldPos.x - ent.x, worldPos.y - ent.y) <= effectiveRadius;
+      });
+
+      if (hovered) {
+        setHoveredStatusToken({ entity: hovered, screenX: localMouse.x, screenY: localMouse.y });
+      } else {
+        setHoveredStatusToken(null);
+      }
+    } else if (hoveredStatusToken) {
+      setHoveredStatusToken(null);
+    }
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
@@ -1734,6 +1764,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
   }
 
   const handlePointerLeave = (e: React.PointerEvent) => {
+    setHoveredStatusToken(null);
     // Si tenemos captura de puntero activa en el elemento, no cortar el arrastre al salir del área
     if (capturedPointerRef.current) return;
     handlePointerUp(e);
@@ -1762,6 +1793,43 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           renderer={rendererRef.current}
           isDragging={isDragging}
         />
+      )}
+      {isMaster && !isPlayerPreviewMode && hoveredStatusToken && (
+        <div
+          className="pointer-events-none absolute z-40 bg-slate-900/95 border border-red-500/40 rounded-lg p-3 shadow-2xl text-xs max-w-xs backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 text-slate-200"
+          style={{
+            left: Math.min(hoveredStatusToken.screenX + 16, Math.max(10, canvasDimensions.width - 290)),
+            top: Math.max(10, Math.min(hoveredStatusToken.screenY - 10, Math.max(10, canvasDimensions.height - 240)))
+          }}
+        >
+          <div className="font-bold text-white text-sm mb-1.5 flex items-center justify-between border-b border-slate-700/60 pb-1">
+            <span>{hoveredStatusToken.entity.name}</span>
+            <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded bg-red-950/80 text-red-300 border border-red-800/40">
+              {(hoveredStatusToken.entity.statuses || []).length}{' '}
+              {(hoveredStatusToken.entity.statuses || []).length === 1 ? 'estado' : 'estados'}
+            </span>
+          </div>
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {(hoveredStatusToken.entity.statuses || []).map((st) => {
+              const desc = DEFAULT_STATUS_DESCRIPTIONS[st.type] || 'Condición activa en la criatura.';
+              const turnsText =
+                st.turnsRemaining !== null ? `${st.turnsRemaining} turnos` : 'Permanente / Indefinido (∞)';
+              return (
+                <div key={st.id} className="bg-slate-800/70 rounded p-1.5 border border-slate-700/50">
+                  <div className="flex items-center justify-between font-semibold text-red-300 text-xs">
+                    <span>{st.type}</span>
+                    <span className="text-[10px] text-amber-300/90 font-normal">
+                      {turnsText}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-300 mt-0.5 leading-snug">
+                    {desc}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
     </div>
   );

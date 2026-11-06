@@ -1,6 +1,6 @@
 import { Container, Sprite, Graphics, Text, TextStyle, Texture, ColorMatrixFilter } from 'pixi.js';
 import { Entity, TokenSide, Point2D, EntityAnimations, computePivotTransform } from '../../types/entity';
-import { ExploredMultiPolygon } from '../../types/game';
+import { ExploredMultiPolygon, TokenNameVisibility } from '../../types/game';
 import { getTextureForAsset, getGifDataForAsset, getCachedTexture } from '../utils/textureCache';
 import { TokenVisibility } from '../../modules/vision/visibilityPolygon';
 import { isPointInMultiPolygon } from '../../modules/vision/fogRegions';
@@ -24,26 +24,26 @@ function isPointInPolygon(point: Point2D, vs: Point2D[]): boolean {
 }
 
 const STATUS_ABBREVIATIONS: Record<string, string> = {
-  Aturdido: 'Atur.',
-  Cegado: 'Ceg.',
-  Hechizado: 'Hech.',
-  Ensordecido: 'Ensor.',
-  Asustado: 'Asust.',
-  Agarrado: 'Agarr.',
-  Incapacitado: 'Incap.',
-  Invisible: 'Invis.',
-  Paralizado: 'Paral.',
-  Petrificado: 'Petrif.',
-  Envenenado: 'Enven.',
-  Derribado: 'Derrib.',
-  Restringido: 'Restr.',
-  Inconsciente: 'Inconc.',
-  Agotamiento: 'Agot.',
-  Congelado: 'Cong.',
-  Quemado: 'Quem.',
-  Sangrando: 'Sangr.',
-  Bendecido: 'Bend.',
-  Acelerado: 'Acel.'
+  Aturdido: 'Atur',
+  Cegado: 'Ceg',
+  Hechizado: 'Hech',
+  Ensordecido: 'Ensor',
+  Asustado: 'Asust',
+  Agarrado: 'Agarr',
+  Incapacitado: 'Incap',
+  Invisible: 'Invis',
+  Paralizado: 'Paral',
+  Petrificado: 'Petrif',
+  Envenenado: 'Env',
+  Derribado: 'Derrib',
+  Restringido: 'Restr',
+  Inconsciente: 'Inconc',
+  Agotamiento: 'Agot',
+  Congelado: 'Cong',
+  Quemado: 'Quem',
+  Sangrando: 'Sangr',
+  Bendecido: 'Bend',
+  Acelerado: 'Acel'
 };
 
 export class TokensLayer extends Container {
@@ -57,6 +57,11 @@ export class TokensLayer extends Container {
   private highlightLayer: Container | null = null;
   private showAnimCtrl = new ShowAnimationController();
   private prevVisibleMap = new Map<string, boolean>();
+  private tokenNameVisibility: TokenNameVisibility = 'master_only';
+
+  public setTokenNameVisibility(visibility: TokenNameVisibility) {
+    this.tokenNameVisibility = visibility;
+  }
 
   constructor(isMaster: boolean) {
     super();
@@ -437,68 +442,54 @@ export class TokensLayer extends Container {
         statusesContainer.x = (-worldDy * sinR) / entity.scaleX;
         statusesContainer.y = (-worldDy * cosR) / entity.scaleY;
 
-        // Altura de texto: ~0.22 * gridSize (mínimo 12 px en pantalla)
-        const targetTextHeight = Math.max(12 / cameraZoom, 0.22 * gridSize);
+        // Altura de texto: ~0.11 * gridSize (la mitad del anterior, mínimo 7 px en pantalla)
+        const targetTextHeight = Math.max(7 / cameraZoom, 0.11 * gridSize);
         const fontSize = Math.round(targetTextHeight);
-        const pillH = Math.round(fontSize * 1.45);
-        const pillPadX = Math.round(fontSize * 0.45);
-        const badgeSpacing = pillH + Math.max(3, Math.round(fontSize * 0.2));
+        const pillH = Math.round(fontSize * 1.35);
+        const pillPadX = Math.round(fontSize * 0.4);
 
-        // Ancho máximo: ancho del token en mundo más un margen pequeño
-        const maxBadgeWidth = Math.max(gridSize * 0.9, worldRadius * 2 + Math.max(8, 12 / cameraZoom));
+        const compactLabel = visibleStatuses
+          .map((s) => {
+            const abbrev = STATUS_ABBREVIATIONS[s.type] || (s.type.length > 4 ? s.type.slice(0, 4) : s.type);
+            const turnsText = s.turnsRemaining !== null ? s.turnsRemaining : '∞';
+            return `${abbrev} ${turnsText}`;
+          })
+          .join(' · ');
 
-        visibleStatuses.forEach((status, idx) => {
-          const badgeItem = new Container();
-          const turnsText = status.turnsRemaining !== null ? status.turnsRemaining : '∞';
-          let labelStr = `${status.type} ${turnsText}`;
-
-          const t = new Text({
-            text: labelStr,
-            style: new TextStyle({
-              fontFamily: 'system-ui, -apple-system, sans-serif',
-              fontSize,
-              fontWeight: 'bold',
-              fill: '#ffffff'
-            })
-          });
-
-          // Si no cabe en el ancho del token más margen, usar versión abreviada
-          if (t.width + pillPadX * 2 > maxBadgeWidth) {
-            const abbrev =
-              STATUS_ABBREVIATIONS[status.type] ||
-              (status.type.length > 5 ? status.type.slice(0, 4) + '.' : status.type);
-            labelStr = `${abbrev} ${turnsText}`;
-            t.text = labelStr;
-          }
-
-          // Si aún excede, recortar para que no sobrepase maxBadgeWidth
-          if (t.width + pillPadX * 2 > maxBadgeWidth && labelStr.length > 6) {
-            labelStr = `${labelStr.slice(0, 5)}… ${turnsText}`;
-            t.text = labelStr;
-          }
-
-          const pillW = Math.round(Math.min(maxBadgeWidth, t.width + pillPadX * 2));
-          const bg = new Graphics();
-          const cornerRadius = Math.max(3, Math.round(fontSize * 0.25));
-          bg.roundRect(0, 0, pillW, pillH, cornerRadius);
-          bg.fill({ color: 0xdc2626, alpha: 0.85 });
-          bg.stroke({ width: Math.max(1, 1.5 / cameraZoom), color: 0xffffff, alpha: 0.35 });
-
-          badgeItem.addChild(bg);
-          t.x = Math.max(pillPadX / 2, Math.round((pillW - t.width) / 2));
-          t.y = Math.round((pillH - t.height) / 2);
-          badgeItem.addChild(t);
-
-          // Centrado horizontalmente y apilado hacia arriba
-          badgeItem.x = -Math.round(pillW / 2);
-          badgeItem.y = -(idx * badgeSpacing + pillH);
-
-          if (this.isMaster && !isPlayerPreview && !status.visibleToPlayers) {
-            badgeItem.alpha = 0.5;
-          }
-
-          statusesContainer.addChild(badgeItem);
+        const t = new Text({
+          text: compactLabel,
+          style: new TextStyle({
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            fontSize,
+            fontWeight: 'bold',
+            fill: '#ffffff'
+          })
         });
+
+        const measuredW = typeof document !== 'undefined' ? t.width : compactLabel.length * (fontSize * 0.6);
+        const measuredH = typeof document !== 'undefined' ? t.height : fontSize * 1.2;
+        const pillW = Math.round(measuredW + pillPadX * 2);
+        const bg = new Graphics();
+        const cornerRadius = Math.max(3, Math.round(fontSize * 0.3));
+        bg.roundRect(0, 0, pillW, pillH, cornerRadius);
+        bg.fill({ color: 0xdc2626, alpha: 0.9 });
+        bg.stroke({ width: Math.max(1, 1 / cameraZoom), color: 0xffffff, alpha: 0.4 });
+
+        const badgeItem = new Container();
+        badgeItem.addChild(bg);
+        t.x = pillPadX;
+        t.y = Math.round((pillH - measuredH) / 2);
+        badgeItem.addChild(t);
+
+        // Centrado horizontalmente y colocado encima del token
+        badgeItem.x = -Math.round(pillW / 2);
+        badgeItem.y = -pillH;
+
+        if (this.isMaster && !isPlayerPreview && visibleStatuses.every((s) => !s.visibleToPlayers)) {
+          badgeItem.alpha = 0.55;
+        }
+
+        statusesContainer.addChild(badgeItem);
       } else {
         statusesContainer.visible = false;
       }
@@ -539,7 +530,18 @@ export class TokensLayer extends Container {
 
     if (nameText) {
       nameText.text = entity.name;
-      nameText.visible = entity.type === 'token';
+      let showName = entity.type === 'token';
+      if (entity.hideName) {
+        showName = false;
+      } else if (this.tokenNameVisibility === 'none') {
+        showName = false;
+      } else if (this.tokenNameVisibility === 'master_only') {
+        showName = !(!this.isMaster || isPlayerPreview);
+      } else if (this.tokenNameVisibility === 'all') {
+        showName = true;
+      }
+      nameText.visible = showName;
+
       nameText.rotation = -entity.rotation;
       nameText.scale.x = (entity.scaleX < 0 ? -1 : 1) * invSx;
       nameText.scale.y = (entity.scaleY < 0 ? -1 : 1) * invSy;

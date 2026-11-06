@@ -12,6 +12,8 @@ interface GridModalProps {
 export const GridModal: React.FC<GridModalProps> = ({ isOpen, onClose }) => {
   const grid = useGameStore((s) => s.game.grid);
   const setGridConfig = useGameStore((s) => s.setGridConfig);
+  const tokenNameVisibility = useGameStore((s) => s.game.tokenNameVisibility ?? 'master_only');
+  const setTokenNameVisibility = useGameStore((s) => s.setTokenNameVisibility);
   const [zoomSensitivity, setZoomSensState] = useState(() => getZoomSensitivity());
 
   const handleSensitivityChange = (val: number) => {
@@ -154,6 +156,25 @@ export const GridModal: React.FC<GridModalProps> = ({ isOpen, onClose }) => {
               className="w-4 h-4 accent-sky-500 cursor-pointer ml-3 shrink-0"
             />
           </label>
+        </div>
+
+        {/* Nombres de los tokens */}
+        <div className="pt-2 border-t border-slate-700/80 space-y-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-300 font-medium">Nombres de los tokens</span>
+          </div>
+          <select
+            value={tokenNameVisibility}
+            onChange={(e) => setTokenNameVisibility(e.target.value as any)}
+            className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 cursor-pointer"
+          >
+            <option value="all">Todos (visibles en todas las pantallas)</option>
+            <option value="master_only">Solo máster (por defecto)</option>
+            <option value="none">Ninguno (ocultos en todas las pantallas)</option>
+          </select>
+          <p className="text-[10px] text-slate-500">
+            Controla qué pantallas muestran los nombres de los tokens sobre el tablero.
+          </p>
         </div>
 
         {/* Sensibilidad del zoom */}

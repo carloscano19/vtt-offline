@@ -337,6 +337,7 @@ export class PixiRenderer {
       game.fog.rememberExplored ?? false,
       lights
     );
+    this.tokensLayer.setTokenNameVisibility(game.tokenNameVisibility || 'master_only');
     this.tokensLayer.syncEntities(
       game.entities,
       selectedIds,

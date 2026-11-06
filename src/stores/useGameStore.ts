@@ -10,7 +10,8 @@ import {
   PlayerViewport,
   ExploredMultiPolygon,
   AmbientConfig,
-  WeatherConfig
+  WeatherConfig,
+  TokenNameVisibility
 } from '../types/game';
 import { Entity, recalculateDoorEndpoints, TokenStatus } from '../types/entity';
 import { revealRect, hideRect } from '../modules/vision/fogMemory';
@@ -117,6 +118,7 @@ function createDefaultGame(): GameState {
     },
     createdAt: now,
     updatedAt: now,
+    tokenNameVisibility: 'master_only',
     cloudSavedId: null,
     cloudSavedName: null,
     cloudSavedOwner: null,
@@ -158,6 +160,7 @@ interface GameStoreState {
 
   // Cuadrícula y mapas
   setGridConfig: (partial: Partial<GridConfig>) => void;
+  setTokenNameVisibility: (visibility: TokenNameVisibility) => void;
 
   // Entidades
   addEntity: (entity: Entity) => void;
@@ -277,6 +280,16 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
         }
       };
     });
+  },
+
+  setTokenNameVisibility: (visibility) => {
+    set((state) => ({
+      game: {
+        ...state.game,
+        tokenNameVisibility: visibility,
+        updatedAt: Date.now()
+      }
+    }));
   },
 
   addEntity: (entity) => {

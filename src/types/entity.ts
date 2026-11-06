@@ -27,6 +27,29 @@ export const DEFAULT_STATUS_TYPES = [
 
 export type DefaultStatusType = (typeof DEFAULT_STATUS_TYPES)[number];
 
+export const DEFAULT_STATUS_DESCRIPTIONS: Record<string, string> = {
+  Cegado: 'Falla tiradas de ataque basadas en vista; ataques contra él tienen ventaja.',
+  Hechizado: 'No puede atacar a quien lo hechizó; quien lo hechizó tiene ventaja en interacción social.',
+  Ensordecido: 'Falla pruebas que requieran oído.',
+  Asustado: 'Desventaja en pruebas y ataques si la fuente del miedo está a la vista; no puede acercarse.',
+  Agarrado: 'Velocidad reducida a 0.',
+  Incapacitado: 'No puede realizar acciones ni reacciones.',
+  Invisible: 'Imposible de ver sin magia; ventaja en sus ataques y desventaja en ataques recibidos.',
+  Paralizado: 'Incapacitado, no puede moverse ni hablar; falla salvaciones de Fuerza y Destreza; ataques a 5 pies son críticos automáticos.',
+  Petrificado: 'Transformado en sustancia sólida; incapacitado, resistente a todo daño, inmune a veneno.',
+  Envenenado: 'Desventaja en tiradas de ataque y pruebas de característica.',
+  Derribado: 'Solo puede arrastrarse; desventaja en ataques propios; ataques a 5 pies tienen ventaja.',
+  Restringido: 'Velocidad 0; desventaja en Destreza; ataques contra él tienen ventaja.',
+  Aturdido: 'Incapacitado, no puede moverse, habla entrecortado; falla salvaciones de Fuerza y Destreza; ataques contra él tienen ventaja.',
+  Inconsciente: 'Incapacitado, cae al suelo; suelta lo que sostiene; falla Fuerza y Destreza; ataques a 5 pies son críticos.',
+  Agotamiento: 'Penalizaciones acumulativas a pruebas, velocidad y salvaciones.',
+  Congelado: 'Velocidad reducida y vulnerable a impactos físicos.',
+  Quemado: 'Sufre daño continuo por fuego al inicio de su turno.',
+  Sangrando: 'Pierde puntos de golpe gradualmente cada asalto.',
+  Bendecido: 'Bonificador a tiradas de ataque y salvaciones.',
+  Acelerado: 'Velocidad duplicada, bonificador a CA y acción adicional.'
+};
+
 export interface TokenStatus {
   id: string;
   type: string; // DefaultStatusType o personalizado
@@ -329,6 +352,7 @@ export interface Entity {
   locked: boolean;
   opacity?: number; // 0.0 a 1.0 (1.0 = 100% opaco por defecto)
   snapToGrid?: boolean; // Ajuste individual a la cuadrícula (true para personajes, false para objetos/luces/efectos)
+  hideName?: boolean;   // Ocultar nombre del token en el tablero
 
   // Datos específicos de mapa (coordenadas relativas locales)
   mapData?: MapData;
