@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { diceManager } from '../../modules/dice/diceManager';
 import { DiceRollResult } from '../../types/dice';
+import { dice3dManager } from '../../modules/dice/dice3dManager';
 import { DiceShape } from './DiceShapes';
 import { History, X, Dices, EyeOff } from 'lucide-react';
 
@@ -9,14 +10,22 @@ interface ActiveRollItemProps {
 }
 
 const ActiveRollItem: React.FC<ActiveRollItemProps> = ({ roll }) => {
-  const [isRolling, setIsRolling] = useState(true);
+  const [hasStopped, setHasStopped] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsRolling(false);
-    }, 1200);
-    return () => clearTimeout(timer);
-  }, []);
+    let mounted = true;
+    dice3dManager.roll(roll).then(() => {
+      if (mounted) setHasStopped(true);
+    }).catch(() => {
+      if (mounted) setHasStopped(true);
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, [roll]);
+
+  if (!hasStopped) return null;
 
   const hasNat20 = roll.dice.some((d) => !d.dropped && d.isNat20);
   const hasNat1 = roll.dice.some((d) => !d.dropped && d.isNat1);
@@ -24,7 +33,7 @@ const ActiveRollItem: React.FC<ActiveRollItemProps> = ({ roll }) => {
   return (
     <div className="bg-slate-900/95 border border-slate-700/90 rounded-xl p-3 shadow-2xl backdrop-blur-md pointer-events-auto transition-all animate-in fade-in slide-in-from-bottom-4 duration-300 w-80 text-slate-200">
       {/* Cabecera con nombre y fórmula */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2.5 text-xs">
+      <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2 text-xs">
         <div className="flex items-center gap-1.5 font-bold truncate">
           <span className="text-sky-400 truncate">{roll.rollerName}</span>
           <span className="text-slate-500 font-mono text-[11px]">({roll.formula.split('→')[0].split(':')[1]?.trim()})</span>
@@ -37,32 +46,30 @@ const ActiveRollItem: React.FC<ActiveRollItemProps> = ({ roll }) => {
         )}
       </div>
 
-      {/* Dados rodando */}
-      <div className="flex items-center justify-center gap-3 py-1 flex-wrap">
+      {/* Desglose de cada dado */}
+      <div className="flex items-center justify-center gap-2.5 py-1.5 flex-wrap">
         {roll.dice.map((die, idx) => (
-          <DiceShape key={idx} dieType={die.dieType || roll.dieType || 'd20'} die={die} isRolling={isRolling} />
+          <DiceShape key={idx} dieType={die.dieType || roll.dieType || 'd20'} die={die} isRolling={false} />
         ))}
       </div>
 
-      {/* Resultado y fórmula final */}
-      <div className="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between">
+      {/* Total grande y desglose final */}
+      <div className="mt-2 pt-2 border-t border-slate-800/80 flex items-center justify-between">
         <div className="text-[11px] text-slate-400 font-mono truncate max-w-[180px]">
-          {isRolling ? 'Rodando...' : roll.formula.split('→')[1]?.trim() || ''}
+          {roll.formula.split('→')[1]?.trim() || ''}
         </div>
         <div className="flex items-center gap-1.5">
-          {!isRolling && (
-            <span
-              className={`font-mono text-xl font-extrabold px-2.5 py-0.5 rounded-lg border shadow-sm ${
-                hasNat20
-                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 shadow-[0_0_12px_rgba(245,158,11,0.5)]'
-                  : hasNat1
-                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/60 shadow-[0_0_12px_rgba(244,63,94,0.5)]'
-                  : 'bg-slate-800 text-white border-slate-700'
-              }`}
-            >
-              {roll.total}
-            </span>
-          )}
+          <span
+            className={`font-mono text-xl font-extrabold px-2.5 py-0.5 rounded-lg border shadow-sm ${
+              hasNat20
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 shadow-[0_0_12px_rgba(245,158,11,0.5)]'
+                : hasNat1
+                ? 'bg-rose-500/20 text-rose-300 border-rose-500/60 shadow-[0_0_12px_rgba(244,63,94,0.5)]'
+                : 'bg-slate-800 text-white border-slate-700'
+            }`}
+          >
+            {roll.total}
+          </span>
         </div>
       </div>
     </div>
@@ -89,7 +96,13 @@ export const DiceRollOverlay: React.FC = () => {
 
   return (
     <>
-      {/* Contenedor en la esquina inferior derecha para las tiradas animadas */}
+      {/* Contenedor transparente para la simulación física de dados 3D */}
+      <div
+        id="dice-3d-box"
+        className="fixed bottom-0 right-0 w-[540px] h-[440px] max-w-full max-h-screen pointer-events-none z-30 overflow-hidden"
+      />
+
+      {/* Contenedor en la esquina inferior derecha para las tarjetas de resultados */}
       <div className="fixed bottom-4 right-4 z-40 flex flex-col-reverse items-end gap-2.5 pointer-events-none select-none max-w-sm">
         {/* Botón flotante discreto de Historial */}
         <button
@@ -101,7 +114,7 @@ export const DiceRollOverlay: React.FC = () => {
           <span>Historial ({history.length})</span>
         </button>
 
-        {/* Tiradas activas apiladas */}
+        {/* Tiradas activas apiladas (aparecen al detenerse los dados) */}
         {activeRolls.map((roll) => (
           <ActiveRollItem key={roll.id} roll={roll} />
         ))}

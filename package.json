@@ -15,6 +15,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@3d-dice/dice-box-threejs": "^0.0.12",
     "@supabase/supabase-js": "^2.118.0",
     "@zip.js/zip.js": "^2.24.0",
     "dexie": "^4.0.11",

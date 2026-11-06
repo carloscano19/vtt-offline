@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { diceManager, generateRandomInteger } from '../src/modules/dice/diceManager';
 import { DiceRollRequest, DieType } from '../src/types/dice';
+import { convertRollToNotation } from '../src/modules/dice/dice3dManager';
+
 
 describe('Bloque 2: Dice System with Master Authority', () => {
   it('generates random integers strictly within [min, max] using crypto.getRandomValues', () => {
@@ -226,5 +228,81 @@ describe('Bloque 2: Dice System with Master Authority', () => {
     const sum = result.dice.reduce((acc, d) => acc + d.value, 0);
     expect(result.total).toBe(sum + 3);
   });
+
+  it('genera la notación forzada adecuada para dados 3D con d20, ventaja, percentil d100 y mixtos', () => {
+    // 1d20 simple
+    const n1 = convertRollToNotation({
+      id: '1',
+      rollerName: 'A',
+      formula: '',
+      dice: [{ dieType: 'd20', sides: 20, value: 17 }],
+      modifier: 0,
+      total: 17,
+      timestamp: 0
+    });
+    expect(n1).toBe('1d20@17');
+
+    // 2d20 con ventaja
+    const n2 = convertRollToNotation({
+      id: '2',
+      rollerName: 'A',
+      formula: '',
+      dice: [
+        { dieType: 'd20', sides: 20, value: 18 },
+        { dieType: 'd20', sides: 20, value: 5, dropped: true }
+      ],
+      modifier: 0,
+      total: 18,
+      timestamp: 0
+    });
+    expect(n2).toBe('2d20@18,5');
+
+    // d100 con decenas 70 y unidades 4 -> 74
+    const n3 = convertRollToNotation({
+      id: '3',
+      rollerName: 'A',
+      formula: '',
+      dice: [
+        { dieType: 'd100', sides: 10, value: 70, displayValue: '70', isTensPercentile: true },
+        { dieType: 'd10', sides: 10, value: 4, displayValue: '4' }
+      ],
+      modifier: 0,
+      total: 74,
+      timestamp: 0
+    });
+    expect(n3).toBe('1d100+1d10@70,4');
+
+    // d100 con 00 + 0 = 100
+    const n4 = convertRollToNotation({
+      id: '4',
+      rollerName: 'A',
+      formula: '',
+      dice: [
+        { dieType: 'd100', sides: 10, value: 100, displayValue: '00', isTensPercentile: true },
+        { dieType: 'd10', sides: 10, value: 0, displayValue: '0' }
+      ],
+      modifier: 0,
+      total: 100,
+      timestamp: 0
+    });
+    expect(n4).toBe('1d100+1d10@100,10');
+
+    // Mixto: 2d6 + 1d8
+    const n5 = convertRollToNotation({
+      id: '5',
+      rollerName: 'A',
+      formula: '',
+      dice: [
+        { dieType: 'd6', sides: 6, value: 5 },
+        { dieType: 'd6', sides: 6, value: 3 },
+        { dieType: 'd8', sides: 8, value: 8 }
+      ],
+      modifier: 0,
+      total: 16,
+      timestamp: 0
+    });
+    expect(n5).toBe('2d6+1d8@5,3,8');
+  });
 });
+
 

@@ -4,3 +4,6 @@
 declare const __APP_VERSION__: string;
 declare const __APP_BUILD_TIME__: number;
 declare const __BUILD_TIME__: string;
+
+declare module '@3d-dice/dice-box-threejs';
+
