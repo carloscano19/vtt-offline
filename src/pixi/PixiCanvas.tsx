@@ -712,10 +712,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     if (activeTool === 'wall') {
       const snapDist = 10 / camera.zoom;
       const magnetPt = findMagnetSnapPoint(worldPos, game.entities, snapDist);
-      let startPt = magnetPt || worldPos;
-      if (!magnetPt && game.grid.snapToGrid && game.grid.size > 0 && !e.altKey) {
-        startPt = snapPointToGrid(worldPos, game.grid.size);
-      }
+      const startPt = magnetPt || worldPos;
 
       interactionState.current.isDrawingWall = true;
       interactionState.current.wallStartPoint = startPt;
@@ -1097,10 +1094,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       // Imán a extremos de paredes existentes (a menos de 10px en pantalla)
       const snapDist = 10 / camera.zoom;
       const magnetPt = findMagnetSnapPoint(rawEnd, game.entities, snapDist);
-      let endPt = magnetPt || rawEnd;
-      if (!magnetPt && game.grid.snapToGrid && game.grid.size > 0 && !e.altKey) {
-        endPt = snapPointToGrid(rawEnd, game.grid.size);
-      }
+      const endPt = magnetPt || rawEnd;
 
       if (wallDrawMode === 'rectangle') {
         const p1 = startPt;
@@ -1529,10 +1523,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       // Imán a extremos de paredes existentes (a menos de 10px en pantalla)
       const snapDist = 10 / camera.zoom;
       const magnetPt = findMagnetSnapPoint(rawEnd, game.entities, snapDist);
-      let endPt = magnetPt || rawEnd;
-      if (!magnetPt && game.grid.snapToGrid && game.grid.size > 0 && !e.altKey) {
-        endPt = snapPointToGrid(rawEnd, game.grid.size);
-      }
+      const endPt = magnetPt || rawEnd;
 
       // Comprobar distancia mínima de arrastre
       const dragDist = Math.hypot(endPt.x - startPt.x, endPt.y - startPt.y);

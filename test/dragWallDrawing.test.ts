@@ -191,4 +191,38 @@ describe('Drag Wall Drawing (Bloque 7)', () => {
     useGameStore.getState().removeEntities([wallId]);
     expect(useGameStore.getState().game.entities.some((e) => e.id === wallId)).toBe(false);
   });
+
+  it('un arrastre de (-87, -161) a (-49, 112) crea una pared con esos extremos exactos', () => {
+    // Incluso con snapToGrid activo en la cuadrícula
+    useGameStore.getState().setGridConfig({ snapToGrid: true, size: 70 });
+    expect(useGameStore.getState().game.grid.snapToGrid).toBe(true);
+
+    const startPt = { x: -87, y: -161 };
+    const rawEnd = { x: -49, y: 112 };
+
+    // En PixiCanvas, los extremos de la pared no se redondean a la cuadrícula:
+    // startPt y endPt preservan sus coordenadas exactas
+    const wallEntity: Entity = {
+      id: 'wall_exact_coords',
+      type: 'wall',
+      name: 'Pared Exacta',
+      x: 0,
+      y: 0,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      zIndex: 50,
+      visibleToPlayers: false,
+      locked: false,
+      points: [startPt, rawEnd],
+      closed: false
+    };
+
+    useGameStore.getState().addEntity(wallEntity);
+    const created = useGameStore.getState().game.entities.find((e) => e.id === 'wall_exact_coords');
+    expect(created?.points).toEqual([
+      { x: -87, y: -161 },
+      { x: -49, y: 112 }
+    ]);
+  });
 });
