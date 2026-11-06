@@ -264,6 +264,37 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         e.key === 'ArrowRight'
       ) {
         if (selectedEntityIds.length === 0) return;
+
+        // Movimiento de mapa seleccionado con flechas
+        const selectedMap = game.entities.find(
+          (ent) => selectedEntityIds.includes(ent.id) && ent.type === 'map'
+        );
+        if (selectedMap && !selectedMap.locked) {
+          let dx = 0;
+          let dy = 0;
+          if (e.key === 'ArrowUp') dy = -1;
+          else if (e.key === 'ArrowDown') dy = 1;
+          else if (e.key === 'ArrowLeft') dx = -1;
+          else if (e.key === 'ArrowRight') dx = 1;
+
+          const gridSize = game.grid.size > 0 ? game.grid.size : 70;
+          let targetX = selectedMap.x;
+          let targetY = selectedMap.y;
+
+          if (e.altKey) {
+            const quarterGrid = gridSize / 4;
+            targetX = selectedMap.x + dx * quarterGrid;
+            targetY = selectedMap.y + dy * quarterGrid;
+          } else {
+            targetX = Math.round((selectedMap.x + dx * gridSize) / gridSize) * gridSize;
+            targetY = Math.round((selectedMap.y + dy * gridSize) / gridSize) * gridSize;
+          }
+
+          e.preventDefault();
+          updateEntity(selectedMap.id, { x: targetX, y: targetY }, true);
+          return;
+        }
+
         const selectedToken = game.entities.find(
           (ent) => selectedEntityIds.includes(ent.id) && ent.type === 'token'
         );
@@ -1146,6 +1177,20 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
             interactionState.current.lastPosSyncTime = now;
             syncChannel.sendEntityPos(entity.id, newX, newY);
           }
+        } else if (entity.type === 'map') {
+          const gridSize = game.grid.size > 0 ? game.grid.size : (entity.mapData?.pixelsPerGrid || 70);
+          let newX = interactionState.current.startEntityPos.x + dx;
+          let newY = interactionState.current.startEntityPos.y + dy;
+          if (!e.altKey && gridSize > 0) {
+            newX = Math.round(newX / gridSize) * gridSize;
+            newY = Math.round(newY / gridSize) * gridSize;
+          }
+          updateEntity(entity.id, { x: newX, y: newY }, false);
+          const now = performance.now();
+          if (now - interactionState.current.lastPosSyncTime >= 33) {
+            interactionState.current.lastPosSyncTime = now;
+            syncChannel.sendEntityPos(entity.id, newX, newY);
+          }
         } else {
           const newX = interactionState.current.startEntityPos.x + dx;
           const newY = interactionState.current.startEntityPos.y + dy;
@@ -1345,32 +1390,32 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           }
           const { p1, p2 } = recalculateDoorEndpoints(finalX, finalY, entity.rotation, entity.door.length ?? 70, entity.door.isHingeInverted);
           updateEntity(entity.id, { x: finalX, y: finalY, scaleX: 1, scaleY: 1, door: { ...entity.door, p1, p2 } }, true);
+        } else if (entity.type === 'map') {
+          const gridSize = game.grid.size > 0 ? game.grid.size : (entity.mapData?.pixelsPerGrid || 70);
+          if (!e.altKey && gridSize > 0) {
+            finalX = Math.round(entity.x / gridSize) * gridSize;
+            finalY = Math.round(entity.y / gridSize) * gridSize;
+          }
+          updateEntity(entity.id, { x: finalX, y: finalY }, true);
         } else {
+          const entitySnap = getDefaultSnapToGrid(entity);
+          const shouldSnap = game.grid.snapToGrid && entitySnap && !e.altKey;
 
-        const entitySnap = getDefaultSnapToGrid(entity);
-        const shouldSnap = game.grid.snapToGrid && entitySnap && !e.altKey;
-
-        if (shouldSnap && game.grid.size > 0) {
-          if (entity.type === 'map') {
-            const snapped = snapPointToGrid({ x: entity.x, y: entity.y }, game.grid.size);
-            finalX = snapped.x;
-            finalY = snapped.y;
-          } else {
+          if (shouldSnap && game.grid.size > 0) {
             const halfGrid = game.grid.size / 2;
             const snapped = snapPointToGrid({ x: entity.x - halfGrid, y: entity.y - halfGrid }, game.grid.size);
             finalX = snapped.x + halfGrid;
             finalY = snapped.y + halfGrid;
           }
-        }
 
-        if (game.grid.wallsBlockMovement && interactionState.current.startEntityPos && entity.type === 'token') {
-          if (isMovementBlockedByWall(interactionState.current.startEntityPos, { x: finalX, y: finalY }, game.entities)) {
-            finalX = interactionState.current.startEntityPos.x;
-            finalY = interactionState.current.startEntityPos.y;
+          if (game.grid.wallsBlockMovement && interactionState.current.startEntityPos && entity.type === 'token') {
+            if (isMovementBlockedByWall(interactionState.current.startEntityPos, { x: finalX, y: finalY }, game.entities)) {
+              finalX = interactionState.current.startEntityPos.x;
+              finalY = interactionState.current.startEntityPos.y;
+            }
           }
-        }
 
-        updateEntity(entity.id, { x: finalX, y: finalY }, true);
+          updateEntity(entity.id, { x: finalX, y: finalY }, true);
         }
       }
     }
@@ -1553,7 +1598,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         const existingMaps = game.entities.filter((e) => e.type === 'map');
         const ppg = asset.mapData?.pixelsPerGrid || (asset.width ? asset.width / 10 : 70);
         scale = existingMaps.length === 0 ? 1 : currentGridSize / ppg;
-        if (game.grid.snapToGrid && currentGridSize > 0) {
+        if (currentGridSize > 0) {
           finalX = Math.round(finalX / currentGridSize) * currentGridSize;
           finalY = Math.round(finalY / currentGridSize) * currentGridSize;
         }

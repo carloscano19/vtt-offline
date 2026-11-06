@@ -293,25 +293,51 @@ export const PropertiesTab: React.FC = () => {
         />
       </div>
 
-      {/* Ajustar a la cuadrícula por entidad */}
-      <div className="bg-slate-800/60 p-2.5 rounded border border-slate-700">
-        <label className="flex items-center justify-between text-xs cursor-pointer">
-          <div>
-            <span className="text-slate-300 font-medium block">Ajustar a la cuadrícula</span>
-            <span className="text-[10px] text-slate-500 block">
-              {getDefaultSnapToGrid(selectedEntity)
-                ? 'Alineado al centro de la casilla'
-                : 'Posicionamiento libre (flechas mueven 1/4 casilla)'}
-            </span>
+      {/* Ajuste / Alineación con la cuadrícula */}
+      {selectedEntity.type === 'map' ? (
+        <div className="bg-slate-800/60 p-2.5 rounded border border-slate-700">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-slate-300 font-medium block text-xs">Alinear con la cuadrícula</span>
+              <span className="text-[10px] text-slate-500 block">
+                Encaja la esquina superior izquierda en la intersección más cercana
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const gSize = game.grid.size > 0 ? game.grid.size : 70;
+                handleUpdate({
+                  x: Math.round(selectedEntity.x / gSize) * gSize,
+                  y: Math.round(selectedEntity.y / gSize) * gSize
+                });
+              }}
+              className="px-3 py-1.5 text-xs bg-sky-600 hover:bg-sky-500 text-white font-medium rounded transition-colors shadow-sm ml-3 shrink-0"
+            >
+              Alinear
+            </button>
           </div>
-          <input
-            type="checkbox"
-            checked={getDefaultSnapToGrid(selectedEntity)}
-            onChange={(e) => handleUpdate({ snapToGrid: e.target.checked })}
-            className="w-4 h-4 accent-sky-500 cursor-pointer ml-3 shrink-0"
-          />
-        </label>
-      </div>
+        </div>
+      ) : (
+        <div className="bg-slate-800/60 p-2.5 rounded border border-slate-700">
+          <label className="flex items-center justify-between text-xs cursor-pointer">
+            <div>
+              <span className="text-slate-300 font-medium block">Ajustar a la cuadrícula</span>
+              <span className="text-[10px] text-slate-500 block">
+                {getDefaultSnapToGrid(selectedEntity)
+                  ? 'Alineado al centro de la casilla'
+                  : 'Posicionamiento libre (flechas mueven 1/4 casilla)'}
+              </span>
+            </div>
+            <input
+              type="checkbox"
+              checked={getDefaultSnapToGrid(selectedEntity)}
+              onChange={(e) => handleUpdate({ snapToGrid: e.target.checked })}
+              className="w-4 h-4 accent-sky-500 cursor-pointer ml-3 shrink-0"
+            />
+          </label>
+        </div>
+      )}
 
       {/* Selector de bando para tokens */}
       {selectedEntity.type === 'token' && (

@@ -101,7 +101,7 @@ export const LibraryTab: React.FC = () => {
 
       posX = game.masterCamera.x - mapW / 2;
       posY = game.masterCamera.y - mapH / 2;
-      if (game.grid.snapToGrid && effectiveGridSize > 0) {
+      if (effectiveGridSize > 0) {
         posX = Math.round(posX / effectiveGridSize) * effectiveGridSize;
         posY = Math.round(posY / effectiveGridSize) * effectiveGridSize;
       }
@@ -123,8 +123,8 @@ export const LibraryTab: React.FC = () => {
             refY = m.y;
           }
         }
-        posX = maxRight + currentGridSize * 2;
-        posY = refY;
+        posX = Math.round((maxRight + currentGridSize * 2) / effectiveGridSize) * effectiveGridSize;
+        posY = Math.round(refY / effectiveGridSize) * effectiveGridSize;
       }
     } else {
       // Token: lado mayor ocupa 1 casilla y centrado en la cuadrícula

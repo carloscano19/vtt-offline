@@ -220,7 +220,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
 
           let mapX = game.masterCamera.x - mapW / 2;
           let mapY = game.masterCamera.y - mapH / 2;
-          if (game.grid.snapToGrid && currentGridSize > 0) {
+          if (currentGridSize > 0) {
             mapX = Math.round(mapX / currentGridSize) * currentGridSize;
             mapY = Math.round(mapY / currentGridSize) * currentGridSize;
           }
@@ -243,8 +243,8 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
                 refY = m.y;
               }
             }
-            mapX = maxRight + currentGridSize * 2;
-            mapY = refY;
+            mapX = Math.round((maxRight + currentGridSize * 2) / currentGridSize) * currentGridSize;
+            mapY = Math.round(refY / currentGridSize) * currentGridSize;
           }
 
           const rawPortals = parsed.mapData?.portals || [];
