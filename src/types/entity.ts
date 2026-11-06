@@ -143,7 +143,11 @@ export interface EntityFilters {
   brightness: number; // 0 a 2 (1 = normal)
 }
 
+export type AnimationPivot = 'center' | 'top' | 'bottom' | 'left' | 'right';
+export type SwayMode = 'translate' | 'pendulum';
+
 export interface EntityAnimations {
+  pivot?: AnimationPivot; // 'center' por defecto
   rotation?: {
     enabled: boolean;
     speed: number; // vueltas por segundo (v/s)
@@ -157,15 +161,67 @@ export interface EntityAnimations {
   };
   sway?: {
     enabled: boolean;
-    distanceInSquares: number; // Distancia en casillas
+    mode?: SwayMode; // 'translate' (por defecto) o 'pendulum'
+    distanceInSquares: number; // Distancia en casillas (para modo translate)
+    angle?: number; // Ángulo de oscilación en grados (10° a 90°, default 30° para modo pendulum)
     speed: number;
-    direction: number; // Dirección en grados (0 = horizontal, 90 = vertical)
+    direction: number | string; // Dirección en grados (0 = horizontal, 90 = vertical)
   };
   bounce?: {
     enabled: boolean;
     speed: number;
     amplitude: number;
   };
+}
+
+/**
+ * Calcula la posición del centro (x, y) y la rotación total de una entidad para que rote
+ * alrededor de un punto de giro específico (center, top, bottom, left, right).
+ */
+export function computePivotTransform(
+  baseX: number,
+  baseY: number,
+  baseRot: number,
+  extraRot: number,
+  width: number,
+  height: number,
+  pivot: AnimationPivot = 'center'
+): { x: number; y: number; rotation: number } {
+  let localPx = 0;
+  let localPy = 0;
+  const halfW = width / 2;
+  const halfH = height / 2;
+  switch (pivot) {
+    case 'top':
+      localPy = -halfH;
+      break;
+    case 'bottom':
+      localPy = halfH;
+      break;
+    case 'left':
+      localPx = -halfW;
+      break;
+    case 'right':
+      localPx = halfW;
+      break;
+    case 'center':
+    default:
+      break;
+  }
+
+  const cosBase = Math.cos(baseRot);
+  const sinBase = Math.sin(baseRot);
+  const Px = baseX + (cosBase * localPx - sinBase * localPy);
+  const Py = baseY + (sinBase * localPx + cosBase * localPy);
+
+  const totalRot = baseRot + extraRot;
+  const cosTotal = Math.cos(totalRot);
+  const sinTotal = Math.sin(totalRot);
+
+  const x = Px - (cosTotal * localPx - sinTotal * localPy);
+  const y = Py - (sinTotal * localPx + cosTotal * localPy);
+
+  return { x, y, rotation: totalRot };
 }
 
 export interface LightConfig {

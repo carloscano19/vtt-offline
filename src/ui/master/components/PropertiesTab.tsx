@@ -2313,8 +2313,33 @@ export const PropertiesTab: React.FC = () => {
           <span>Animaciones Continuas</span>
         </div>
 
+        {/* Punto de giro */}
+        <div className="space-y-1.5 pt-1 border-t border-slate-700/60">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-300 font-medium">Punto de giro</span>
+            <select
+              value={selectedEntity.animations?.pivot ?? 'center'}
+              onChange={(e) =>
+                handleUpdate({
+                  animations: {
+                    ...selectedEntity.animations,
+                    pivot: e.target.value as any
+                  }
+                })
+              }
+              className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-purple-500 cursor-pointer"
+            >
+              <option value="center">Centro</option>
+              <option value="top">Arriba</option>
+              <option value="bottom">Abajo</option>
+              <option value="left">Izquierda</option>
+              <option value="right">Derecha</option>
+            </select>
+          </div>
+        </div>
+
         {/* Giro continuo */}
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 pt-1.5 border-t border-slate-700/60">
           <div className="flex items-center justify-between">
             <span className="text-slate-300">Rotación continua</span>
             <input
@@ -2455,8 +2480,10 @@ export const PropertiesTab: React.FC = () => {
                     ...selectedEntity.animations,
                     sway: {
                       enabled: e.target.checked,
+                      mode: selectedEntity.animations?.sway?.mode ?? 'translate',
                       distanceInSquares: selectedEntity.animations?.sway?.distanceInSquares ?? 1,
-                      speed: selectedEntity.animations?.sway?.speed ?? 1,
+                      angle: selectedEntity.animations?.sway?.angle ?? 30,
+                      speed: selectedEntity.animations?.sway?.speed ?? 2,
                       direction: typeof selectedEntity.animations?.sway?.direction === 'number'
                         ? selectedEntity.animations.sway.direction
                         : 0
@@ -2468,53 +2495,191 @@ export const PropertiesTab: React.FC = () => {
             />
           </div>
           {selectedEntity.animations?.sway?.enabled && (
-            <div className="space-y-1.5 pl-2 border-l border-purple-500/40">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400 text-[11px]">Dirección</span>
+            <div className="space-y-2 pl-2 border-l border-purple-500/40">
+              {/* Selector de modo: Desplazar vs Péndulo */}
+              <div className="grid grid-cols-2 gap-1.5">
                 <button
+                  type="button"
                   onClick={() =>
                     handleUpdate({
                       animations: {
                         ...selectedEntity.animations,
                         sway: {
                           ...selectedEntity.animations!.sway!,
-                          direction: (selectedEntity.animations?.sway?.direction ?? 0) === 0 ? 90 : 0
+                          mode: 'translate'
                         }
                       }
                     })
                   }
-                  className="px-2 py-0.5 bg-slate-700 rounded text-[11px] text-white capitalize"
+                  className={`py-1 text-xs rounded font-medium border transition-colors ${
+                    (selectedEntity.animations?.sway?.mode ?? 'translate') === 'translate'
+                      ? 'bg-purple-950/80 border-purple-500 text-purple-300'
+                      : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                  }`}
                 >
-                  {(selectedEntity.animations?.sway?.direction ?? 0) === 0 ? 'Horizontal' : 'Vertical'}
+                  Desplazar
                 </button>
-              </div>
-              <div>
-                <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
-                  <span>Distancia</span>
-                  <span className="text-white font-mono">
-                    {selectedEntity.animations?.sway?.distanceInSquares ?? 1} casillas
-                  </span>
-                </div>
-                <input
-                  type="number"
-                  min="0.2"
-                  max="20"
-                  step="0.5"
-                  value={selectedEntity.animations?.sway?.distanceInSquares ?? 1}
-                  onChange={(e) =>
+                <button
+                  type="button"
+                  onClick={() =>
                     handleUpdate({
                       animations: {
                         ...selectedEntity.animations,
                         sway: {
                           ...selectedEntity.animations!.sway!,
-                          distanceInSquares: parseFloat(e.target.value) || 1
+                          mode: 'pendulum'
                         }
                       }
                     })
                   }
-                  className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200"
-                />
+                  className={`py-1 text-xs rounded font-medium border transition-colors ${
+                    selectedEntity.animations?.sway?.mode === 'pendulum'
+                      ? 'bg-purple-950/80 border-purple-500 text-purple-300'
+                      : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Péndulo
+                </button>
               </div>
+
+              {selectedEntity.animations?.sway?.mode === 'pendulum' ? (
+                <>
+                  {/* Ajustes Modo Péndulo */}
+                  <div>
+                    <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                      <span>Ángulo de oscilación</span>
+                      <span className="text-white font-mono">
+                        {selectedEntity.animations?.sway?.angle ?? 30}°
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="10"
+                      max="90"
+                      step="5"
+                      value={selectedEntity.animations?.sway?.angle ?? 30}
+                      onChange={(e) =>
+                        handleUpdate({
+                          animations: {
+                            ...selectedEntity.animations,
+                            sway: {
+                              ...selectedEntity.animations!.sway!,
+                              angle: parseInt(e.target.value) || 30
+                            }
+                          }
+                        })
+                      }
+                      className="w-full accent-purple-500 cursor-pointer"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                      <span>Velocidad</span>
+                      <span className="text-white font-mono">
+                        {(Number(selectedEntity.animations?.sway?.speed) || 2).toFixed(1)}x
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="5"
+                      step="0.25"
+                      value={selectedEntity.animations?.sway?.speed ?? 2}
+                      onChange={(e) =>
+                        handleUpdate({
+                          animations: {
+                            ...selectedEntity.animations,
+                            sway: {
+                              ...selectedEntity.animations!.sway!,
+                              speed: parseFloat(e.target.value) || 2
+                            }
+                          }
+                        })
+                      }
+                      className="w-full accent-purple-500 cursor-pointer"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Ajustes Modo Desplazar */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400 text-[11px]">Dirección</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleUpdate({
+                          animations: {
+                            ...selectedEntity.animations,
+                            sway: {
+                              ...selectedEntity.animations!.sway!,
+                              direction: (selectedEntity.animations?.sway?.direction ?? 0) === 0 ? 90 : 0
+                            }
+                          }
+                        })
+                      }
+                      className="px-2 py-0.5 bg-slate-700 rounded text-[11px] text-white capitalize"
+                    >
+                      {(selectedEntity.animations?.sway?.direction ?? 0) === 0 ? 'Horizontal' : 'Vertical'}
+                    </button>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                      <span>Distancia</span>
+                      <span className="text-white font-mono">
+                        {selectedEntity.animations?.sway?.distanceInSquares ?? 1} casillas
+                      </span>
+                    </div>
+                    <input
+                      type="number"
+                      min="0.2"
+                      max="20"
+                      step="0.5"
+                      value={selectedEntity.animations?.sway?.distanceInSquares ?? 1}
+                      onChange={(e) =>
+                        handleUpdate({
+                          animations: {
+                            ...selectedEntity.animations,
+                            sway: {
+                              ...selectedEntity.animations!.sway!,
+                              distanceInSquares: parseFloat(e.target.value) || 1
+                            }
+                          }
+                        })
+                      }
+                      className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                      <span>Velocidad</span>
+                      <span className="text-white font-mono">
+                        {(Number(selectedEntity.animations?.sway?.speed) || 2).toFixed(1)}x
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="5"
+                      step="0.25"
+                      value={selectedEntity.animations?.sway?.speed ?? 2}
+                      onChange={(e) =>
+                        handleUpdate({
+                          animations: {
+                            ...selectedEntity.animations,
+                            sway: {
+                              ...selectedEntity.animations!.sway!,
+                              speed: parseFloat(e.target.value) || 2
+                            }
+                          }
+                        })
+                      }
+                      className="w-full accent-purple-500 cursor-pointer"
+                    />
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

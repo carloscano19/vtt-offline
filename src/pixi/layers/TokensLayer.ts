@@ -1,5 +1,5 @@
 import { Container, Sprite, Graphics, Text, TextStyle, Texture, ColorMatrixFilter } from 'pixi.js';
-import { Entity, TokenSide, Point2D, EntityAnimations } from '../../types/entity';
+import { Entity, TokenSide, Point2D, EntityAnimations, computePivotTransform } from '../../types/entity';
 import { ExploredMultiPolygon } from '../../types/game';
 import { getTextureForAsset, getGifDataForAsset, getCachedTexture } from '../utils/textureCache';
 import { TokenVisibility } from '../../modules/vision/visibilityPolygon';
@@ -558,13 +558,17 @@ export class TokensLayer extends Container {
       let offsetY = 0;
       let extraRot = 0;
 
+      const pivot = anim?.pivot || 'center';
+      const spriteW = sprite ? sprite.width || effectiveGrid : effectiveGrid;
+      const spriteH = sprite ? sprite.height || effectiveGrid : effectiveGrid;
+
       if (anim) {
         // Rotación continua
         if (anim.rotation?.enabled) {
           const dirMultiplier = anim.rotation.direction === 'ccw' ? -1 : 1;
           const vps = anim.rotation.speed ?? 0.2;
           const rotSpeed = vps * (Math.PI * 2) * dirMultiplier;
-          extraRot = this.animTime * rotSpeed;
+          extraRot += this.animTime * rotSpeed;
         }
 
         // Temblor / Shake
@@ -575,37 +579,60 @@ export class TokensLayer extends Container {
           offsetY += Math.cos(this.animTime * freq * 1.3) * intensity;
         }
 
-        // Vaivén / Sway (distancia en casillas en coordenadas del MUNDO)
+        // Vaivén / Sway
         if (anim.sway?.enabled) {
-          const distSquares = typeof anim.sway.distanceInSquares === 'number' && Number.isFinite(anim.sway.distanceInSquares)
-            ? anim.sway.distanceInSquares
-            : 1;
-          const distPx = distSquares * effectiveGrid;
+          if (anim.sway.mode === 'pendulum') {
+            const angleDeg = typeof anim.sway.angle === 'number' && Number.isFinite(anim.sway.angle)
+              ? anim.sway.angle
+              : 30;
+            const angleRad = (angleDeg * Math.PI) / 180;
+            const swaySpeed = typeof anim.sway.speed === 'number' && Number.isFinite(anim.sway.speed)
+              ? anim.sway.speed
+              : 2;
+            const pendulumRot = Math.sin(this.animTime * swaySpeed) * angleRad;
+            extraRot += pendulumRot;
+          } else {
+            // Desplazar (modo por defecto)
+            const distSquares = typeof anim.sway.distanceInSquares === 'number' && Number.isFinite(anim.sway.distanceInSquares)
+              ? anim.sway.distanceInSquares
+              : 1;
+            const distPx = distSquares * effectiveGrid;
 
-          // Dirección: soportar número (grados) o string 'horizontal' / 'vertical'
-          let dirDeg = 0;
-          if (typeof anim.sway.direction === 'number' && Number.isFinite(anim.sway.direction)) {
-            dirDeg = anim.sway.direction;
-          } else if (typeof (anim.sway as any).direction === 'string') {
-            dirDeg = (anim.sway as any).direction.toLowerCase() === 'vertical' ? 90 : 0;
-          }
-          const dirRad = (dirDeg * Math.PI) / 180;
+            // Dirección: soportar número (grados) o string 'horizontal' / 'vertical'
+            let dirDeg = 0;
+            if (typeof anim.sway.direction === 'number' && Number.isFinite(anim.sway.direction)) {
+              dirDeg = anim.sway.direction;
+            } else if (typeof (anim.sway as any).direction === 'string') {
+              dirDeg = (anim.sway as any).direction.toLowerCase() === 'vertical' ? 90 : 0;
+            }
+            const dirRad = (dirDeg * Math.PI) / 180;
 
-          const swaySpeed = typeof anim.sway.speed === 'number' && Number.isFinite(anim.sway.speed)
-            ? anim.sway.speed
-            : 2;
-          const swayOffset = Math.sin(this.animTime * swaySpeed) * distPx;
+            const swaySpeed = typeof anim.sway.speed === 'number' && Number.isFinite(anim.sway.speed)
+              ? anim.sway.speed
+              : 2;
+            const swayOffset = Math.sin(this.animTime * swaySpeed) * distPx;
 
-          if (Number.isFinite(swayOffset)) {
-            offsetX += Math.cos(dirRad) * swayOffset;
-            offsetY += Math.sin(dirRad) * swayOffset;
+            if (Number.isFinite(swayOffset)) {
+              offsetX += Math.cos(dirRad) * swayOffset;
+              offsetY += Math.sin(dirRad) * swayOffset;
+            }
           }
         }
       }
 
-      container.x = baseX + offsetX;
-      container.y = baseY + offsetY;
-      container.rotation = baseRot + extraRot;
+      const transformed = computePivotTransform(
+        baseX,
+        baseY,
+        baseRot,
+        extraRot,
+        spriteW,
+        spriteH,
+        pivot
+      );
+
+      container.x = transformed.x + offsetX;
+      container.y = transformed.y + offsetY;
+      container.rotation = transformed.rotation;
     }
   }
 
