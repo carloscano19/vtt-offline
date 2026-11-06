@@ -54,14 +54,40 @@ describe('Bloque 2: Dice System with Master Authority', () => {
     }
   });
 
-  it('rolls d100 as a percentile pair (tens 00-90 and units 0-9) where 00 + 0 = 100', () => {
-    let found100 = false;
-    for (let i = 0; i < 300; i++) {
+  it('rolls d100 solo as a single tens die (00-90) where 00 is 0', () => {
+    for (let i = 0; i < 100; i++) {
       const result = diceManager.generateRoll({
-        requestId: `test_d100_${i}`,
+        requestId: `test_d100_solo_${i}`,
         rollerName: 'Tester',
         dieType: 'd100',
         count: 1,
+        modifier: 0,
+        advantage: 'none'
+      });
+
+      expect(result.dice.length).toBe(1);
+      const die = result.dice[0];
+      expect(die.dieType).toBe('d100');
+      expect([0, 10, 20, 30, 40, 50, 60, 70, 80, 90]).toContain(die.value);
+      if (die.value === 0) {
+        expect(die.displayValue).toBe('00');
+        expect(result.total).toBe(0);
+      } else {
+        expect(die.displayValue).toBe(`${die.value}`);
+        expect(result.total).toBe(die.value);
+      }
+    }
+  });
+
+  it('rolls d100 + d10 as a percentile pair where d10 acts as units and 00 + 0 = 100', () => {
+    for (let i = 0; i < 200; i++) {
+      const result = diceManager.generateRoll({
+        requestId: `test_d100_percentil_${i}`,
+        rollerName: 'Tester',
+        dicePool: [
+          { dieType: 'd100', count: 1 },
+          { dieType: 'd10', count: 1 }
+        ],
         modifier: 0,
         advantage: 'none'
       });
@@ -82,7 +108,6 @@ describe('Bloque 2: Dice System with Master Authority', () => {
 
       if (tensDie.displayValue === '00' && unitsDie.displayValue === '0') {
         expect(result.total).toBe(100);
-        found100 = true;
       } else {
         const tensNum = parseInt(tensDie.displayValue as string, 10);
         const unitsNum = parseInt(unitsDie.displayValue as string, 10);

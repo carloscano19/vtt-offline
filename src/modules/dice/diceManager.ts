@@ -146,30 +146,27 @@ class DiceManager {
 
       dice.push(d1, d2);
     } else {
+      // Si el pool contiene tanto d100 como d10, ordenar para que d100 preceda a d10
+      if (pool.some((p) => p.dieType === 'd100') && pool.some((p) => p.dieType === 'd10')) {
+        pool.sort((a, b) => {
+          if (a.dieType === 'd100' && b.dieType === 'd10') return -1;
+          if (a.dieType === 'd10' && b.dieType === 'd100') return 1;
+          return 0;
+        });
+      }
+
       for (const item of pool) {
         const count = Math.max(1, Math.min(20, item.count));
 
         if (item.dieType === 'd100') {
-          // El d100 se tira como dos d10 en la mesa: decenas (00, 10, ... 90) y unidades (0-9)
+          // El d100 es un único dado de decenas (00, 10, 20... 90)
           for (let i = 0; i < count; i++) {
             const rawTens = generateRandomInteger(0, 9) * 10; // 0, 10, 20... 90
-            const rawUnits = generateRandomInteger(0, 9);      // 0, 1, 2... 9
-            const is100 = rawTens === 0 && rawUnits === 0;
-
             dice.push({
               dieType: 'd100',
-              sides: 10,
-              value: is100 ? 100 : rawTens,
-              displayValue: rawTens === 0 ? '00' : `${rawTens}`,
-              isTensPercentile: true
-            });
-
-            dice.push({
-              dieType: 'd10',
-              sides: 10,
-              value: is100 ? 0 : rawUnits,
-              displayValue: `${rawUnits}`,
-              isUnitsPercentile: true
+              sides: 100,
+              value: rawTens, // 00 es 0 si sale solo
+              displayValue: rawTens === 0 ? '00' : `${rawTens}`
             });
           }
         } else {
@@ -185,6 +182,43 @@ class DiceManager {
               isNat1: item.dieType === 'd20' && val === 1
             });
           }
+        }
+      }
+
+      // Combinación percentil: si hay al menos un d100 y al menos un d10,
+      // el primer d100 hace de decenas y el primer d10 actúa de unidades (su cara 10 cuenta como 0).
+      // Si salen 00 y 10 (0), el resultado es 100.
+      // Si hay más de un d10 (ej: d100 + 2d10), solo el primer d10 hace de unidades del percentil; los demás d10 se suman de forma normal (1 a 10).
+      const tensIndex = dice.findIndex((d) => d.dieType === 'd100');
+      const unitsIndex = dice.findIndex((d) => d.dieType === 'd10');
+
+      if (tensIndex !== -1 && unitsIndex !== -1) {
+        const tensDie = dice[tensIndex];
+        const unitsDie = dice[unitsIndex];
+
+        tensDie.isTensPercentile = true;
+        unitsDie.isUnitsPercentile = true;
+
+        const rawD10 = unitsDie.value; // 1 a 10
+        const unitsVal = rawD10 === 10 ? 0 : rawD10; // su cara 10 cuenta como 0
+        unitsDie.displayValue = `${unitsVal}`;
+
+        const rawTens = tensDie.displayValue === '00' ? 0 : tensDie.value; // 0, 10, ..., 90
+
+        if (rawTens === 0 && unitsVal === 0) {
+          // Si salen 00 y 10 (0), el resultado del percentil es 100
+          tensDie.value = 100;
+          unitsDie.value = 0;
+        } else {
+          tensDie.value = rawTens;
+          unitsDie.value = unitsVal;
+        }
+
+        // Asegurar que el dado de unidades esté inmediatamente después del de decenas para la fórmula
+        if (unitsIndex !== tensIndex + 1) {
+          const [removedUnits] = dice.splice(unitsIndex, 1);
+          const newTensIndex = dice.indexOf(tensDie);
+          dice.splice(newTensIndex + 1, 0, removedUnits);
         }
       }
     }

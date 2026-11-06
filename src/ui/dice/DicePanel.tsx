@@ -104,10 +104,15 @@ export const DicePanel: React.FC<DicePanelProps> = ({
     });
   };
 
-  // Extraer dados activos para la tirada en modo Varios
+  // Extraer dados activos para la tirada en modo Varios (d100 precede a d10 para percentil)
   const activeDice: DiePoolItem[] = DICE_LIST
     .filter((d) => selectedDice[d] && (counts[d] || 0) > 0)
-    .map((d) => ({ dieType: d, count: counts[d] || 1 }));
+    .map((d) => ({ dieType: d, count: counts[d] || 1 }))
+    .sort((a, b) => {
+      if (a.dieType === 'd100' && b.dieType === 'd10') return -1;
+      if (a.dieType === 'd10' && b.dieType === 'd100') return 1;
+      return 0;
+    });
 
   const totalDice = activeDice.reduce((acc, d) => acc + d.count, 0);
   const isSingleD20 = activeDice.length === 1 && activeDice[0].dieType === 'd20' && activeDice[0].count === 1;
