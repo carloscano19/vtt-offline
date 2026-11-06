@@ -15,6 +15,7 @@ import { AmbientLayer } from './layers/AmbientLayer';
 import { WeatherLayer } from './layers/WeatherLayer';
 import { LightsLayer } from './layers/LightsLayer';
 import { EffectsLayer } from './layers/EffectsLayer';
+import { MovementPathLayer } from './layers/MovementPathLayer';
 import { PlayerFrameLayout } from './layers/PlayerFrameLayout';
 import { visionManager } from '../modules/vision/visionManager';
 import { lightManager, LightVisibility } from '../modules/lights/lightManager';
@@ -39,6 +40,7 @@ export class PixiRenderer {
   public rulerLayer!: RulerLayer;
   public gizmoLayer!: GizmoLayer;
   public playerFrameLayout!: PlayerFrameLayout;
+  public movementPathLayer!: MovementPathLayer;
   public fogToolLayer!: FogToolLayer;
 
   private isMaster: boolean;
@@ -119,6 +121,11 @@ export class PixiRenderer {
       this.effectsLayer = new EffectsLayer(this.isMaster);
       this.effectsLayer.label = 'EffectsLayer';
       this.worldContainer.addChild(this.effectsLayer);
+
+      // 5c. Capa de Camino de Movimiento y Presupuesto por Turno
+      this.movementPathLayer = new MovementPathLayer(this.isMaster);
+      this.movementPathLayer.label = 'MovementPathLayer';
+      this.worldContainer.addChild(this.movementPathLayer);
 
       // 6. Capa de Luz Ambiental Global y Luces Dinámicas (Vectorial)
       this.ambientLayer = new AmbientLayer(this.isMaster);
@@ -326,6 +333,7 @@ export class PixiRenderer {
     this.effectsLayer.update(game.entities, camera, width, height, 0.016);
     this.ambientLayer.update(game.ambient, lights, worldBounds, 0.016, visibilities);
     this.weatherLayer.update(game.weather, camera, width, height, 0.016);
+    this.movementPathLayer.update(game.entities, game.grid.size, camera.zoom);
     this.lightsLayer.update(game.entities, selectedIds, isPlayerPreview);
     this.wallsLayer.update(game.entities, selectedIds, activeDraftWallPoints);
     this.rulerLayer.update(ruler, game.grid.size, camera.zoom);

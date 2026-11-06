@@ -2,6 +2,7 @@ import { DieType, DiceRollRequest, DiceRollResult, SingleDieResult } from '../..
 import { playDiceRollSound } from './diceSound';
 import { onlineRoomManager } from '../online/onlineRoomManager';
 import { syncChannel } from '../sync/syncChannel';
+import { useGameStore } from '../../stores/useGameStore';
 
 const DIE_SIDES: Record<DieType, number> = {
   d4: 4,
@@ -207,6 +208,10 @@ class DiceManager {
    * Petición de tirada desde el jugador remoto (espera hasta 5s la respuesta autoritaria del máster)
    */
   public requestRollAsPlayer(req: Omit<DiceRollRequest, 'requestId'>): Promise<DiceRollResult> {
+    if (useGameStore.getState().game.remotePlayersFrozen) {
+      return Promise.reject(new Error('La partida está en pausa por el máster'));
+    }
+
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const fullReq: DiceRollRequest = {
       ...req,
@@ -229,6 +234,8 @@ class DiceManager {
   }
 
   private handleIncomingRequest(req: DiceRollRequest): void {
+    if (useGameStore.getState().game.remotePlayersFrozen) return;
+
     // El máster procesa la petición del jugador remoto
     const result = this.generateRoll(req);
 

@@ -163,6 +163,10 @@ class OnlineRoomManager {
     return Boolean(this.roomCode && this.channel);
   }
 
+  public isMasterUser(): boolean {
+    return this.isMaster;
+  }
+
   public getConnectedUsers(): RemoteUser[] {
     return this.connectedUsers;
   }

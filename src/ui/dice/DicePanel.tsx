@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { DieType, DiceRollRequest } from '../../types/dice';
 import { diceManager } from '../../modules/dice/diceManager';
+import { useGameStore } from '../../stores/useGameStore';
 import { Dices, Volume2, VolumeX, EyeOff, RotateCcw, AlertCircle, X } from 'lucide-react';
 
 interface DicePanelProps {
@@ -28,6 +29,7 @@ export const DicePanel: React.FC<DicePanelProps> = ({
   const [isRolling, setIsRolling] = useState(false);
   const [waitingWarning, setWaitingWarning] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(diceManager.isMuted());
+  const isFrozen = useGameStore((s) => s.game.remotePlayersFrozen);
 
   if (!isOpen) return null;
 
@@ -242,11 +244,19 @@ export const DicePanel: React.FC<DicePanelProps> = ({
           </div>
         )}
 
+        {/* Aviso de congelación si la partida está en pausa */}
+        {!isMaster && isFrozen && (
+          <div className="p-2.5 rounded-lg bg-rose-950/70 border border-rose-500/60 text-xs text-rose-300 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>Partida en pausa por el máster. No puedes tirar dados hasta que se reanude.</span>
+          </div>
+        )}
+
         {/* Botones de acción */}
         <div className="pt-2 flex items-center gap-2">
           <button
             type="button"
-            disabled={isRolling}
+            disabled={isRolling || (!isMaster && isFrozen)}
             onClick={() => handleRoll()}
             className="flex-1 py-2.5 px-4 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-bold text-sm shadow-lg transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
           >
@@ -256,9 +266,9 @@ export const DicePanel: React.FC<DicePanelProps> = ({
 
           <button
             type="button"
-            disabled={isRolling}
+            disabled={isRolling || (!isMaster && isFrozen)}
             onClick={handleRepeatLast}
-            className="py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold shadow transition-colors cursor-pointer flex items-center gap-1.5"
+            className="py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 border border-slate-700 text-slate-200 text-xs font-semibold shadow transition-colors cursor-pointer flex items-center gap-1.5"
             title="Repetir la última tirada"
           >
             <RotateCcw className="w-3.5 h-3.5" />

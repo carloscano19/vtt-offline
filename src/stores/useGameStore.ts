@@ -119,7 +119,8 @@ function createDefaultGame(): GameState {
     updatedAt: now,
     cloudSavedId: null,
     cloudSavedName: null,
-    cloudSavedOwner: null
+    cloudSavedOwner: null,
+    remotePlayersFrozen: false
   };
 }
 
@@ -181,6 +182,11 @@ interface GameStoreState {
   removeTokenStatus: (tokenId: string, statusId: string) => void;
   updateTokenStatus: (tokenId: string, statusId: string, updates: Partial<TokenStatus>) => void;
   duplicateEntity: (id: string) => string | undefined;
+
+  // Jugadores remotos y movimiento limitado
+  setRemotePlayersFrozen: (frozen: boolean) => void;
+  resetTokenMovement: (tokenId: string) => void;
+  adjustTokenMovement: (tokenId: string, delta: number) => void;
 
   // Ambiente y Clima
   setAmbientConfig: (partial: Partial<AmbientConfig>) => void;
@@ -550,33 +556,61 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       let anyChanged = false;
 
       const entities = state.game.entities.map((ent) => {
-        if (ent.type !== 'token' || !Array.isArray(ent.statuses) || ent.statuses.length === 0) {
+        if (ent.type !== 'token') {
           return ent;
         }
 
-        const survivingStatuses: TokenStatus[] = [];
-        for (const st of ent.statuses) {
-          if (st.turnsRemaining === null) {
-            // Sin límite: no cambia
-            survivingStatuses.push(st);
-          } else {
-            anyChanged = true;
-            const remaining = st.turnsRemaining - 1;
-            if (remaining <= 0) {
-              expiredNotifications.push(`${st.type} terminó en ${ent.name || 'Token'}`);
-            } else {
-              survivingStatuses.push({
-                ...st,
-                turnsRemaining: remaining
-              });
+        let updatedEnt = ent;
+
+        // 1. Recargar presupuesto de movimiento y borrar camino verde
+        const budget = typeof ent.movementBudget === 'number' ? ent.movementBudget : 7;
+        const currentRemaining = ent.movementState?.remaining;
+        const currentPathLen = ent.movementState?.path?.length || 0;
+        if (
+          ent.movementState ||
+          ent.controlledBy ||
+          ent.movementBudget !== undefined ||
+          currentRemaining !== budget ||
+          currentPathLen > 0
+        ) {
+          anyChanged = true;
+          updatedEnt = {
+            ...updatedEnt,
+            movementBudget: budget,
+            movementState: {
+              remaining: budget,
+              path: []
             }
-          }
+          };
         }
 
-        return {
-          ...ent,
-          statuses: survivingStatuses
-        };
+        // 2. Decrementar estados con turnos restantes
+        if (Array.isArray(ent.statuses) && ent.statuses.length > 0) {
+          const survivingStatuses: TokenStatus[] = [];
+          for (const st of ent.statuses) {
+            if (st.turnsRemaining === null) {
+              // Sin límite: no cambia
+              survivingStatuses.push(st);
+            } else {
+              anyChanged = true;
+              const remaining = st.turnsRemaining - 1;
+              if (remaining <= 0) {
+                expiredNotifications.push(`${st.type} terminó en ${ent.name || 'Token'}`);
+              } else {
+                survivingStatuses.push({
+                  ...st,
+                  turnsRemaining: remaining
+                });
+              }
+            }
+          }
+          updatedEnt = {
+            ...updatedEnt,
+            statuses: survivingStatuses
+          };
+        }
+
+        return updatedEnt;
       });
 
       return {
@@ -592,6 +626,81 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
     });
 
     return expiredNotifications;
+  },
+
+  setRemotePlayersFrozen: (frozen: boolean) => {
+    set((state) => ({
+      game: {
+        ...state.game,
+        remotePlayersFrozen: frozen,
+        updatedAt: Date.now()
+      }
+    }));
+  },
+
+  resetTokenMovement: (tokenId: string) => {
+    set((state) => {
+      let changed = false;
+      const entities = state.game.entities.map((ent) => {
+        if (ent.id === tokenId && ent.type === 'token') {
+          changed = true;
+          const budget = typeof ent.movementBudget === 'number' ? ent.movementBudget : 7;
+          return {
+            ...ent,
+            movementBudget: budget,
+            movementState: {
+              remaining: budget,
+              path: []
+            }
+          };
+        }
+        return ent;
+      });
+
+      if (!changed) return state;
+
+      return {
+        game: {
+          ...state.game,
+          entities,
+          updatedAt: Date.now()
+        }
+      };
+    });
+  },
+
+  adjustTokenMovement: (tokenId: string, delta: number) => {
+    set((state) => {
+      let changed = false;
+      const entities = state.game.entities.map((ent) => {
+        if (ent.id === tokenId && ent.type === 'token') {
+          changed = true;
+          const budget = typeof ent.movementBudget === 'number' ? ent.movementBudget : 7;
+          const currentRemaining = typeof ent.movementState?.remaining === 'number'
+            ? ent.movementState.remaining
+            : budget;
+          const remaining = Math.max(0, currentRemaining + delta);
+          return {
+            ...ent,
+            movementState: {
+              remaining,
+              path: ent.movementState?.path || []
+            }
+          };
+        }
+        return ent;
+      });
+
+      if (!changed) return state;
+
+      return {
+        game: {
+          ...state.game,
+          entities,
+          updatedAt: Date.now()
+        }
+      };
+    });
   },
 
   addTokenStatus: (tokenId, status) => {

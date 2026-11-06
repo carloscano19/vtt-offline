@@ -267,6 +267,22 @@ export function normalizeEntity(entity: Entity): Entity {
     };
   }
 
+  // Normalizar movimiento y control para tokens
+  if (entity.type === 'token') {
+    const budget = typeof entity.movementBudget === 'number' && entity.movementBudget >= 0 ? entity.movementBudget : 7;
+    const remaining = typeof entity.movementState?.remaining === 'number' ? entity.movementState.remaining : budget;
+    const path = Array.isArray(entity.movementState?.path) ? entity.movementState.path : [];
+    entity = {
+      ...entity,
+      controlledBy: entity.controlledBy ? String(entity.controlledBy) : undefined,
+      movementBudget: budget,
+      movementState: {
+        remaining,
+        path
+      }
+    };
+  }
+
   // Normalizar opacidad (0.0 a 1.0, por defecto 1.0 si es undefined o NaN)
   const rawOpacity = typeof entity.opacity === 'number' && Number.isFinite(entity.opacity) ? entity.opacity : 1.0;
   entity = {
@@ -413,6 +429,7 @@ export function normalizeGameState(game: GameState): GameState {
       })(),
       cloudSavedId: game.cloudSavedId ?? null,
       cloudSavedName: game.cloudSavedName ?? null,
-      cloudSavedOwner: game.cloudSavedOwner ?? null
+      cloudSavedOwner: game.cloudSavedOwner ?? null,
+      remotePlayersFrozen: Boolean(game.remotePlayersFrozen ?? false)
     };
 }

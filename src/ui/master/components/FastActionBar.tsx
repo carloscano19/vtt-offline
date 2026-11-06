@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, EyeOff, Lock, Unlock, Copy, Trash2, Sparkles, FlipHorizontal, FlipVertical } from 'lucide-react';
+import { Eye, EyeOff, Lock, Unlock, Copy, Trash2, Sparkles, FlipHorizontal, FlipVertical, RotateCcw } from 'lucide-react';
 import { useGameStore } from '../../../stores/useGameStore';
 import { useUIStore } from '../../../stores/useUIStore';
 import { worldToScreen, localToWorld } from '../../../pixi/utils/coordinates';
@@ -28,6 +28,8 @@ export const FastActionBar: React.FC<FastActionBarProps> = ({
   const toggleEntityLock = useGameStore((s) => s.toggleEntityLock);
   const duplicateEntity = useGameStore((s) => s.duplicateEntity);
   const removeEntities = useGameStore((s) => s.removeEntities);
+  const resetTokenMovement = useGameStore((s) => s.resetTokenMovement);
+  const adjustTokenMovement = useGameStore((s) => s.adjustTokenMovement);
   const setEditingTokenStatusesId = useUIStore((s) => s.setEditingTokenStatusesId);
   const addToast = useUIStore((s) => s.addToast);
 
@@ -297,6 +299,67 @@ export const FastActionBar: React.FC<FastActionBarProps> = ({
               </span>
             )}
           </button>
+
+          {/* Control rápido de movimiento del token */}
+          <div className="w-[1px] h-4 bg-slate-700/80 mx-0.5" />
+          <div className="flex items-center gap-0.5 px-0.5">
+            {(() => {
+              const budget = typeof entity.movementBudget === 'number' ? entity.movementBudget : 7;
+              const remaining = typeof entity.movementState?.remaining === 'number'
+                ? entity.movementState.remaining
+                : budget;
+              const isZero = remaining === 0;
+
+              return (
+                <>
+                  <span
+                    className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded border transition-colors ${
+                      isZero
+                        ? 'bg-rose-950/70 border-rose-600/60 text-rose-300'
+                        : 'bg-emerald-950/70 border-emerald-600/60 text-emerald-300'
+                    }`}
+                    title={`Casillas restantes en este turno: ${remaining} de ${budget}`}
+                  >
+                    {remaining}/{budget}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      adjustTokenMovement(entity.id, -1);
+                    }}
+                    className="px-1.5 py-0.5 text-[11px] font-bold rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                    title="Restar 1 casilla de movimiento"
+                  >
+                    -1
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      adjustTokenMovement(entity.id, 1);
+                    }}
+                    className="px-1.5 py-0.5 text-[11px] font-bold rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                    title="Sumar 1 casilla de movimiento"
+                  >
+                    +1
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      resetTokenMovement(entity.id);
+                      addToast('Movimiento del turno reiniciado', 'info', 2000);
+                    }}
+                    className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                    title="Reiniciar casillas de este turno y borrar camino"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                </>
+              );
+            })()}
+          </div>
         </>
       )}
     </div>

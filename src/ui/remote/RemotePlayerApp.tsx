@@ -4,9 +4,11 @@ import { PixiCanvas } from '../../pixi/PixiCanvas';
 import { CanvasErrorBoundary } from '../common/CanvasErrorBoundary';
 import { onlineRoomManager } from '../../modules/online/onlineRoomManager';
 import { audioManager } from '../../modules/audio/audioManager';
+import { movementManager } from '../../modules/movement/movementManager';
+import { movementSound } from '../../modules/movement/movementSound';
 import { DicePanel } from '../dice/DicePanel';
 import { DiceRollOverlay } from '../dice/DiceRollOverlay';
-import { Maximize2, Minimize2, Volume2, VolumeX, Crosshair, User, AlertCircle, Wifi, WifiOff, Dices } from 'lucide-react';
+import { Maximize2, Minimize2, Volume2, VolumeX, Crosshair, User, AlertCircle, Wifi, WifiOff, Dices, Pause } from 'lucide-react';
 
 interface RemotePlayerAppProps {
   roomCode: string;
@@ -18,6 +20,7 @@ export const RemotePlayerApp: React.FC<RemotePlayerAppProps> = ({ roomCode }) =>
   const playerCamera = useGameStore((s) => s.game.playerCamera);
   const entities = useGameStore((s) => s.game.entities);
   const music = useGameStore((s) => s.game.music);
+  const remotePlayersFrozen = useGameStore((s) => s.game.remotePlayersFrozen);
 
   const [savedName, setSavedName] = useState<string>(() => {
     try {
@@ -129,6 +132,149 @@ export const RemotePlayerApp: React.FC<RemotePlayerAppProps> = ({ roomCode }) =>
     }
   };
 
+  // Control por teclado para mover el token asignado (flechas, diagonales y Retroceso para deshacer)
+  useEffect(() => {
+    if (!isJoined || !savedName) return;
+
+    const cleanupError = movementManager.onError((reason) => {
+      setWarningMessage(reason);
+    });
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      const isArrow = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key);
+      const isDiagonal = [
+        'Numpad7',
+        'Numpad9',
+        'Numpad1',
+        'Numpad3',
+        'Numpad8',
+        'Numpad2',
+        'Numpad4',
+        'Numpad6',
+        'KeyQ',
+        'KeyE',
+        'KeyZ',
+        'KeyC'
+      ].includes(e.code);
+      const isUndo = e.key === 'Backspace';
+
+      if (!isArrow && !isDiagonal && !isUndo) return;
+
+      const currentGame = useGameStore.getState().game;
+
+      if (currentGame.remotePlayersFrozen) {
+        e.preventDefault();
+        setWarningMessage('La partida está en pausa por el máster');
+        movementSound.playWallBump();
+        return;
+      }
+
+      const myToken = currentGame.entities.find(
+        (ent) =>
+          ent.type === 'token' &&
+          ent.controlledBy &&
+          ent.controlledBy.trim().toLowerCase() === savedName.trim().toLowerCase()
+      );
+
+      if (!myToken) {
+        e.preventDefault();
+        setWarningMessage('No tienes ningún token asignado en la mesa');
+        return;
+      }
+
+      if (isUndo) {
+        e.preventDefault();
+        movementManager.requestUndo(myToken.id, savedName);
+        return;
+      }
+
+      e.preventDefault();
+
+      let dx = 0;
+      let dy = 0;
+
+      if (e.key === 'ArrowUp') dy -= 1;
+      if (e.key === 'ArrowDown') dy += 1;
+      if (e.key === 'ArrowLeft') dx -= 1;
+      if (e.key === 'ArrowRight') dx += 1;
+
+      // Diagonales y teclado numérico (D&D 5e: 1 casilla)
+      if (e.code === 'Numpad7' || e.code === 'KeyQ') {
+        dx = -1;
+        dy = -1;
+      }
+      if (e.code === 'Numpad9' || e.code === 'KeyE') {
+        dx = 1;
+        dy = -1;
+      }
+      if (e.code === 'Numpad1' || e.code === 'KeyZ') {
+        dx = -1;
+        dy = 1;
+      }
+      if (e.code === 'Numpad3' || e.code === 'KeyC') {
+        dx = 1;
+        dy = 1;
+      }
+      if (e.code === 'Numpad8') {
+        dx = 0;
+        dy = -1;
+      }
+      if (e.code === 'Numpad2') {
+        dx = 0;
+        dy = 1;
+      }
+      if (e.code === 'Numpad4') {
+        dx = -1;
+        dy = 0;
+      }
+      if (e.code === 'Numpad6') {
+        dx = 1;
+        dy = 0;
+      }
+
+      if (dx === 0 && dy === 0) return;
+
+      const budget = typeof myToken.movementBudget === 'number' ? myToken.movementBudget : 7;
+      const remaining = typeof myToken.movementState?.remaining === 'number'
+        ? myToken.movementState.remaining
+        : budget;
+
+      if (remaining <= 0) {
+        setWarningMessage('Sin casillas de movimiento restantes en este turno');
+        movementSound.playWallBump();
+        return;
+      }
+
+      movementManager.requestStep(myToken.id, dx, dy, savedName);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      cleanupError();
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isJoined, savedName]);
+
+  // Auto-descartar avisos flotantes a los 3.5 segundos
+  useEffect(() => {
+    if (!warningMessage) return;
+    const t = setTimeout(() => {
+      setWarningMessage(null);
+    }, 3500);
+    return () => clearTimeout(t);
+  }, [warningMessage]);
+
   const toggleFullscreen = async () => {
     try {
       if (!document.fullscreenElement) {
@@ -209,6 +355,14 @@ export const RemotePlayerApp: React.FC<RemotePlayerAppProps> = ({ roomCode }) =>
             </>
           )}
         </div>
+
+        {/* Indicador de Pausa si el máster ha congelado la partida */}
+        {remotePlayersFrozen && (
+          <div className="bg-rose-950/90 border border-rose-500/80 rounded-lg px-3 py-1.5 shadow-lg backdrop-blur-xs flex items-center gap-1.5 text-xs text-rose-200 animate-pulse font-semibold">
+            <Pause className="w-3.5 h-3.5 text-rose-400" />
+            <span>Pausado por el máster</span>
+          </div>
+        )}
 
         {/* Botón "Centrar en mi ficha" */}
         <button

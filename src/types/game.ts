@@ -99,6 +99,7 @@ export interface GameState {
   cloudSavedId?: string | null;
   cloudSavedName?: string | null;
   cloudSavedOwner?: string | null;
+  remotePlayersFrozen?: boolean;
 }
 
 export type AssetType = 'image' | 'gif' | 'video' | 'map' | 'audio';

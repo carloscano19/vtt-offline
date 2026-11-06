@@ -37,7 +37,9 @@ import {
   KeyRound,
   SkipForward,
   Globe,
-  Dices
+  Dices,
+  Pause,
+  Play
 } from 'lucide-react';
 import { OnlineRoomModal } from './OnlineRoomModal';
 import { DicePanel } from '../../dice/DicePanel';
@@ -118,6 +120,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
   const setAmbientConfig = useGameStore((s) => s.setAmbientConfig);
   const setWeatherConfig = useGameStore((s) => s.setWeatherConfig);
   const nextTurn = useGameStore((s) => s.nextTurn);
+  const setRemotePlayersFrozen = useGameStore((s) => s.setRemotePlayersFrozen);
   const addToast = useUIStore((s) => s.addToast);
   const undo = useGameStore((s) => s.undo);
   const redo = useGameStore((s) => s.redo);
@@ -649,6 +652,33 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           <span className="font-mono text-[11px] px-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
             T{game.turnCounter || 1}
           </span>
+        </button>
+
+        {/* Botón Pausa de jugadores remotos */}
+        <button
+          type="button"
+          onClick={() => {
+            const nextFrozen = !game.remotePlayersFrozen;
+            setRemotePlayersFrozen(nextFrozen);
+            addToast(
+              nextFrozen ? 'Jugadores remotos en pausa (congelados)' : 'Partida reanudada',
+              nextFrozen ? 'warning' : 'info',
+              2500
+            );
+          }}
+          className={`px-2.5 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 border transition-all active:scale-95 cursor-pointer ${
+            game.remotePlayersFrozen
+              ? 'bg-rose-950/80 border-rose-500 text-rose-200 shadow-md ring-1 ring-rose-500/60 animate-pulse'
+              : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+          }`}
+          title={
+            game.remotePlayersFrozen
+              ? 'Partida en pausa: los jugadores remotos no pueden mover tokens ni tirar dados (clic para reanudar)'
+              : 'Pausar jugadores remotos: congela movimiento y dados de jugadores a distancia'
+          }
+        >
+          {game.remotePlayersFrozen ? <Play className="w-4 h-4 text-rose-300" /> : <Pause className="w-4 h-4 text-slate-400" />}
+          <span className="hidden md:inline">{game.remotePlayersFrozen ? 'Pausado' : 'Pausa'}</span>
         </button>
 
         <div className="w-[1px] h-6 bg-slate-700/80 mx-0.5" />

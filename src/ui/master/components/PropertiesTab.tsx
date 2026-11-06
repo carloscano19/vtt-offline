@@ -25,9 +25,11 @@ import {
   Crop,
   Check,
   RefreshCw,
-  Sun
+  Sun,
+  UserCheck
 } from 'lucide-react';
 import { TokenSide, recalculateDoorEndpoints, getDefaultSnapToGrid } from '../../../types/entity';
+import { onlineRoomManager, RemoteUser } from '../../../modules/online/onlineRoomManager';
 import { getAsset, db } from '../../../db/dexie';
 import { cloudSync } from '../../../modules/sync/cloudSync';
 import { syncChannel } from '../../../modules/sync/syncChannel';
@@ -75,6 +77,13 @@ export const PropertiesTab: React.FC = () => {
   const [showTrimModal, setShowTrimModal] = React.useState(false);
   const [isTrimming, setIsTrimming] = React.useState(false);
   const [trimFeedback, setTrimFeedback] = React.useState<string | null>(null);
+  const [connectedUsers, setConnectedUsers] = React.useState<RemoteUser[]>(onlineRoomManager.getConnectedUsers());
+
+  React.useEffect(() => {
+    return onlineRoomManager.onConnectedUsers((users) => {
+      setConnectedUsers(users.filter((u) => u.role === 'player'));
+    });
+  }, []);
 
   const handleConfirmTrim = async () => {
     if (!selectedEntity?.assetId) return;
@@ -373,6 +382,109 @@ export const PropertiesTab: React.FC = () => {
               {trimFeedback}
             </p>
           )}
+        </div>
+      )}
+
+      {/* Control remoto y casillas por turno para tokens */}
+      {selectedEntity.type === 'token' && (
+        <div className="bg-slate-800/60 p-3 rounded border border-slate-700 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-sky-400 flex items-center gap-1.5 text-xs">
+              <UserCheck className="w-4 h-4" />
+              Jugador Remoto y Movimiento
+            </span>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-slate-400 text-xs font-medium">Controlado por</label>
+            <div className="space-y-1.5">
+              <select
+                value={
+                  selectedEntity.controlledBy && connectedUsers.some((u) => u.name === selectedEntity.controlledBy)
+                    ? selectedEntity.controlledBy
+                    : selectedEntity.controlledBy
+                    ? '__custom__'
+                    : ''
+                }
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '__custom__') {
+                    // Espera que escriba en el input
+                  } else {
+                    handleUpdate({ controlledBy: val || undefined });
+                  }
+                }}
+                className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500"
+              >
+                <option value="">Nadie (solo máster)</option>
+                {connectedUsers.map((u) => (
+                  <option key={u.id} value={u.name}>
+                    {u.name} (conectado)
+                  </option>
+                ))}
+                {selectedEntity.controlledBy &&
+                  !connectedUsers.some((u) => u.name === selectedEntity.controlledBy) && (
+                    <option value="__custom__">
+                      {selectedEntity.controlledBy} (personalizado)
+                    </option>
+                  )}
+                {!selectedEntity.controlledBy && <option value="__custom__">Otro jugador...</option>}
+              </select>
+
+              <input
+                type="text"
+                placeholder="Nombre del jugador o personaje..."
+                value={selectedEntity.controlledBy || ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  handleUpdate({ controlledBy: val.trim() || undefined });
+                }}
+                className="w-full bg-slate-900/80 border border-slate-700 rounded px-2.5 py-1 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-sky-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <div>
+              <label className="text-slate-400 text-xs font-medium block mb-1">Casillas / turno</label>
+              <input
+                type="number"
+                min={1}
+                max={99}
+                value={selectedEntity.movementBudget ?? 7}
+                onChange={(e) => {
+                  const num = Math.max(1, parseInt(e.target.value, 10) || 7);
+                  handleUpdate({
+                    movementBudget: num,
+                    movementState: {
+                      remaining: num,
+                      path: []
+                    }
+                  });
+                }}
+                className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
+              />
+            </div>
+            <div className="flex flex-col justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  const budget = selectedEntity.movementBudget ?? 7;
+                  handleUpdate({
+                    movementState: {
+                      remaining: budget,
+                      path: []
+                    }
+                  });
+                }}
+                className="w-full py-1.5 px-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-xs font-medium flex items-center justify-center gap-1 transition-colors"
+                title="Restablece el presupuesto y borra el camino verde de este token"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Reiniciar</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
