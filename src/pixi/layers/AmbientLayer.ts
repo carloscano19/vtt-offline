@@ -1,6 +1,7 @@
 import { Container, Graphics, Sprite } from 'pixi.js';
 import { AmbientConfig, ExploredMultiPolygon } from '../../types/game';
 import { LightVisibility } from '../../modules/lights/lightManager';
+import { TokenVisibility } from '../../modules/vision/visibilityPolygon';
 import { visionToMulti, simplifyMulti } from '../../modules/vision/fogMemory';
 import { safeClip } from '../../modules/vision/safeClip';
 import { parseColor, rgbComponents } from '../../utils/color';
@@ -119,9 +120,20 @@ export class AmbientLayer extends Container {
     ambientConfig: AmbientConfig,
     lights: LightVisibility[],
     bounds: { x: number; y: number; width: number; height: number },
-    deltaSeconds: number = 0.016
+    deltaSeconds: number = 0.016,
+    visibilities: TokenVisibility[] = []
   ) {
     this.timeSec += deltaSeconds;
+
+    // Tokens de jugador con visión activa que iluminan su entorno
+    const illuminatingTokens = (visibilities || []).filter(
+      (t) =>
+        t.illuminates !== false &&
+        t.totalRangePx > 0 &&
+        t.center &&
+        t.totalPolygon &&
+        t.totalPolygon.length >= 3
+    );
 
     // 1. Determinar valores objetivo según preset o personalizado
     const preset = ambientConfig?.preset || 'dusk';
@@ -147,7 +159,7 @@ export class AmbientLayer extends Container {
     this.currentB += (this.targetB - this.currentB) * factor;
     this.currentDarkness += (this.targetDarkness - this.currentDarkness) * factor;
 
-    // 3. Clave para invalidar cálculo de polígonos (solo si cambian luces o bounds)
+    // 3. Clave para invalidar cálculo de polígonos (solo si cambian luces, tokens con visión o bounds)
     const bx = Number.isFinite(bounds.x) ? Math.round(bounds.x) : -2000;
     const by = Number.isFinite(bounds.y) ? Math.round(bounds.y) : -2000;
     const bw = Number.isFinite(bounds.width) && bounds.width > 0 ? Math.round(bounds.width) : 4000;
@@ -159,7 +171,13 @@ export class AmbientLayer extends Container {
           `${l.lightId}:${Math.round(l.center.x)}:${Math.round(l.center.y)}:${l.brightRangePx}:${l.totalRangePx}:${l.shape || 'circle'}:${l.coneAngle || 60}:${l.directionOffset || 0}:${Math.round((l.rotation || 0) * 100) / 100}`
       )
       .join('|');
-    const geoKey = `${bx},${by},${bw},${bh}__${lightsKey}`;
+    const tokensKey = illuminatingTokens
+      .map(
+        (t) =>
+          `${t.tokenId}:${Math.round(t.center.x)}:${Math.round(t.center.y)}:${t.brightRangePx}:${t.totalRangePx}:${t.shape || 'circle'}:${t.coneAngle || 60}:${t.directionOffset || 0}:${Math.round((t.rotation || 0) * 100) / 100}`
+      )
+      .join('|');
+    const geoKey = `${bx},${by},${bw},${bh}__${lightsKey}__${tokensKey}`;
 
     if (geoKey !== this.lastGeometryKey || !this.cachedRegions) {
       this.lastGeometryKey = geoKey;
@@ -176,7 +194,9 @@ export class AmbientLayer extends Container {
         ]
       ];
 
-      const totalPolys = lights.map((l) => l.totalPolygon).filter((p) => p && p.length >= 3);
+      const lightPolys = lights.map((l) => l.totalPolygon).filter((p) => p && p.length >= 3);
+      const tokenPolys = illuminatingTokens.map((t) => t.totalPolygon).filter((p) => p && p.length >= 3);
+      const totalPolys = [...lightPolys, ...tokenPolys];
 
       let totalMulti: ExploredMultiPolygon = [];
       let outsideMulti: ExploredMultiPolygon = worldBoxMulti;
@@ -188,16 +208,18 @@ export class AmbientLayer extends Container {
 
       this.cachedRegions = { outsideMulti, totalMulti };
 
-      // 4a. Regenerar geometría estática de oscuridad fuera de las luces
+      // 4a. Regenerar geometría estática de oscuridad fuera de las luces y visión
       this.darknessGfx.clear();
       this.renderMulti(this.darknessGfx, outsideMulti, 0xffffff, 1.0);
 
-      // 4b. Regenerar máscara stencil única para degradado de oscuridad de todas las luces
+      // 4b. Regenerar máscara stencil única para degradado de oscuridad de todas las luces y tokens
       this.dimMaskGfx.clear();
       if (totalMulti.length > 0) {
         this.renderMulti(this.dimMaskGfx, totalMulti, 0xffffff, 1.0);
 
         let darkSpriteIdx = 0;
+
+        // Sprites de reducción de oscuridad para las luces
         for (const light of lights) {
           const rBright = light.brightRangePx || 0;
           const rTotal = light.totalRangePx || 0;
@@ -233,6 +255,44 @@ export class AmbientLayer extends Container {
           sprite.visible = true;
           darkSpriteIdx++;
         }
+
+        // Sprites de reducción de oscuridad para los tokens con visión activa que iluminan
+        for (const token of illuminatingTokens) {
+          const rBright = token.brightRangePx || 0;
+          const rTotal = token.totalRangePx || 0;
+          if (rTotal <= 0 || !token.center) continue;
+
+          let sprite = this.dimSprites[darkSpriteIdx];
+          if (!sprite) {
+            sprite = new Sprite();
+            sprite.anchor.set(0.5);
+            this.dimSprites.push(sprite);
+            this.dimSpritesContainer.addChild(sprite);
+          }
+          const ratio = rTotal > 0 ? rBright / rTotal : 1.0;
+          const isCone = token.shape === 'cone';
+          const coneAngle = token.coneAngle ?? 60;
+          const totalAngleRad = (token.rotation || 0) + ((token.directionOffset || 0) * Math.PI) / 180;
+
+          if (this.darknessFilter) {
+            sprite.texture = isCone
+              ? getConeTintGradientTexture(ratio, coneAngle)
+              : getTintRadialGradientTexture(ratio);
+            sprite.tint = 0xffffff;
+            sprite.alpha = 1.0;
+            sprite.blendMode = 'max';
+          } else {
+            sprite.texture = getDimRadialGradientTexture(ratio);
+            sprite.blendMode = 'normal';
+          }
+          sprite.position.set(token.center.x, token.center.y);
+          sprite.rotation = isCone ? totalAngleRad : 0;
+          sprite.width = rTotal * 2;
+          sprite.height = rTotal * 2;
+          sprite.visible = true;
+          darkSpriteIdx++;
+        }
+
         for (let i = darkSpriteIdx; i < this.dimSprites.length; i++) {
           this.dimSprites[i].visible = false;
         }
@@ -240,7 +300,7 @@ export class AmbientLayer extends Container {
         for (const s of this.dimSprites) s.visible = false;
       }
 
-      // 5. Regenerar máscara stencil única y sprites del haz continuo de luz (mismo sector, color uniforme)
+      // 5. Regenerar máscara stencil única y sprites del haz continuo de tinte (únicamente fuentes de luz, no tokens)
       this.tintDimMaskGfx.clear();
       let tintSpriteIdx = 0;
       for (const light of lights) {
@@ -281,7 +341,7 @@ export class AmbientLayer extends Container {
       }
     }
 
-    // 6. Animación ligera por fotograma: ÚNICAMENTE actualizar alfas, tintes y parpadeo (sin tocar geometría ni máscaras)
+    // 6. Animación ligera por fotograma: alfas, tintes suaves y parpadeo (sin tocar geometría ni máscaras)
     const tintR = Math.round(this.currentR * 0.22);
     const tintG = Math.round(this.currentG * 0.22);
     const tintB = Math.round(this.currentB * 0.22);
@@ -314,7 +374,7 @@ export class AmbientLayer extends Container {
       this.dimContainer.visible = false;
     }
 
-    // Modular tinte de luces según oscuridad ambiental, parpadeo de antorchas y fundido de 0.6s
+    // Modular tinte suave de luces según oscuridad ambiental, parpadeo y saturación cromática
     const darknessFactor = 0.05 + 0.95 * Math.pow(Math.min(1.0, this.currentDarkness / 0.85), 1.5);
 
     let activeTintIdx = 0;
@@ -337,7 +397,7 @@ export class AmbientLayer extends Container {
         fadeFactor = fade.current;
       }
 
-      // Actualizar alfa del sprite de reducción de oscuridad
+      // Actualizar alfa del sprite de reducción de oscuridad de la luz
       const rBright = light.brightRangePx || 0;
       const rTotal = light.totalRangePx || 0;
       if (rTotal > 0 && light.center) {
@@ -348,8 +408,15 @@ export class AmbientLayer extends Container {
         }
       }
 
-      // Actualizar alfa del sprite del haz de luz
-      const { rgb: colorNum } = parseColor(light.color, 0xffaa44);
+      // Actualizar tinte suave del haz de luz
+      const { rgb: colorNum } = parseColor(light.color, 0xff9a3c);
+      const r = (colorNum >> 16) & 0xff;
+      const g = (colorNum >> 8) & 0xff;
+      const b = colorNum & 0xff;
+      const maxC = Math.max(r, g, b);
+      const minC = Math.min(r, g, b);
+      const chroma = maxC - minC;
+      const saturation = maxC > 0 ? chroma / maxC : 0;
 
       let flickerMod = 1.0;
       if (light.flicker) {
@@ -357,13 +424,30 @@ export class AmbientLayer extends Container {
         flickerMod = 0.90 + 0.10 * Math.sin(this.timeSec * 8 + seed) * Math.cos(this.timeSec * 13 + seed);
       }
 
-      const baseAlpha = light.intensity * 0.25 * darknessFactor * flickerMod;
+      // Si el color de la luz es blanco o neutro, el tinte es prácticamente invisible (~0) para no lavar el mapa.
+      // Si tiene color (ej. naranja #ff9a3c), añade solo un tinte suave a baja intensidad (~0.05-0.08) en screen.
+      const baseAlpha = saturation > 0.03
+        ? light.intensity * 0.09 * saturation * darknessFactor * flickerMod
+        : 0;
+
       if (rTotal > 0 && light.center && light.totalPolygon && light.totalPolygon.length >= 3) {
         const sprite = this.tintDimSprites[activeTintIdx++];
         if (sprite) {
           sprite.tint = colorNum;
           sprite.alpha = baseAlpha * fadeFactor;
           sprite.visible = sprite.alpha > 0.001;
+        }
+      }
+    }
+
+    // Los sprites de reducción de oscuridad de los tokens de jugador se mantienen siempre a 1.0
+    for (const token of illuminatingTokens) {
+      const rTotal = token.totalRangePx || 0;
+      if (rTotal > 0 && token.center) {
+        const dimSprite = this.dimSprites[activeDimIdx++];
+        if (dimSprite) {
+          dimSprite.alpha = 1.0;
+          dimSprite.visible = true;
         }
       }
     }

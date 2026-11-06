@@ -231,7 +231,8 @@ export const PropertiesTab: React.FC = () => {
                           active: true,
                           brightRangeInSquares: 4,
                           dimRangeInSquares: 2,
-                          hardness: 0.5
+                          hardness: 0.5,
+                          illuminates: true
                         }
                       });
                     } else {
@@ -275,7 +276,11 @@ export const PropertiesTab: React.FC = () => {
                       brightRangeInSquares:
                         selectedEntity.vision?.brightRangeInSquares ?? selectedEntity.vision?.rangeInSquares ?? 4,
                       dimRangeInSquares: selectedEntity.vision?.dimRangeInSquares ?? 2,
-                      hardness: selectedEntity.vision?.hardness ?? 0.5
+                      hardness: selectedEntity.vision?.hardness ?? 0.5,
+                      illuminates: selectedEntity.vision?.illuminates !== false,
+                      shape: selectedEntity.vision?.shape ?? 'circle',
+                      coneAngle: selectedEntity.vision?.coneAngle ?? 60,
+                      directionOffset: selectedEntity.vision?.directionOffset ?? 0
                     }
                   })
                 }
@@ -287,8 +292,29 @@ export const PropertiesTab: React.FC = () => {
 
           {Boolean(selectedEntity.vision?.active) && (
             <div className="space-y-3 pt-1 border-t border-slate-700/60">
+              {/* Casilla: Ilumina su entorno */}
+              <div className="flex items-center justify-between pb-1">
+                <div>
+                  <span className="text-xs text-slate-300 block font-medium">Ilumina su entorno</span>
+                  <span className="text-[10px] text-slate-500 block">Elimina la oscuridad ambiente en su rango</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={selectedEntity.vision?.illuminates !== false}
+                  onChange={(e) =>
+                    handleUpdate({
+                      vision: {
+                        ...selectedEntity.vision!,
+                        illuminates: e.target.checked
+                      }
+                    })
+                  }
+                  className="rounded border-slate-700 text-emerald-500 focus:ring-emerald-500 bg-slate-800 h-4 w-4 cursor-pointer"
+                />
+              </div>
+
               {/* 1. Alcance claro */}
-              <div>
+              <div className="pt-2 border-t border-slate-700/60">
                 <div className="flex justify-between text-slate-400 mb-1">
                   <span>Alcance claro (casillas)</span>
                   <span className="text-white font-mono">
@@ -305,10 +331,9 @@ export const PropertiesTab: React.FC = () => {
                   onChange={(e) =>
                     handleUpdate({
                       vision: {
+                        ...selectedEntity.vision!,
                         active: Boolean(selectedEntity.vision?.active),
-                        brightRangeInSquares: Math.max(0, parseInt(e.target.value) || 0),
-                        dimRangeInSquares: selectedEntity.vision?.dimRangeInSquares ?? 2,
-                        hardness: selectedEntity.vision?.hardness ?? 0.5
+                        brightRangeInSquares: Math.max(0, parseInt(e.target.value) || 0)
                       }
                     })
                   }
@@ -333,14 +358,8 @@ export const PropertiesTab: React.FC = () => {
                   onChange={(e) =>
                     handleUpdate({
                       vision: {
-                        active: Boolean(selectedEntity.vision?.active),
-                        brightRangeInSquares:
-                          selectedEntity.vision?.brightRangeInSquares ?? selectedEntity.vision?.rangeInSquares ?? 4,
-                        dimRangeInSquares: Math.max(0, parseInt(e.target.value) || 0),
-                        hardness: selectedEntity.vision?.hardness ?? 0.5,
-                        shape: selectedEntity.vision?.shape ?? 'circle',
-                        coneAngle: selectedEntity.vision?.coneAngle ?? 60,
-                        directionOffset: selectedEntity.vision?.directionOffset ?? 0
+                        ...selectedEntity.vision!,
+                        dimRangeInSquares: Math.max(0, parseInt(e.target.value) || 0)
                       }
                     })
                   }
@@ -1258,7 +1277,7 @@ export const PropertiesTab: React.FC = () => {
                     effect: { ...selectedEntity.effect!, emitsLight: emits },
                     light: emits
                       ? {
-                          color: selectedEntity.effect?.color || '#ff7700',
+                          color: selectedEntity.effect?.color || '#ff9a3c',
                           intensity: selectedEntity.effect?.intensity ?? 80,
                           brightRadiusInSquares: (selectedEntity.effect?.baseLightRadius || 3) * scale,
                           dimRadiusInSquares: 2 * scale,

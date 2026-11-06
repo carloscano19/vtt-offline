@@ -52,7 +52,8 @@ export class VisionManager {
         const dirOffset = t.vision?.directionOffset ?? 0;
         const rot = Math.round((t.rotation || 0) * 100) / 100;
         const scale = Math.round((t.scaleX || 1) * 100) / 100;
-        return `${t.id}:${Math.round(t.x)}:${Math.round(t.y)}:${b}:${d}:${t.vision?.hardness}:${shape}:${coneAngle}:${dirOffset}:${rot}:${scale}`;
+        const illum = t.vision?.illuminates !== false ? 1 : 0;
+        return `${t.id}:${Math.round(t.x)}:${Math.round(t.y)}:${b}:${d}:${t.vision?.hardness}:${shape}:${coneAngle}:${dirOffset}:${rot}:${scale}:${illum}`;
       })
       .join('|');
 
@@ -174,7 +175,8 @@ export class VisionManager {
         shape,
         coneAngle,
         directionOffset,
-        rotation
+        rotation,
+        illuminates: token.vision?.illuminates !== false
       });
     }
 

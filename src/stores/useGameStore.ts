@@ -321,7 +321,8 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
             active: true,
             brightRangeInSquares: 4,
             dimRangeInSquares: 2,
-            hardness: 0.5
+            hardness: 0.5,
+            illuminates: true
           };
         }
         return updated;

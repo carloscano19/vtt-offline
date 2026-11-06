@@ -1452,7 +1452,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           effect: {
             preset: item.preset || 'custom',
             category: item.category,
-            color: item.color || '#ff7700',
+            color: item.color || '#ff9a3c',
             intensity: item.intensity ?? 80,
             speed: item.speed ?? 1.0,
             emitsLight: !!item.emitsLight,
@@ -1460,7 +1460,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           },
           light: item.emitsLight
             ? {
-                color: item.color || '#ff7700',
+                color: item.color || '#ff9a3c',
                 intensity: item.intensity ?? 80,
                 brightRadiusInSquares: (item.baseLightRadius ?? 3) * effectScale,
                 dimRadiusInSquares: 2 * effectScale,

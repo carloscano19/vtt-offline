@@ -370,7 +370,7 @@ export const ZipPackModal: React.FC<ZipPackModalProps> = ({
         const cat = itemCategories.get(item.id) || item.category;
         const emits = itemEmitsLight.get(item.id) ?? item.emitsLight;
 
-        const lightColor = cat === 'fire' ? '#ff7700' : cat === 'lights' ? '#ffaa33' : '#38bdf8';
+        const lightColor = cat === 'fire' || cat === 'lights' ? '#ff9a3c' : '#38bdf8';
         const lightRadius = 4;
         const flicker = cat === 'fire' || cat === 'lights';
 

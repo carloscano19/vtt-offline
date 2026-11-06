@@ -23,7 +23,8 @@ export function normalizeEntity(entity: Entity): Entity {
           hardness: 0.5,
           shape: 'circle',
           coneAngle: 60,
-          directionOffset: 0
+          directionOffset: 0,
+          illuminates: true
         }
       };
     } else {
@@ -50,7 +51,8 @@ export function normalizeEntity(entity: Entity): Entity {
           dimRangeInSquares,
           shape: entity.vision.shape === 'cone' ? 'cone' : 'circle',
           coneAngle: typeof entity.vision.coneAngle === 'number' ? Math.max(10, Math.min(180, entity.vision.coneAngle)) : 60,
-          directionOffset: typeof entity.vision.directionOffset === 'number' ? ((entity.vision.directionOffset % 360) + 360) % 360 : 0
+          directionOffset: typeof entity.vision.directionOffset === 'number' ? ((entity.vision.directionOffset % 360) + 360) % 360 : 0,
+          illuminates: entity.vision.illuminates !== false
         }
       };
     }

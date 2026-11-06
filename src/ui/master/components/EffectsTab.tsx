@@ -48,7 +48,7 @@ const CATALOG_ITEMS: EffectCatalogItem[] = [
     name: 'Antorcha de pared',
     category: 'lights',
     description: 'Soporte con antorcha encendida y chispas parpadeantes.',
-    defaultColor: '#ff9922',
+    defaultColor: '#ff9a3c',
     defaultScale: 0.75,
     emitsLight: true,
     baseLightRadius: 4,
@@ -59,7 +59,7 @@ const CATALOG_ITEMS: EffectCatalogItem[] = [
     name: 'Hoguera',
     category: 'lights',
     description: 'Piedras y troncos con llamas vivas y brasas ascendentes.',
-    defaultColor: '#ff7700',
+    defaultColor: '#ff9a3c',
     defaultScale: 1.0,
     emitsLight: true,
     baseLightRadius: 5,
@@ -70,7 +70,7 @@ const CATALOG_ITEMS: EffectCatalogItem[] = [
     name: 'Brasero de hierro',
     category: 'lights',
     description: 'Cuenco metálico ornamental con brasas incandescentes.',
-    defaultColor: '#ff8811',
+    defaultColor: '#ff9a3c',
     defaultScale: 1.0,
     emitsLight: true,
     baseLightRadius: 4,
@@ -105,7 +105,7 @@ const CATALOG_ITEMS: EffectCatalogItem[] = [
     name: 'Llamas pequeñas',
     category: 'fire',
     description: 'Llamas ágiles y chispas bajas en el suelo.',
-    defaultColor: '#ff5500',
+    defaultColor: '#ff9a3c',
     defaultScale: 1.0,
     emitsLight: true,
     baseLightRadius: 3,
@@ -116,7 +116,7 @@ const CATALOG_ITEMS: EffectCatalogItem[] = [
     name: 'Incendio grande',
     category: 'fire',
     description: 'Fuego turbulento expansivo con masa de brasas ardientes.',
-    defaultColor: '#ff3300',
+    defaultColor: '#ff9a3c',
     defaultScale: 2.0,
     emitsLight: true,
     baseLightRadius: 6,
@@ -283,7 +283,7 @@ export const EffectsTab: React.FC = () => {
   const [modalName, setModalName] = useState('');
   const [modalCategory, setModalCategory] = useState<'lights' | 'fire' | 'smoke' | 'arcane'>('fire');
   const [modalEmitsLight, setModalEmitsLight] = useState(true);
-  const [modalLightColor, setModalLightColor] = useState('#ff7700');
+  const [modalLightColor, setModalLightColor] = useState('#ff9a3c');
   const [modalLightRadius, setModalLightRadius] = useState(4);
   const [modalFlicker, setModalFlicker] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -464,7 +464,8 @@ export const EffectsTab: React.FC = () => {
     const category = (catTag ? catTag.replace('category:', '') : 'fire') as 'lights' | 'fire' | 'smoke' | 'arcane';
     const emitsLight = tags.includes('emits_light') || category === 'lights' || category === 'fire';
     const colTag = tags.find((t) => t.startsWith('light_color:'));
-    const color = colTag ? colTag.replace('light_color:', '') : '#ff7700';
+    const isFire = category === 'fire' || /fire|flame|fuego|llama|hoguera|brasero|antorcha|torch|campfire|brazier/i.test(asset.name);
+    const color = colTag ? colTag.replace('light_color:', '') : (isFire ? '#ff9a3c' : '#ff9a3c');
     const radTag = tags.find((t) => t.startsWith('light_radius:'));
     const baseLightRadius = radTag ? parseInt(radTag.replace('light_radius:', '')) || 4 : 4;
     const flicker = tags.includes('flicker') || category === 'lights' || category === 'fire';

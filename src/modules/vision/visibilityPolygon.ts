@@ -18,6 +18,7 @@ export interface TokenVisibility {
   coneAngle?: number;
   directionOffset?: number;
   rotation?: number;
+  illuminates?: boolean;
 }
 
 /**

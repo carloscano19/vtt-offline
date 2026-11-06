@@ -48,7 +48,7 @@ export function deduceCategoryAndLight(path: string): {
     return {
       category: 'lights',
       emitsLight: true,
-      lightColor: '#ffaa33',
+      lightColor: '#ff9a3c',
       lightRadius: 4,
       flicker: true
     };
@@ -59,7 +59,7 @@ export function deduceCategoryAndLight(path: string): {
     return {
       category: 'fire',
       emitsLight: true,
-      lightColor: '#ff7700',
+      lightColor: '#ff9a3c',
       lightRadius: 4,
       flicker: true
     };

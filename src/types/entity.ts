@@ -196,6 +196,7 @@ export interface TokenVision {
   shape?: 'circle' | 'cone';    // Forma de la visión (default 'circle')
   coneAngle?: number;           // Apertura en grados (10 a 180, default 60)
   directionOffset?: number;     // Desfase de dirección en grados (0 a 360, default 0)
+  illuminates?: boolean;        // "Ilumina su entorno", activada por defecto (true)
 }
 
 export interface TokenHp {

@@ -33,13 +33,16 @@ export function getDimRadialGradientTexture(ratio: number): Texture {
   const cx = size / 2;
   const cy = size / 2;
   const r1 = cx;
-  const p = Math.max(1.0, Math.min(3.5, Math.log(0.45) / Math.log(clampedRatio)));
 
   const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r1);
   const steps = 64;
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
-    const smoothAlpha = 0.5 * (1 - Math.cos(Math.PI * Math.pow(t, p)));
+    let smoothAlpha = 0;
+    if (t > clampedRatio) {
+      const u = (t - clampedRatio) / (1.0 - clampedRatio);
+      smoothAlpha = 0.5 * (1 - Math.cos(Math.PI * u));
+    }
     grad.addColorStop(t, `rgba(255, 255, 255, ${smoothAlpha.toFixed(4)})`);
   }
 
@@ -52,10 +55,10 @@ export function getDimRadialGradientTexture(ratio: number): Texture {
 }
 
 /**
- * Genera o recupera de caché una textura continua de tinte radial inverso (256x256):
- * - Máxima intensidad cerca del origen (1.0).
- * - Desvanecimiento continuo suave (curva coseno C1) hasta 0 en el radio exterior.
- * - Sin escalón brusco en el radio claro ni relleno plano constante.
+ * Genera o recupera de caché una textura continua de degradado radial inverso (256x256):
+ * - Desde r = 0 hasta r = ratio: completamente iluminado (alpha = 1.0), sin oscuridad.
+ * - Desde r = ratio hasta r = 1: desvanecimiento suave C1 (curva coseno) de 1 a 0.
+ * - En r >= 1: alpha = 0.0 (oscuridad ambiente base).
  */
 export function getTintRadialGradientTexture(ratio: number): Texture {
   const clampedRatio = Math.max(0.05, Math.min(0.95, Math.round(ratio * 50) / 50));
@@ -79,13 +82,16 @@ export function getTintRadialGradientTexture(ratio: number): Texture {
   const cx = size / 2;
   const cy = size / 2;
   const r1 = cx;
-  const p = Math.max(1.0, Math.min(3.5, Math.log(0.45) / Math.log(clampedRatio)));
 
   const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r1);
   const steps = 64;
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
-    const smoothAlpha = 0.5 * (1 + Math.cos(Math.PI * Math.pow(t, p)));
+    let smoothAlpha = 1.0;
+    if (t > clampedRatio) {
+      const u = (t - clampedRatio) / (1.0 - clampedRatio);
+      smoothAlpha = 0.5 * (1 + Math.cos(Math.PI * u));
+    }
     grad.addColorStop(t, `rgba(255, 255, 255, ${smoothAlpha.toFixed(4)})`);
   }
 
@@ -102,11 +108,12 @@ export function getTintRadialGradientTexture(ratio: number): Texture {
 const coneTintGradientCache = new Map<string, Texture>();
 
 /**
- * Genera o recupera de caché una textura continua de tinte para un cono direccional (256x256):
+ * Genera o recupera de caché una textura continua de degradado para un cono direccional (256x256):
  * - Vértice en el centro (cx, cy).
  * - Dirección hacia +X (rotación 0).
  * - Apertura angular coneAngleDeg (10° a 180°).
- * - Borde radial: degradado continuo C1 desde el vértice hasta 0 en el radio exterior.
+ * - Desde r = 0 hasta r = ratio: alpha = 1.0 (iluminación plena en radio claro).
+ * - Desde r = ratio hasta r = 1: desvanecimiento radial suave C1 (curva coseno) de 1 a 0.
  * - Bordes laterales: desvanecimiento angular suave (~4.5°) para una caída limpia en ambos flancos.
  */
 export function getConeTintGradientTexture(ratio: number, coneAngleDeg: number): Texture {
@@ -140,8 +147,6 @@ export function getConeTintGradientTexture(ratio: number, coneAngleDeg: number):
   const halfAngle = (clampedAngle * Math.PI) / 360;
   const softAngle = Math.min(0.08, halfAngle * 0.2); // ~4.5 grados de desvanecimiento lateral
 
-  const p = Math.max(1.0, Math.min(3.5, Math.log(0.45) / Math.log(clampedRatio)));
-
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const dx = x - cx;
@@ -152,9 +157,13 @@ export function getConeTintGradientTexture(ratio: number, coneAngleDeg: number):
       const angle = Math.abs(Math.atan2(dy, dx));
       if (angle > halfAngle) continue;
 
-      // Factor radial continuo: derivada 0 en vértice y derivada 0 en borde exterior
+      // Factor radial continuo: 1.0 en radio claro, y caída suave C1 hasta el radio exterior
       const t = dist / r1;
-      const fRadial = 0.5 * (1 + Math.cos(Math.PI * Math.pow(t, p)));
+      let fRadial = 1.0;
+      if (t > clampedRatio) {
+        const u = (t - clampedRatio) / (1.0 - clampedRatio);
+        fRadial = 0.5 * (1 + Math.cos(Math.PI * u));
+      }
 
       // Factor angular (desvanecimiento lateral suave y uniforme)
       let fAngle = 1.0;

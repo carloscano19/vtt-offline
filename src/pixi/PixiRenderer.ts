@@ -54,6 +54,7 @@ export class PixiRenderer {
   private lastCamera: CameraState | null = null;
   private lastAmbient: AmbientConfig | null = null;
   private lastLights: LightVisibility[] | null = null;
+  private lastVisibilities: any[] | null = null;
   private lastWorldBounds: { x: number; y: number; width: number; height: number } | null = null;
 
   constructor(isMaster: boolean) {
@@ -199,7 +200,8 @@ export class PixiRenderer {
             this.lastAmbient,
             this.lastLights,
             this.lastWorldBounds,
-            deltaSec
+            deltaSec,
+            this.lastVisibilities || []
           );
         }
 
@@ -287,6 +289,7 @@ export class PixiRenderer {
     this.lastCamera = camera;
     this.lastAmbient = game.ambient;
     this.lastLights = lights;
+    this.lastVisibilities = visibilities;
     this.lastWorldBounds = worldBounds;
 
     // Sincronizar capas
@@ -300,7 +303,7 @@ export class PixiRenderer {
     this.doorsLayer.update(game.entities, selectedIds, gridSize);
     this.tokensLayer.syncEntities(game.entities, selectedIds, visibilities, isPlayerPreview, game.fog.enabled, gridSize, camera.zoom);
     this.effectsLayer.update(game.entities, camera, width, height, 0.016);
-    this.ambientLayer.update(game.ambient, lights, worldBounds, 0.016);
+    this.ambientLayer.update(game.ambient, lights, worldBounds, 0.016, visibilities);
     this.fogLayer.update(
       this.app.renderer as Renderer,
       game.fog.enabled,
