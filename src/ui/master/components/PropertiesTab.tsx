@@ -28,7 +28,7 @@ import {
   Sun,
   UserCheck
 } from 'lucide-react';
-import { TokenSide, recalculateDoorEndpoints, getDefaultSnapToGrid, ShowAnimationType } from '../../../types/entity';
+import { TokenSide, recalculateDoorEndpoints, getDefaultSnapToGrid, ShowAnimationType, DoorType, SlidingMaterial } from '../../../types/entity';
 import { onlineRoomManager, RemoteUser } from '../../../modules/online/onlineRoomManager';
 import { getAsset, db } from '../../../db/dexie';
 import { cloudSync } from '../../../modules/sync/cloudSync';
@@ -1520,28 +1520,81 @@ export const PropertiesTab: React.FC = () => {
             </div>
           </div>
 
-          {/* Cambiar bisagra de extremo */}
-          <div className="pt-2 border-t border-slate-700/80">
-            <button
-              onClick={() => {
-                if (!selectedEntity.door) return;
-                const isInv = !selectedEntity.door.isHingeInverted;
+          {/* Selector de Tipo de puerta */}
+          <div className="pt-2 border-t border-slate-700/80 space-y-1.5">
+            <span className="text-slate-300 font-medium text-xs block">Tipo de puerta</span>
+            <select
+              value={selectedEntity.door.type || 'normal'}
+              onChange={(e) =>
                 handleUpdate({
                   door: {
-                    ...selectedEntity.door,
-                    isHingeInverted: isInv,
-                    p1: selectedEntity.door.p2,
-                    p2: selectedEntity.door.p1
+                    ...selectedEntity.door!,
+                    type: e.target.value as DoorType
                   }
-                });
-              }}
-              className="w-full py-1.5 px-3 rounded text-xs font-medium bg-slate-700/60 hover:bg-slate-700 border border-slate-600 text-slate-200 transition-colors flex items-center justify-center gap-2"
-              title="Intercambia el punto de giro de la puerta al otro extremo"
+                })
+              }
+              className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
             >
-              <RotateCw className="w-3.5 h-3.5 text-amber-400" />
-              <span>Cambiar bisagra de extremo</span>
-            </button>
+              <option value="normal">Normal (bisagra lateral)</option>
+              <option value="revolving">Giratoria (gira 180° sobre el centro)</option>
+              <option value="sliding">Deslizante (se desliza por la pared)</option>
+            </select>
+
+            {/* Si es Deslizante: selector de material */}
+            {(selectedEntity.door.type === 'sliding') && (
+              <div className="pt-1.5 space-y-1">
+                <span className="text-slate-400 text-[11px] block">Material</span>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(['wood', 'stone', 'bars'] as SlidingMaterial[]).map((mat) => (
+                    <button
+                      key={mat}
+                      type="button"
+                      onClick={() =>
+                        handleUpdate({
+                          door: {
+                            ...selectedEntity.door!,
+                            slidingMaterial: mat
+                          }
+                        })
+                      }
+                      className={`py-1 px-2 text-xs rounded border transition-colors ${
+                        (selectedEntity.door?.slidingMaterial || 'wood') === mat
+                          ? 'bg-amber-950/80 border-amber-500 text-amber-300 font-semibold'
+                          : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {mat === 'wood' ? 'Madera' : mat === 'stone' ? 'Piedra' : 'Reja'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Cambiar bisagra de extremo (solo para Normal) */}
+          {(!selectedEntity.door.type || selectedEntity.door.type === 'normal') && (
+            <div className="pt-2 border-t border-slate-700/80">
+              <button
+                onClick={() => {
+                  if (!selectedEntity.door) return;
+                  const isInv = !selectedEntity.door.isHingeInverted;
+                  handleUpdate({
+                    door: {
+                      ...selectedEntity.door,
+                      isHingeInverted: isInv,
+                      p1: selectedEntity.door.p2,
+                      p2: selectedEntity.door.p1
+                    }
+                  });
+                }}
+                className="w-full py-1.5 px-3 rounded text-xs font-medium bg-slate-700/60 hover:bg-slate-700 border border-slate-600 text-slate-200 transition-colors flex items-center justify-center gap-2"
+                title="Intercambia el punto de giro de la puerta al otro extremo"
+              >
+                <RotateCw className="w-3.5 h-3.5 text-amber-400" />
+                <span>Cambiar bisagra de extremo</span>
+              </button>
+            </div>
+          )}
 
           <p className="text-[11px] text-slate-400">
             {selectedEntity.door.isLocked

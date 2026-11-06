@@ -59,6 +59,7 @@ export class PixiRenderer {
   private lastLights: LightVisibility[] | null = null;
   private lastVisibilities: any[] | null = null;
   private lastWorldBounds: { x: number; y: number; width: number; height: number } | null = null;
+  private lastSelectedIds: string[] = [];
 
   constructor(isMaster: boolean) {
     this.isMaster = isMaster;
@@ -221,11 +222,17 @@ export class PixiRenderer {
           );
         }
 
+        if (this.lastEntities && this.lastGridSize) {
+          this.doorsLayer?.update(
+            this.lastEntities,
+            this.isMaster ? this.lastSelectedIds : [],
+            this.lastGridSize,
+            deltaSec
+          );
+        }
+
         if (!this.isMaster) {
           this.tokensLayer?.tick(deltaSec);
-          if (this.lastEntities && this.lastGridSize) {
-            this.doorsLayer?.update(this.lastEntities, [], this.lastGridSize, deltaSec);
-          }
         }
       });
 
@@ -307,6 +314,7 @@ export class PixiRenderer {
     this.lastLights = lights;
     this.lastVisibilities = visibilities;
     this.lastWorldBounds = worldBounds;
+    this.lastSelectedIds = selectedIds;
 
     // Sincronizar capas
     this.mapsLayer.syncEntities(game.entities);

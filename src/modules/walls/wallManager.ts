@@ -1,5 +1,6 @@
 import { Entity, Point2D } from '../../types/entity';
 import { localToWorld } from '../../pixi/utils/coordinates';
+import { doorAnimationManager } from '../doors/doorAnimationManager';
 
 export interface WallSegment {
   p1: Point2D;
@@ -82,8 +83,8 @@ export function getAllWallSegments(entities: Entity[]): WallSegment[] {
       }
     }
 
-    // 4. Puertas (tipo 'door') - si están CERRADAS, bloquean visión como pared
-    if (ent.type === 'door' && ent.door && !ent.door.isOpen) {
+    // 4. Puertas (tipo 'door') - si NO están completamente abiertas, bloquean visión como pared
+    if (ent.type === 'door' && ent.door && !doorAnimationManager.isFullyOpen(ent.id, ent.door.isOpen)) {
       const parentMap = ent.mapId ? mapEntitiesById.get(ent.mapId) : undefined;
       const transformPoint = (p: Point2D): Point2D => {
         if (parentMap) {

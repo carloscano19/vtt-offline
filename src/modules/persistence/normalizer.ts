@@ -262,7 +262,9 @@ export function normalizeEntity(entity: Entity): Entity {
         length: Math.max(1, length),
         isOpen: door.isOpen ?? false,
         isLocked: door.isLocked ?? false,
-        openAngle: door.openAngle ?? Math.PI / 2
+        openAngle: door.openAngle ?? Math.PI / 2,
+        type: door.type === 'revolving' || door.type === 'sliding' ? door.type : 'normal',
+        slidingMaterial: door.slidingMaterial === 'stone' || door.slidingMaterial === 'bars' ? door.slidingMaterial : 'wood'
       }
     };
   }

@@ -45,6 +45,9 @@ export interface MapWall {
   closed?: boolean;
 }
 
+export type DoorType = 'normal' | 'revolving' | 'sliding';
+export type SlidingMaterial = 'wood' | 'stone' | 'bars';
+
 export interface DoorState {
   isOpen: boolean;
   isLocked: boolean;
@@ -53,6 +56,8 @@ export interface DoorState {
   p1: Point2D; // Bisagra o inicio del segmento de la puerta
   p2: Point2D; // Fin del segmento de la puerta
   openAngle?: number; // Ángulo de apertura en radianes (default Math.PI / 2)
+  type?: DoorType; // 'normal' (default), 'revolving', 'sliding'
+  slidingMaterial?: SlidingMaterial; // 'wood' (default), 'stone', 'bars'
 }
 
 /**
