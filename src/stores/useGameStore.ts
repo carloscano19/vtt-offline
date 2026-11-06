@@ -123,10 +123,32 @@ function createDefaultGame(): GameState {
   };
 }
 
+export interface HistorySnapshot {
+  entities: Entity[];
+  fog: FogConfig;
+}
+
+function createHistorySnapshot(game: GameState): HistorySnapshot {
+  return {
+    entities: game.entities,
+    fog: { ...game.fog }
+  };
+}
+
+function restoreHistorySnapshot(snap: any): { entities: Entity[]; fog?: FogConfig } {
+  if (Array.isArray(snap)) {
+    return { entities: snap };
+  }
+  return {
+    entities: snap.entities,
+    fog: snap.fog
+  };
+}
+
 interface GameStoreState {
   game: GameState;
-  past: Entity[][];
-  future: Entity[][];
+  past: HistorySnapshot[];
+  future: HistorySnapshot[];
 
   // Acciones
   setGame: (game: GameState) => void;
@@ -252,7 +274,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
   addEntity: (entity) => {
     const normalizedEntity = normalizeEntity(entity);
     set((state) => {
-      const past = [...state.past, state.game.entities];
+      const past = [...state.past, createHistorySnapshot(state.game)];
       let grid = state.game.grid;
       let existingEntities = state.game.entities;
       let finalEntity = normalizedEntity;
@@ -312,7 +334,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
 
   updateEntity: (id, partial, recordHistory = true) => {
     set((state) => {
-      const past = recordHistory ? [...state.past, state.game.entities] : state.past;
+      const past = recordHistory ? [...state.past, createHistorySnapshot(state.game)] : state.past;
       const entities = state.game.entities.map((ent) => {
         if (ent.id !== id) return ent;
         const updated = { ...ent, ...partial };
@@ -344,7 +366,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
     set((state) => {
       if (ids.length === 0) return state;
       const idSet = new Set(ids);
-      const past = [...state.past, state.game.entities];
+      const past = [...state.past, createHistorySnapshot(state.game)];
       const entities = state.game.entities.filter((ent) => !idSet.has(ent.id));
 
       const updatedGame = {
@@ -415,7 +437,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
 
       return {
         game: { ...state.game, entities: newEntities, updatedAt: Date.now() },
-        past: [...state.past, state.game.entities],
+        past: [...state.past, createHistorySnapshot(state.game)],
         future: []
       };
     });
@@ -425,7 +447,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
     if (ids.length === 0) return;
     set((state) => {
       const idSet = new Set(ids);
-      const past = [...state.past, state.game.entities];
+      const past = [...state.past, createHistorySnapshot(state.game)];
       const entities = state.game.entities.map((ent) => {
         if (!idSet.has(ent.id) || ent.type === 'wall') return ent;
         const currentScaleX = ent.scaleX ?? 1;
@@ -445,7 +467,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
     if (ids.length === 0) return;
     set((state) => {
       const idSet = new Set(ids);
-      const past = [...state.past, state.game.entities];
+      const past = [...state.past, createHistorySnapshot(state.game)];
       const entities = state.game.entities.map((ent) => {
         if (!idSet.has(ent.id) || ent.type === 'wall') return ent;
         const currentScaleY = ent.scaleY ?? 1;
@@ -523,7 +545,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
   nextTurn: () => {
     const expiredNotifications: string[] = [];
     set((state) => {
-      const past = [...state.past, state.game.entities];
+      const past = [...state.past, createHistorySnapshot(state.game)];
       const currentTurn = (state.game.turnCounter || 1) + 1;
       let anyChanged = false;
 
@@ -574,7 +596,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
 
   addTokenStatus: (tokenId, status) => {
     set((state) => {
-      const past = [...state.past, state.game.entities];
+      const past = [...state.past, createHistorySnapshot(state.game)];
       const newStatus: TokenStatus = {
         id: 'id' in status && status.id ? status.id : `status_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         type: status.type,
@@ -599,7 +621,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
 
   removeTokenStatus: (tokenId, statusId) => {
     set((state) => {
-      const past = [...state.past, state.game.entities];
+      const past = [...state.past, createHistorySnapshot(state.game)];
       const entities = state.game.entities.map((e) => {
         if (e.id !== tokenId || e.type !== 'token') return e;
         const current = Array.isArray(e.statuses) ? e.statuses : [];
@@ -618,7 +640,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
 
   updateTokenStatus: (tokenId, statusId, updates) => {
     set((state) => {
-      const past = [...state.past, state.game.entities];
+      const past = [...state.past, createHistorySnapshot(state.game)];
       const entities = state.game.entities.map((e) => {
         if (e.id !== tokenId || e.type !== 'token') return e;
         const current = Array.isArray(e.statuses) ? e.statuses : [];
@@ -735,8 +757,9 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
   },
 
   resetFogExploration: () => {
-    set((state) => ({
-      game: {
+    set((state) => {
+      const past = [...state.past, createHistorySnapshot(state.game)];
+      const updatedGame: GameState = {
         ...state.game,
         fog: {
           ...state.game.fog,
@@ -744,8 +767,14 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
           revealed: []
         },
         updatedAt: Date.now()
-      }
-    }));
+      };
+      syncChannel.sendState(updatedGame, true);
+      return {
+        game: updatedGame,
+        past,
+        future: []
+      };
+    });
   },
 
   setFogExplored: (explored) => {
@@ -759,21 +788,29 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
   },
 
   revealFogRect: (rect) => {
-    set((state) => ({
-      game: {
+    set((state) => {
+      const past = [...state.past, createHistorySnapshot(state.game)];
+      const updatedGame: GameState = {
         ...state.game,
         fog: {
           ...state.game.fog,
           revealed: revealRect(state.game.fog.revealed || [], rect)
         },
         updatedAt: Date.now()
-      }
-    }));
+      };
+      syncChannel.sendState(updatedGame, true);
+      return {
+        game: updatedGame,
+        past,
+        future: []
+      };
+    });
   },
 
   hideFogRect: (rect) => {
-    set((state) => ({
-      game: {
+    set((state) => {
+      const past = [...state.past, createHistorySnapshot(state.game)];
+      const updatedGame: GameState = {
         ...state.game,
         fog: {
           ...state.game.fog,
@@ -781,8 +818,14 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
           explored: hideRect(state.game.fog.explored || [], rect)
         },
         updatedAt: Date.now()
-      }
-    }));
+      };
+      syncChannel.sendState(updatedGame, true);
+      return {
+        game: updatedGame,
+        past,
+        future: []
+      };
+    });
   },
 
   setPlayerViewport: (viewport) => {
@@ -796,7 +839,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
 
   toggleDoor: (doorEntityId) => {
     set((state) => {
-      const past = [...state.past, state.game.entities];
+      const past = [...state.past, createHistorySnapshot(state.game)];
       const entities = state.game.entities.map((e) => {
         if (e.id === doorEntityId && e.door) {
           if (e.door.isLocked) return e; // Puerta bloqueada con candado no se abre
@@ -825,7 +868,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
 
   setDoorLocked: (doorEntityId, locked) => {
     set((state) => {
-      const past = [...state.past, state.game.entities];
+      const past = [...state.past, createHistorySnapshot(state.game)];
       const entities = state.game.entities.map((e) => {
         if (e.id === doorEntityId && e.door) {
           return {
@@ -855,28 +898,48 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
     const { past, game, future } = get();
     if (past.length === 0) return;
 
-    const previousEntities = past[past.length - 1];
+    const previous = past[past.length - 1];
     const newPast = past.slice(0, past.length - 1);
+    const restored = restoreHistorySnapshot(previous);
+
+    const updatedGame: GameState = {
+      ...game,
+      entities: restored.entities,
+      fog: restored.fog ? { ...restored.fog } : game.fog,
+      updatedAt: Date.now()
+    };
 
     set({
-      game: { ...game, entities: previousEntities, updatedAt: Date.now() },
+      game: updatedGame,
       past: newPast,
-      future: [game.entities, ...future]
+      future: [createHistorySnapshot(game), ...future]
     });
+
+    syncChannel.sendState(updatedGame, true);
   },
 
   redo: () => {
     const { past, game, future } = get();
     if (future.length === 0) return;
 
-    const nextEntities = future[0];
+    const next = future[0];
     const newFuture = future.slice(1);
+    const restored = restoreHistorySnapshot(next);
+
+    const updatedGame: GameState = {
+      ...game,
+      entities: restored.entities,
+      fog: restored.fog ? { ...restored.fog } : game.fog,
+      updatedAt: Date.now()
+    };
 
     set({
-      game: { ...game, entities: nextEntities, updatedAt: Date.now() },
-      past: [...past, game.entities],
+      game: updatedGame,
+      past: [...past, createHistorySnapshot(game)],
       future: newFuture
     });
+
+    syncChannel.sendState(updatedGame, true);
   },
 
   canUndo: () => get().past.length > 0,
