@@ -8,21 +8,29 @@ interface DiceShapeProps {
 }
 
 export const DiceShape: React.FC<DiceShapeProps> = ({ dieType, die, isRolling }) => {
-  const [displayValue, setDisplayValue] = useState<number | string>(die.value);
+  const targetDisplay = die.displayValue !== undefined ? die.displayValue : die.value;
+  const [displayValue, setDisplayValue] = useState<number | string>(targetDisplay);
 
   useEffect(() => {
     if (!isRolling) {
-      setDisplayValue(die.value);
+      setDisplayValue(targetDisplay);
       return;
     }
 
     const interval = setInterval(() => {
-      const max = die.sides === 100 ? 100 : die.sides;
-      setDisplayValue(Math.floor(Math.random() * max) + 1);
+      if (die.isTensPercentile || dieType === 'd100') {
+        const val = Math.floor(Math.random() * 10) * 10;
+        setDisplayValue(val === 0 ? '00' : `${val}`);
+      } else if (dieType === 'd10') {
+        setDisplayValue(Math.floor(Math.random() * 10));
+      } else {
+        const max = die.sides === 100 ? 100 : die.sides;
+        setDisplayValue(Math.floor(Math.random() * max) + 1);
+      }
     }, 60);
 
     return () => clearInterval(interval);
-  }, [isRolling, die.value, die.sides]);
+  }, [isRolling, targetDisplay, die.sides, die.isTensPercentile, dieType]);
 
   const isNat20 = !isRolling && !die.dropped && die.isNat20;
   const isNat1 = !isRolling && !die.dropped && die.isNat1;
@@ -92,7 +100,7 @@ export const DiceShape: React.FC<DiceShapeProps> = ({ dieType, die, isRolling })
         className={`relative w-12 h-12 flex items-center justify-center text-xs font-bold ${textColor} ${rollClass} ${glowStyle} ${
           die.dropped ? 'opacity-40' : ''
         }`}
-        title={`${dieType}: ${die.value}${die.dropped ? ' (descartado)' : ''}`}
+        title={`${dieType}: ${displayValue}${die.dropped ? ' (descartado)' : ''}`}
       >
         <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full drop-shadow">
           <polygon
@@ -133,12 +141,21 @@ export const DiceShape: React.FC<DiceShapeProps> = ({ dieType, die, isRolling })
   if (dieType === 'd100') {
     return (
       <div
-        className={`w-12 h-12 rounded-xl border-2 flex flex-col items-center justify-center font-bold font-mono shadow-md ${bgColor} ${borderColor} ${textColor} ${rollClass} ${glowStyle} ${
+        className={`relative w-12 h-12 flex items-center justify-center text-xs font-bold ${textColor} ${rollClass} ${glowStyle} ${
           die.dropped ? 'opacity-40' : ''
         }`}
-        title={`d100: ${die.value}${die.dropped ? ' (descartado)' : ''}`}
+        title={`d100 (decenas): ${displayValue}${die.dropped ? ' (descartado)' : ''}`}
       >
-        <span className="text-xs">{displayValue}%</span>
+        <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full drop-shadow">
+          <polygon
+            points="50,8 92,50 50,92 8,50"
+            fill={isNat20 ? '#78350f' : isNat1 ? '#4c0519' : '#0f172a'}
+            stroke={isNat20 ? '#fbbf24' : isNat1 ? '#f43f5e' : '#38bdf8'}
+            strokeWidth="5"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <span className="relative z-10 font-mono text-xs font-extrabold">{displayValue}</span>
       </div>
     );
   }

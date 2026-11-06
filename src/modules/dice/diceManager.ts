@@ -147,17 +147,43 @@ class DiceManager {
       dice.push(d1, d2);
     } else {
       for (const item of pool) {
-        const sides = DIE_SIDES[item.dieType] || 20;
         const count = Math.max(1, Math.min(20, item.count));
-        for (let i = 0; i < count; i++) {
-          const val = generateRandomInteger(1, sides);
-          dice.push({
-            dieType: item.dieType,
-            sides,
-            value: val,
-            isNat20: item.dieType === 'd20' && val === 20,
-            isNat1: item.dieType === 'd20' && val === 1
-          });
+
+        if (item.dieType === 'd100') {
+          // El d100 se tira como dos d10 en la mesa: decenas (00, 10, ... 90) y unidades (0-9)
+          for (let i = 0; i < count; i++) {
+            const rawTens = generateRandomInteger(0, 9) * 10; // 0, 10, 20... 90
+            const rawUnits = generateRandomInteger(0, 9);      // 0, 1, 2... 9
+            const is100 = rawTens === 0 && rawUnits === 0;
+
+            dice.push({
+              dieType: 'd100',
+              sides: 10,
+              value: is100 ? 100 : rawTens,
+              displayValue: rawTens === 0 ? '00' : `${rawTens}`,
+              isTensPercentile: true
+            });
+
+            dice.push({
+              dieType: 'd10',
+              sides: 10,
+              value: is100 ? 0 : rawUnits,
+              displayValue: `${rawUnits}`
+            });
+          }
+        } else {
+          const sides = DIE_SIDES[item.dieType] || 20;
+          for (let i = 0; i < count; i++) {
+            const val = generateRandomInteger(1, sides);
+            dice.push({
+              dieType: item.dieType,
+              sides,
+              value: val,
+              displayValue: `${val}`,
+              isNat20: item.dieType === 'd20' && val === 20,
+              isNat1: item.dieType === 'd20' && val === 1
+            });
+          }
         }
       }
     }
@@ -171,7 +197,7 @@ class DiceManager {
     const advStr = advantage === 'advantage' ? ' (Ventaja)' : advantage === 'disadvantage' ? ' (Desventaja)' : '';
 
     const poolFormula = pool.map((p) => `${p.count}${p.dieType}`).join(' + ') || `${req.count || 1}${req.dieType || 'd20'}`;
-    const diceStr = keptDice.map((d) => d.value).join(' + ');
+    const diceStr = keptDice.map((d) => d.displayValue !== undefined ? d.displayValue : d.value).join(' + ');
     const detailStr = req.modifier !== 0 ? `${diceStr} ${modStr}` : diceStr;
     const formula = `${req.rollerName}: ${poolFormula}${modStr}${advStr} → ${detailStr} = ${total}`;
 

@@ -18,15 +18,14 @@ describe('Bloque 2: Dice System with Master Authority', () => {
     }
   });
 
-  it('rolls all standard dice types (d4, d6, d8, d10, d12, d20, d100) with correct ranges', () => {
+  it('rolls all standard polyhedral dice types (d4, d6, d8, d10, d12, d20) with correct ranges', () => {
     const diceList: { type: DieType; sides: number }[] = [
       { type: 'd4', sides: 4 },
       { type: 'd6', sides: 6 },
       { type: 'd8', sides: 8 },
       { type: 'd10', sides: 10 },
       { type: 'd12', sides: 12 },
-      { type: 'd20', sides: 20 },
-      { type: 'd100', sides: 100 }
+      { type: 'd20', sides: 20 }
     ];
 
     for (const item of diceList) {
@@ -50,6 +49,39 @@ describe('Bloque 2: Dice System with Master Authority', () => {
       const sum = result.dice.reduce((acc, d) => acc + d.value, 0);
       expect(result.total).toBe(sum + 2);
       expect(result.formula).toContain('Tester: 3' + item.type + '+2');
+    }
+  });
+
+  it('rolls d100 as a percentile pair (tens 00-90 and units 0-9) where 00 + 0 = 100', () => {
+    let found100 = false;
+    for (let i = 0; i < 300; i++) {
+      const result = diceManager.generateRoll({
+        requestId: `test_d100_${i}`,
+        rollerName: 'Tester',
+        dieType: 'd100',
+        count: 1,
+        modifier: 0,
+        advantage: 'none'
+      });
+
+      expect(result.dice.length).toBe(2);
+      const [tensDie, unitsDie] = result.dice;
+
+      expect(tensDie.dieType).toBe('d100');
+      expect(tensDie.isTensPercentile).toBe(true);
+      expect(unitsDie.dieType).toBe('d10');
+
+      expect(result.total).toBeGreaterThanOrEqual(1);
+      expect(result.total).toBeLessThanOrEqual(100);
+
+      if (tensDie.displayValue === '00' && unitsDie.displayValue === '0') {
+        expect(result.total).toBe(100);
+        found100 = true;
+      } else {
+        const tensNum = parseInt(tensDie.displayValue as string, 10);
+        const unitsNum = parseInt(unitsDie.displayValue as string, 10);
+        expect(result.total).toBe(tensNum + unitsNum);
+      }
     }
   });
 
