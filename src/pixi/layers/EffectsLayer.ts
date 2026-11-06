@@ -35,6 +35,7 @@ class ProceduralEffectNode extends Container {
 
   public fadeFactor = 1.0;
   private hasInitializedFade = false;
+  private spikeAnimProgress = 1.0;
 
   constructor(entityId: string) {
     super();
@@ -189,7 +190,7 @@ class ProceduralEffectNode extends Container {
     const hexColor = parseColor(effect.color, 0xff7700).rgb;
     const intensity = Math.max(0, Math.min(100, effect.intensity ?? 80)) / 100;
 
-    this.renderEffect(effect.preset, hexColor, intensity, effectiveDelta);
+    this.renderEffect(effect.preset, hexColor, intensity, effectiveDelta, entity);
   }
 
   private initParticlePool(maxCount: number) {
@@ -211,7 +212,7 @@ class ProceduralEffectNode extends Container {
     }
   }
 
-  private renderEffect(preset: EffectPresetId, color: number, intensity: number, dt: number) {
+  private renderEffect(preset: EffectPresetId, color: number, intensity: number, dt: number, entity: Entity) {
     this.baseGfx.clear();
     this.particleGfx.clear();
 
@@ -260,6 +261,15 @@ class ProceduralEffectNode extends Container {
         break;
       case 'ice_zone':
         this.renderIceZone(color, intensity, dt);
+        break;
+      case 'blade_pendulum':
+        this.renderBladePendulum(entity, color, intensity, dt);
+        break;
+      case 'saw_blade':
+        this.renderSawBlade(entity, color, intensity, dt);
+        break;
+      case 'spike_trap':
+        this.renderSpikeTrap(entity, color, intensity, dt);
         break;
       default:
         this.renderFireSmall(color, intensity, dt);
@@ -790,6 +800,246 @@ class ProceduralEffectNode extends Container {
       const progress = p.life / p.maxLife;
       this.particleGfx.circle(p.x, p.y, p.size * (1 + (1 - progress)));
       this.particleGfx.fill({ color: 0xe0f2fe, alpha: progress * 0.25 * intensity });
+    }
+  }
+
+  // 16. Péndulo con cuchilla
+  private renderBladePendulum(entity: Entity, color: number, intensity: number, _dt: number) {
+    const bg = this.baseGfx;
+    const effect = entity.effect;
+    const lengthSquares = effect?.trapLength ?? 2;
+    const armLen = lengthSquares * 70;
+    const maxAngleDeg = effect?.trapAngle ?? 45;
+    const maxAngleRad = (maxAngleDeg * Math.PI) / 180;
+    const speed = (effect?.speed ?? 1.0) * 2.5;
+
+    // Ángulo oscilante pendular
+    const currentAngle = Math.sin(this.time * speed) * maxAngleRad;
+    const endX = Math.sin(currentAngle) * armLen;
+    const endY = Math.cos(currentAngle) * armLen;
+
+    // 1. Base / Soporte en el techo (punto de anclaje)
+    bg.circle(0, 0, 9);
+    bg.fill({ color: 0x1e293b });
+    bg.stroke({ width: 2, color: 0x0f172a });
+    bg.circle(0, 0, 4);
+    bg.fill({ color: 0x64748b });
+
+    // 2. Brazo metálico oscilante
+    bg.moveTo(0, 0);
+    bg.lineTo(endX, endY);
+    bg.stroke({ width: 5, color: 0x334155 });
+    bg.moveTo(0, 0);
+    bg.lineTo(endX, endY);
+    bg.stroke({ width: 2, color: 0x94a3b8 });
+
+    // 3. Cuchilla curva / guadaña al final del brazo
+    const uX = Math.sin(currentAngle);
+    const uY = Math.cos(currentAngle);
+    const nX = -uY;
+    const nY = uX;
+
+    const bladeR = 36 * (entity.scaleX || 1);
+    const bladeArcStart = endX - nX * bladeR;
+    const bladeArcStartY = endY - nY * bladeR;
+    const bladeArcEnd = endX + nX * bladeR;
+    const bladeArcEndY = endY + nY * bladeR;
+
+    bg.moveTo(bladeArcStart, bladeArcStartY);
+    bg.quadraticCurveTo(endX + uX * 22, endY + uY * 22, bladeArcEnd, bladeArcEndY);
+    bg.quadraticCurveTo(endX - uX * 6, endY - uY * 6, bladeArcStart, bladeArcStartY);
+    bg.closePath();
+    bg.fill({ color: color, alpha: 0.95 * intensity });
+    bg.stroke({ width: 2.5, color: 0xffffff, alpha: 0.9 * intensity });
+
+    // Filo brillante
+    bg.moveTo(bladeArcStart, bladeArcStartY);
+    bg.quadraticCurveTo(endX + uX * 22, endY + uY * 22, bladeArcEnd, bladeArcEndY);
+    bg.stroke({ width: 1.5, color: 0xffffff });
+
+    // Perno de sujeción central de la hoja
+    bg.circle(endX, endY, 5);
+    bg.fill({ color: 0x1e293b });
+    bg.stroke({ width: 1.5, color: 0xd1d5db });
+  }
+
+  // 17. Sierra giratoria
+  private renderSawBlade(entity: Entity, color: number, intensity: number, _dt: number) {
+    const bg = this.baseGfx;
+    const effect = entity.effect;
+    const hasRail = effect?.hasRail ?? false;
+    const railSquares = effect?.trapLength ?? 3;
+    const railLen = railSquares * 70;
+    const halfRail = railLen / 2;
+
+    let posX = 0;
+    let posY = 0;
+
+    if (hasRail) {
+      // 1. Dibujar carril / ranura en el suelo
+      bg.rect(-halfRail, -7, railLen, 14);
+      bg.fill({ color: 0x0f172a, alpha: 0.85 });
+      bg.stroke({ width: 2, color: 0x334155 });
+
+      // Ranura central oscura
+      bg.rect(-halfRail + 4, -2, railLen - 8, 4);
+      bg.fill({ color: 0x020617 });
+
+      // Remaches/topes en los extremos del carril
+      bg.circle(-halfRail + 5, 0, 4);
+      bg.fill({ color: 0x475569 });
+      bg.circle(halfRail - 5, 0, 4);
+      bg.fill({ color: 0x475569 });
+
+      // Desplazamiento lineal de ida y vuelta a lo largo del carril
+      const slideRange = halfRail - 22;
+      const slideSpeed = (effect?.speed ?? 1.0) * 2;
+      posX = Math.sin(this.time * slideSpeed) * slideRange;
+    }
+
+    // 2. Disco de sierra dentada giratoria
+    const radius = 28;
+    const spinSpeed = (effect?.speed ?? 1.0) * 16;
+    const spinAngle = this.time * spinSpeed;
+    const teethCount = 14;
+
+    // Desenfoque de movimiento: anillo exterior translúcido
+    bg.circle(posX, posY, radius + 2);
+    bg.stroke({ width: 4, color: color, alpha: 0.3 * intensity });
+
+    // Dientes de la sierra
+    bg.moveTo(
+      posX + Math.cos(spinAngle) * radius,
+      posY + Math.sin(spinAngle) * radius
+    );
+    for (let i = 0; i < teethCount; i++) {
+      const a1 = spinAngle + (i / teethCount) * Math.PI * 2;
+      const aTip = a1 + (0.5 / teethCount) * Math.PI * 2;
+      const a2 = spinAngle + ((i + 1) / teethCount) * Math.PI * 2;
+
+      const rTip = radius + 6;
+      bg.lineTo(posX + Math.cos(aTip) * rTip, posY + Math.sin(aTip) * rTip);
+      bg.lineTo(posX + Math.cos(a2) * (radius - 2), posY + Math.sin(a2) * (radius - 2));
+    }
+    bg.closePath();
+    bg.fill({ color: color, alpha: 0.95 * intensity });
+    bg.stroke({ width: 1.5, color: 0xe2e8f0, alpha: intensity });
+
+    // Brillo metálico interior
+    bg.circle(posX, posY, radius * 0.65);
+    bg.stroke({ width: 1.5, color: 0xffffff, alpha: 0.7 * intensity });
+
+    // Eje central de hierro con perno
+    bg.circle(posX, posY, 8);
+    bg.fill({ color: 0x1e293b });
+    bg.stroke({ width: 1.5, color: 0x94a3b8 });
+    bg.circle(posX, posY, 3);
+    bg.fill({ color: 0xd1d5db });
+  }
+
+  // 18. Trampa de pinchos
+  private renderSpikeTrap(entity: Entity, color: number, _intensity: number, dt: number) {
+    const bg = this.baseGfx;
+    const effect = entity.effect;
+    const hasBlood = effect?.hasBlood ?? false;
+
+    // Animación de pinchos al revelarse (0 a 1 en ~0.4s)
+    if (this.fadeFactor > 0.05) {
+      if (this.spikeAnimProgress < 1) {
+        this.spikeAnimProgress = Math.min(1, this.spikeAnimProgress + dt / 0.4);
+        if (this.spikeAnimProgress > 0.1 && this.spikeAnimProgress < 0.8) {
+          // Generar polvo durante la salida de pinchos
+          this.initParticlePool(10);
+          for (const p of this.particles) {
+            if (p.life <= 0) {
+              p.life = 0.3 + Math.random() * 0.3;
+              p.maxLife = p.life;
+              p.x = (Math.random() - 0.5) * 50;
+              p.y = (Math.random() - 0.5) * 50;
+              p.vx = (Math.random() - 0.5) * 30;
+              p.vy = (Math.random() - 0.5) * 30;
+              p.size = 2 + Math.random() * 3;
+              p.color = 0x94a3b8;
+              p.alpha = 0.6;
+            }
+          }
+        }
+      }
+    } else {
+      this.spikeAnimProgress = 0;
+    }
+
+    const progress = this.spikeAnimProgress;
+
+    // 1. Baldosa de piedra base (64x64)
+    bg.roundRect(-32, -32, 64, 64, 4);
+    bg.fill({ color: 0x334155, alpha: 0.95 });
+    bg.stroke({ width: 2, color: 0x1e293b });
+
+    // Ranuras decorativas de piedra
+    bg.moveTo(-32, 0);
+    bg.lineTo(32, 0);
+    bg.stroke({ width: 1, color: 0x1e293b, alpha: 0.6 });
+    bg.moveTo(0, -32);
+    bg.lineTo(0, 32);
+    bg.stroke({ width: 1, color: 0x1e293b, alpha: 0.6 });
+
+    // Rejilla de 9 agujeros (3x3)
+    const holeCoords = [-20, 0, 20];
+    for (const hx of holeCoords) {
+      for (const hy of holeCoords) {
+        // Agujero oscuro
+        bg.circle(hx, hy, 5.5);
+        bg.fill({ color: 0x090d16 });
+        bg.stroke({ width: 1, color: 0x475569 });
+
+        // Pinchos si han salido
+        if (progress > 0.05) {
+          const spikeH = 14 * progress;
+          const tipX = hx;
+          const tipY = hy - spikeH;
+
+          // Triángulo/cono del pincho
+          bg.moveTo(hx - 4 * progress, hy);
+          bg.lineTo(tipX, tipY);
+          bg.lineTo(hx + 4 * progress, hy);
+          bg.closePath();
+          bg.fill({ color: color });
+          bg.stroke({ width: 1, color: 0xe2e8f0 });
+
+          // Sombra lateral del pincho
+          bg.moveTo(hx, hy);
+          bg.lineTo(tipX, tipY);
+          bg.lineTo(hx + 4 * progress, hy);
+          bg.closePath();
+          bg.fill({ color: 0x1e293b, alpha: 0.4 });
+        }
+      }
+    }
+
+    // 2. Mancha de sangre opcional
+    if (hasBlood && progress > 0.3) {
+      const bloodAlpha = Math.min(1, progress * 1.2);
+      bg.circle(-6, 4, 7);
+      bg.fill({ color: 0x991b1b, alpha: 0.8 * bloodAlpha });
+      bg.circle(12, -8, 5);
+      bg.fill({ color: 0x7f1d1d, alpha: 0.75 * bloodAlpha });
+      bg.circle(-14, -12, 4);
+      bg.fill({ color: 0x991b1b, alpha: 0.7 * bloodAlpha });
+      bg.circle(4, 14, 6);
+      bg.fill({ color: 0x880808, alpha: 0.85 * bloodAlpha });
+    }
+
+    // 3. Polvo levantado
+    for (const p of this.particles) {
+      p.life -= dt;
+      if (p.life > 0) {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        const norm = p.life / p.maxLife;
+        this.particleGfx.circle(p.x, p.y, p.size * (1 - norm * 0.3));
+        this.particleGfx.fill({ color: p.color, alpha: norm * p.alpha });
+      }
     }
   }
 

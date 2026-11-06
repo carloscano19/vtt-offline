@@ -53,7 +53,10 @@ const EFFECT_PRESET_NAMES: Record<string, string> = {
   magic_seal: 'Sello mágico',
   portal: 'Portal arcano',
   lightning: 'Rayos',
-  ice_zone: 'Zona de hielo'
+  ice_zone: 'Zona de hielo',
+  blade_pendulum: 'Péndulo con cuchilla',
+  saw_blade: 'Sierra giratoria',
+  spike_trap: 'Trampa de pinchos'
 };
 
 import { useShallow } from 'zustand/react/shallow';
@@ -1871,6 +1874,134 @@ export const PropertiesTab: React.FC = () => {
               className="w-full accent-amber-500 cursor-pointer"
             />
           </div>
+
+          {/* Ajustes específicos de Trampas */}
+          {selectedEntity.effect.preset === 'blade_pendulum' && (
+            <div className="space-y-2 pt-2 border-t border-slate-700/60">
+              <div>
+                <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                  <span>Longitud del péndulo</span>
+                  <span className="text-white font-mono">
+                    {selectedEntity.effect.trapLength ?? 2} casillas
+                  </span>
+                </div>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  step="0.5"
+                  value={selectedEntity.effect.trapLength ?? 2}
+                  onChange={(e) =>
+                    handleUpdate({
+                      effect: {
+                        ...selectedEntity.effect!,
+                        trapLength: parseFloat(e.target.value) || 2
+                      }
+                    })
+                  }
+                  className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs"
+                />
+              </div>
+              <div>
+                <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                  <span>Ángulo de oscilación</span>
+                  <span className="text-white font-mono">
+                    {selectedEntity.effect.trapAngle ?? 45}°
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="10"
+                  max="90"
+                  step="5"
+                  value={selectedEntity.effect.trapAngle ?? 45}
+                  onChange={(e) =>
+                    handleUpdate({
+                      effect: {
+                        ...selectedEntity.effect!,
+                        trapAngle: parseInt(e.target.value) || 45
+                      }
+                    })
+                  }
+                  className="w-full accent-amber-500 cursor-pointer"
+                />
+              </div>
+            </div>
+          )}
+
+          {selectedEntity.effect.preset === 'saw_blade' && (
+            <div className="space-y-2 pt-2 border-t border-slate-700/60">
+              <label className="flex items-center justify-between text-xs cursor-pointer">
+                <span className="text-slate-300">Desplazamiento por carril</span>
+                <input
+                  type="checkbox"
+                  checked={selectedEntity.effect.hasRail ?? false}
+                  onChange={(e) =>
+                    handleUpdate({
+                      effect: {
+                        ...selectedEntity.effect!,
+                        hasRail: e.target.checked,
+                        trapLength: selectedEntity.effect!.trapLength ?? 3
+                      }
+                    })
+                  }
+                  className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                />
+              </label>
+              {selectedEntity.effect.hasRail && (
+                <div>
+                  <div className="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                    <span>Longitud del carril</span>
+                    <span className="text-white font-mono">
+                      {selectedEntity.effect.trapLength ?? 3} casillas
+                    </span>
+                  </div>
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    step="0.5"
+                    value={selectedEntity.effect.trapLength ?? 3}
+                    onChange={(e) =>
+                      handleUpdate({
+                        effect: {
+                          ...selectedEntity.effect!,
+                          trapLength: parseFloat(e.target.value) || 3
+                        }
+                      })
+                    }
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {selectedEntity.effect.preset === 'spike_trap' && (
+            <div className="pt-2 border-t border-slate-700/60">
+              <label className="flex items-center justify-between text-xs cursor-pointer">
+                <div>
+                  <span className="text-slate-300 block">Mancha de sangre</span>
+                  <span className="text-[10px] text-slate-500 block">
+                    Salpicaduras carmesí en los pinchos y baldosa
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={selectedEntity.effect.hasBlood ?? false}
+                  onChange={(e) =>
+                    handleUpdate({
+                      effect: {
+                        ...selectedEntity.effect!,
+                        hasBlood: e.target.checked
+                      }
+                    })
+                  }
+                  className="w-4 h-4 accent-amber-500 rounded cursor-pointer ml-3 shrink-0"
+                />
+              </label>
+            </div>
+          )}
 
           {/* Tamaño rápido (Casillas) */}
           <div>

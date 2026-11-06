@@ -278,17 +278,27 @@ export type EffectPresetId =
   | 'portal'
   | 'lightning'
   | 'ice_zone'
+  | 'blade_pendulum'
+  | 'saw_blade'
+  | 'spike_trap'
   | 'custom';
 
 export interface EffectConfig {
   preset: EffectPresetId;
-  category?: 'lights' | 'fire' | 'smoke' | 'arcane';
+  category?: 'lights' | 'fire' | 'smoke' | 'arcane' | 'traps';
   color: string;           // Hex principal (ej: '#ff7700')
   secondaryColor?: string; // Hex secundario opcional
   intensity: number;       // 0 a 100 (%)
   speed: number;           // 0.1 a 3.0 (1.0 = normal)
   emitsLight: boolean;     // Emite luz dinámica con el sistema de iluminación existente
   baseLightRadius: number; // Radio de luz base en casillas (se escala con la entidad)
+
+  // Configuración de trampas
+  trapLength?: number;     // Longitud en casillas (péndulo / carril de sierra, default 2 o 3)
+  trapAngle?: number;      // Ángulo de oscilación para péndulo (10° a 90°, default 45°)
+  hasRail?: boolean;       // Si la sierra giratoria tiene carril lineal
+  hasBlood?: boolean;      // Mancha de sangre en trampa de pinchos
+  spikesOut?: boolean;     // Estado de pinchos
 }
 
 export interface Entity {

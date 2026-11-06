@@ -25,14 +25,16 @@ import {
   Film,
   Image as ImageIcon,
   Check,
-  Package
+  Package,
+  Disc,
+  AlertTriangle
 } from 'lucide-react';
 import { ZipPackModal } from './ZipPackModal';
 
 interface EffectCatalogItem {
   id: EffectPresetId;
   name: string;
-  category: 'lights' | 'fire' | 'smoke' | 'arcane';
+  category: 'lights' | 'fire' | 'smoke' | 'arcane' | 'traps';
   description: string;
   defaultColor: string;
   defaultScale: number;
@@ -213,6 +215,40 @@ const CATALOG_ITEMS: EffectCatalogItem[] = [
     emitsLight: false,
     baseLightRadius: 0,
     icon: Snowflake
+  },
+  // 5. Trampas
+  {
+    id: 'blade_pendulum',
+    name: 'Péndulo con cuchilla',
+    category: 'traps',
+    description: 'Brazo oscilante con cuchilla curva desde su punto de anclaje.',
+    defaultColor: '#94a3b8',
+    defaultScale: 1.0,
+    emitsLight: false,
+    baseLightRadius: 0,
+    icon: Compass
+  },
+  {
+    id: 'saw_blade',
+    name: 'Sierra giratoria',
+    category: 'traps',
+    description: 'Disco dentado metálico giratorio con opción de carril.',
+    defaultColor: '#64748b',
+    defaultScale: 1.0,
+    emitsLight: false,
+    baseLightRadius: 0,
+    icon: Disc
+  },
+  {
+    id: 'spike_trap',
+    name: 'Trampa de pinchos',
+    category: 'traps',
+    description: 'Baldosa con orificios y púas retráctiles con polvo y sangre.',
+    defaultColor: '#94a3b8',
+    defaultScale: 1.0,
+    emitsLight: false,
+    baseLightRadius: 0,
+    icon: AlertTriangle
   }
 ];
 
@@ -518,7 +554,11 @@ export const EffectsTab: React.FC = () => {
         intensity: 80,
         speed: 1.0,
         emitsLight: item.emitsLight,
-        baseLightRadius: item.baseLightRadius
+        baseLightRadius: item.baseLightRadius,
+        trapLength: item.id === 'blade_pendulum' ? 2 : (item.id === 'saw_blade' ? 3 : undefined),
+        trapAngle: item.id === 'blade_pendulum' ? 45 : undefined,
+        hasRail: item.id === 'saw_blade',
+        hasBlood: false
       },
       light: item.emitsLight
         ? {
@@ -663,7 +703,8 @@ export const EffectsTab: React.FC = () => {
             { id: 'lights', label: 'Luces' },
             { id: 'fire', label: 'Fuego' },
             { id: 'smoke', label: 'Humo' },
-            { id: 'arcane', label: 'Arcano' }
+            { id: 'arcane', label: 'Arcano' },
+            { id: 'traps', label: 'Trampas' }
           ].map((cat) => (
             <button
               key={cat.id}
