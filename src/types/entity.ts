@@ -282,6 +282,14 @@ export interface Entity {
   side?: TokenSide;
   statuses?: TokenStatus[];
   hp?: TokenHp;
+
+  // Control de jugador remoto y movimiento limitado
+  controlledBy?: string;
+  movementBudget?: number;
+  movementState?: {
+    remaining: number;
+    path: Point2D[];
+  };
 }
 
 /**

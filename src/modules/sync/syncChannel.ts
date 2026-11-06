@@ -1,4 +1,5 @@
 import { GameState, RulerState, CameraState } from '../../types/game';
+import { onlineRoomManager } from '../online/onlineRoomManager';
 
 export type SyncMessage =
   | { type: 'STATE_SYNC'; state: GameState; appVersion?: string; appBuildTime?: number }
@@ -240,6 +241,10 @@ class SyncManager {
         console.error('[SyncManager] Error al enviar STATE_SYNC:', err);
       }
     }
+
+    if (onlineRoomManager.isRoomActive()) {
+      onlineRoomManager.broadcastState(state, force);
+    }
   }
 
   public sendEntityPos(id: string, x: number, y: number) {
@@ -250,6 +255,10 @@ class SyncManager {
       } catch (err) {
         console.error('[SyncManager] Error al enviar ENTITY_POS_SYNC:', err);
       }
+    }
+
+    if (onlineRoomManager.isRoomActive()) {
+      onlineRoomManager.broadcastEntityPos(id, x, y);
     }
   }
 

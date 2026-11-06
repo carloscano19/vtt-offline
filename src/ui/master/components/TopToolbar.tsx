@@ -35,8 +35,11 @@ import {
   ChevronDown,
   PanelRight,
   KeyRound,
-  SkipForward
+  SkipForward,
+  Globe
 } from 'lucide-react';
+import { OnlineRoomModal } from './OnlineRoomModal';
+import { onlineRoomManager } from '../../../modules/online/onlineRoomManager';
 import { useUIStore, ActiveTool } from '../../../stores/useUIStore';
 import { useGameStore } from '../../../stores/useGameStore';
 import { parseUVTT } from '../../../modules/import/uvttParser';
@@ -82,6 +85,24 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
     return authManager.onAuthStateChange((user) => {
       setIsCloudConnected(!!user);
     });
+  }, []);
+
+  const [showOnlineRoomModal, setShowOnlineRoomModal] = useState(false);
+  const [isRoomActive, setIsRoomActive] = useState(onlineRoomManager.isRoomActive());
+  const [connectedPlayerCount, setConnectedPlayerCount] = useState(0);
+
+  useEffect(() => {
+    const unsubStatus = onlineRoomManager.onConnectionStatus(() => {
+      setIsRoomActive(onlineRoomManager.isRoomActive());
+    });
+    const unsubUsers = onlineRoomManager.onConnectedUsers((users) => {
+      setConnectedPlayerCount(users.filter((u) => u.role === 'player').length);
+      setIsRoomActive(onlineRoomManager.isRoomActive());
+    });
+    return () => {
+      unsubStatus();
+      unsubUsers();
+    };
   }, []);
 
   const game = useGameStore((s) => s.game);
@@ -563,6 +584,23 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           }
         >
           {isCloudConnected ? <Cloud className="w-5 h-5" /> : <KeyRound className="w-5 h-5" />}
+        </button>
+
+        <button
+          onClick={() => setShowOnlineRoomModal(true)}
+          className={`btn-icon relative transition-colors ${
+            isRoomActive ? 'text-emerald-400 hover:text-emerald-300' : 'text-slate-400 hover:text-white'
+          }`}
+          title={
+            isRoomActive
+              ? `Sala online activa (${connectedPlayerCount} jugadores conectados)`
+              : 'Sala online: crear sala para jugadores a distancia'
+          }
+        >
+          <Globe className="w-5 h-5" />
+          {isRoomActive && (
+            <span className="absolute bottom-1 right-1 w-2 h-2 rounded-full bg-emerald-400 ring-1 ring-slate-900 animate-pulse" />
+          )}
         </button>
 
         <div className="w-[1px] h-6 bg-slate-700 mx-1" />
@@ -1190,6 +1228,12 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           </div>
         </div>
       )}
+
+      {/* Modal de Sala Online */}
+      <OnlineRoomModal
+        isOpen={showOnlineRoomModal}
+        onClose={() => setShowOnlineRoomModal(false)}
+      />
     </header>
   );
 };
