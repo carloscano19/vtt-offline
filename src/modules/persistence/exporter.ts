@@ -1,9 +1,9 @@
-import JSZip from 'jszip';
 import { db, saveAsset } from '../../db/dexie';
 import { GameState, AssetItem } from '../../types/game';
 import { normalizeGameState } from './normalizer';
 
 export async function exportVttSave(state: GameState): Promise<Blob> {
+  const JSZip = (await import('jszip')).default;
   const zip = new JSZip();
 
   // 1. Añadir el estado del juego
@@ -48,6 +48,7 @@ export async function exportVttSave(state: GameState): Promise<Blob> {
 }
 
 export async function importVttSave(buffer: ArrayBuffer): Promise<GameState> {
+  const JSZip = (await import('jszip')).default;
   const zip = await JSZip.loadAsync(buffer);
 
   const gameFile = zip.file('game.json');

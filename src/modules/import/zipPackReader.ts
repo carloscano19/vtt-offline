@@ -1,4 +1,4 @@
-import { ZipReader, BlobReader, BlobWriter, Entry } from '@zip.js/zip.js';
+import type { ZipReader, Entry } from '@zip.js/zip.js';
 
 export interface ZipPackItem {
   id: string;
@@ -91,6 +91,7 @@ export function deduceCategoryAndLight(path: string): {
  * Utiliza @zip.js/zip.js con BlobReader sobre el File para lectura perezosa.
  */
 export async function readZipPack(file: File): Promise<ZipPackResult> {
+  const { ZipReader, BlobReader } = await import('@zip.js/zip.js');
   const reader = new ZipReader(new BlobReader(file));
   const entries = await reader.getEntries();
 
@@ -185,5 +186,6 @@ export async function extractEntryBlob(entry: Entry, mimeType: string): Promise<
   if (entry.directory || !('getData' in entry) || typeof (entry as any).getData !== 'function') {
     throw new Error('La entrada del ZIP no permite extracción de datos.');
   }
+  const { BlobWriter } = await import('@zip.js/zip.js');
   return await (entry as any).getData(new BlobWriter(mimeType));
 }

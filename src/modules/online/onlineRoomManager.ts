@@ -2,6 +2,7 @@ import { supabase, isSupabaseConfigured } from '../supabase/supabaseClient';
 import { GameState } from '../../types/game';
 import { saveAsset, getAsset } from '../../db/dexie';
 import { invalidateCachedTexture } from '../../pixi/utils/textureCache';
+import { useGameStore } from '../../stores/useGameStore';
 
 export interface RemoteUser {
   id: string;
@@ -574,7 +575,6 @@ class OnlineRoomManager {
       case 'ROOM_REQUEST_STATE':
         if (this.isMaster) {
           // El máster recibe la petición de un jugador y le responde de inmediato
-          const { useGameStore } = await import('../../stores/useGameStore');
           const currentMasterGame = useGameStore.getState().game;
           this.doBroadcastState(currentMasterGame);
         }
