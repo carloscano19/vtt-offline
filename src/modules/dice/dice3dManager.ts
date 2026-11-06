@@ -162,18 +162,18 @@ class Dice3DManager {
         done();
       }
     }).finally(() => {
-      // Los dados se desvanecen a los ~4 s desde el lanzamiento
+      // Los dados 3D se desvanecen exactamente a los 4 s de pararse
       this.clearTimer = setTimeout(() => {
         if (this.containerElement) {
-          this.containerElement.style.transition = 'opacity 0.6s ease-out';
+          this.containerElement.style.transition = 'opacity 0.8s ease-out';
           this.containerElement.style.opacity = '0';
         }
         setTimeout(() => {
           try {
             box.clearDice();
           } catch {}
-        }, 600);
-      }, 3500);
+        }, 800);
+      }, 4000);
     });
   }
 }

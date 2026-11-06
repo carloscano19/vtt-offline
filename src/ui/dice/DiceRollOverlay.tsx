@@ -11,6 +11,7 @@ interface ActiveRollItemProps {
 
 const ActiveRollItem: React.FC<ActiveRollItemProps> = ({ roll }) => {
   const [hasStopped, setHasStopped] = useState(false);
+  const [isFadingOut, setIsFadingOut] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -25,47 +26,94 @@ const ActiveRollItem: React.FC<ActiveRollItemProps> = ({ roll }) => {
     };
   }, [roll]);
 
+  // La tarjeta debe quedarse visible 6 s desde que aparece (no desde que se tiró) y luego fundirse
+  useEffect(() => {
+    if (!hasStopped) return;
+
+    const fadeTimer = setTimeout(() => {
+      setIsFadingOut(true);
+    }, 6000);
+
+    const dismissTimer = setTimeout(() => {
+      diceManager.dismissRoll(roll.id);
+    }, 6600);
+
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(dismissTimer);
+    };
+  }, [hasStopped, roll.id]);
+
   if (!hasStopped) return null;
 
   const hasNat20 = roll.dice.some((d) => !d.dropped && d.isNat20);
   const hasNat1 = roll.dice.some((d) => !d.dropped && d.isNat1);
 
+  // Parsear fórmula para separar pool de dados y desglose aritmético
+  const arrowParts = roll.formula.split('→');
+  const leftSide = arrowParts[0] || '';
+  const rightSide = arrowParts[1] || '';
+
+  const colonIndex = leftSide.indexOf(':');
+  const poolFormula = colonIndex !== -1 ? leftSide.slice(colonIndex + 1).trim() : leftSide.trim();
+
+  const detailParts = rightSide.split('=');
+  const detailArithmetic = detailParts[0]?.trim() || rightSide.trim();
+
   return (
-    <div className="bg-slate-900/95 border border-slate-700/90 rounded-xl p-3 shadow-2xl backdrop-blur-md pointer-events-auto transition-all animate-in fade-in slide-in-from-bottom-4 duration-300 w-80 text-slate-200">
-      {/* Cabecera con nombre y fórmula */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2 text-xs">
-        <div className="flex items-center gap-1.5 font-bold truncate">
-          <span className="text-sky-400 truncate">{roll.rollerName}</span>
-          <span className="text-slate-500 font-mono text-[11px]">({roll.formula.split('→')[0].split(':')[1]?.trim()})</span>
-        </div>
-        {roll.isSecret && (
-          <span className="flex items-center gap-1 text-[10px] bg-amber-950/80 border border-amber-600/50 text-amber-300 px-1.5 py-0.5 rounded">
-            <EyeOff className="w-3 h-3" />
-            <span>Oculta</span>
+    <div
+      className={`bg-slate-900/95 border border-slate-700/90 rounded-xl p-3.5 shadow-2xl backdrop-blur-md pointer-events-auto transition-all duration-600 w-84 sm:w-96 max-w-[90vw] text-slate-200 ${
+        isFadingOut
+          ? 'opacity-0 translate-y-2'
+          : 'opacity-100 translate-y-0 animate-in fade-in slide-in-from-bottom-3 duration-300'
+      }`}
+    >
+      {/* Cabecera con nombre, fórmula y botón de cerrar */}
+      <div className="flex items-start justify-between border-b border-slate-800 pb-2 mb-2 text-xs gap-2">
+        <div className="flex items-baseline gap-1.5 font-bold flex-wrap min-w-0">
+          <span className="text-sky-400">{roll.rollerName}</span>
+          <span className="text-slate-400 font-mono text-[11px] break-words whitespace-normal">
+            ({poolFormula})
           </span>
-        )}
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {roll.isSecret && (
+            <span className="flex items-center gap-1 text-[10px] bg-amber-950/80 border border-amber-600/50 text-amber-300 px-1.5 py-0.5 rounded">
+              <EyeOff className="w-3 h-3" />
+              <span>Oculta</span>
+            </span>
+          )}
+          <button
+            onClick={() => diceManager.dismissRoll(roll.id)}
+            className="text-slate-500 hover:text-slate-300 p-0.5 rounded transition-colors cursor-pointer"
+            title="Cerrar"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
-      {/* Desglose de cada dado */}
+      {/* Desglose gráfico de cada dado */}
       <div className="flex items-center justify-center gap-2.5 py-1.5 flex-wrap">
         {roll.dice.map((die, idx) => (
           <DiceShape key={idx} dieType={die.dieType || roll.dieType || 'd20'} die={die} isRolling={false} />
         ))}
       </div>
 
-      {/* Total grande y desglose final */}
-      <div className="mt-2 pt-2 border-t border-slate-800/80 flex items-center justify-between">
-        <div className="text-[11px] text-slate-400 font-mono truncate max-w-[180px]">
-          {roll.formula.split('→')[1]?.trim() || ''}
+      {/* Total destacado y desglose detallado en varias líneas sin cortes ni puntos suspensivos */}
+      <div className="mt-2 pt-2 border-t border-slate-800/80 flex items-start justify-between gap-3">
+        <div className="text-xs text-slate-400 font-mono break-words whitespace-normal leading-relaxed flex-1 min-w-0">
+          <span className="text-slate-300 font-medium">{detailArithmetic}</span>
+          <span className="text-slate-500 font-semibold ml-1.5">=</span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0">
           <span
-            className={`font-mono text-xl font-extrabold px-2.5 py-0.5 rounded-lg border shadow-sm ${
+            className={`font-mono text-2xl font-black px-3 py-1 rounded-xl border shadow-md ${
               hasNat20
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 shadow-[0_0_12px_rgba(245,158,11,0.5)]'
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 shadow-[0_0_14px_rgba(245,158,11,0.5)]'
                 : hasNat1
-                ? 'bg-rose-500/20 text-rose-300 border-rose-500/60 shadow-[0_0_12px_rgba(244,63,94,0.5)]'
-                : 'bg-slate-800 text-white border-slate-700'
+                ? 'bg-rose-500/20 text-rose-300 border-rose-500/60 shadow-[0_0_14px_rgba(244,63,94,0.5)]'
+                : 'bg-slate-800 text-white border-slate-700/80'
             }`}
           >
             {roll.total}
@@ -80,6 +128,9 @@ export const DiceRollOverlay: React.FC = () => {
   const [activeRolls, setActiveRolls] = useState<DiceRollResult[]>(diceManager.getActiveRolls());
   const [history, setHistory] = useState<DiceRollResult[]>(diceManager.getHistory());
   const [showHistory, setShowHistory] = useState(false);
+  const [isShortScreen, setIsShortScreen] = useState(() =>
+    typeof window !== 'undefined' ? window.innerHeight < 680 : false
+  );
 
   useEffect(() => {
     const unsubActive = diceManager.onActiveRollsChange((rolls) => {
@@ -88,9 +139,14 @@ export const DiceRollOverlay: React.FC = () => {
     const unsubHist = diceManager.onHistoryChange((hist) => {
       setHistory(hist);
     });
+    const handleResize = () => {
+      setIsShortScreen(window.innerHeight < 680);
+    };
+    window.addEventListener('resize', handleResize);
     return () => {
       unsubActive();
       unsubHist();
+      window.removeEventListener('resize', handleResize);
     };
   }, []);
 
@@ -99,12 +155,22 @@ export const DiceRollOverlay: React.FC = () => {
       {/* Contenedor transparente para la simulación física de dados 3D */}
       <div
         id="dice-3d-box"
-        className="fixed bottom-0 right-0 w-[540px] h-[440px] max-w-full max-h-screen pointer-events-none z-30 overflow-hidden"
+        className="fixed bottom-0 right-0 w-[480px] h-[360px] max-w-full pointer-events-none z-30 overflow-hidden"
       />
 
-      {/* Contenedor en la esquina inferior derecha para las tarjetas de resultados */}
-      <div className="fixed bottom-4 right-4 z-40 flex flex-col-reverse items-end gap-2.5 pointer-events-none select-none max-w-sm">
-        {/* Botón flotante discreto de Historial */}
+      {/* Contenedor para las tarjetas de resultados: encima de la zona donde caen los dados (o a su izquierda en pantallas de poca altura) */}
+      <div
+        className={`fixed z-40 flex flex-col-reverse items-end gap-2.5 pointer-events-none select-none max-w-sm sm:max-w-md transition-all duration-300 ${
+          isShortScreen ? 'bottom-4 right-[500px]' : 'bottom-[375px] right-4'
+        }`}
+      >
+        {activeRolls.map((roll) => (
+          <ActiveRollItem key={roll.id} roll={roll} />
+        ))}
+      </div>
+
+      {/* Botón flotante discreto de Historial en la esquina inferior derecha */}
+      <div className="fixed bottom-3 right-3 z-40 pointer-events-none select-none">
         <button
           onClick={() => setShowHistory(true)}
           className="pointer-events-auto bg-slate-900/80 hover:bg-slate-800 border border-slate-700/60 text-slate-300 hover:text-white px-2.5 py-1.5 rounded-lg shadow-lg backdrop-blur-xs text-xs flex items-center gap-1.5 transition-all cursor-pointer opacity-70 hover:opacity-100"
@@ -113,11 +179,6 @@ export const DiceRollOverlay: React.FC = () => {
           <History className="w-3.5 h-3.5 text-sky-400" />
           <span>Historial ({history.length})</span>
         </button>
-
-        {/* Tiradas activas apiladas (aparecen al detenerse los dados) */}
-        {activeRolls.map((roll) => (
-          <ActiveRollItem key={roll.id} roll={roll} />
-        ))}
       </div>
 
       {/* Modal / Panel de Historial de Tiradas (últimas 50) */}
@@ -154,8 +215,8 @@ export const DiceRollOverlay: React.FC = () => {
                         <span className="font-semibold text-sky-300">{h.rollerName}</span>
                         <span className="font-mono text-[10px] text-slate-500">{timeStr}</span>
                       </div>
-                      <div className="flex items-center justify-between pt-1 border-t border-slate-900">
-                        <span className="font-mono text-slate-400 text-[11px] truncate max-w-[260px]">
+                      <div className="flex items-start justify-between pt-1 border-t border-slate-900 gap-2">
+                        <span className="font-mono text-slate-400 text-[11px] break-words whitespace-normal flex-1">
                           {h.formula}
                         </span>
                         <span className="font-mono font-bold text-sm text-white px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 shrink-0">

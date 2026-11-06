@@ -305,6 +305,14 @@ class DiceManager {
     this.addRoll(result);
   }
 
+  public dismissRoll(rollId: string): void {
+    const beforeCount = this.activeRolls.length;
+    this.activeRolls = this.activeRolls.filter((r) => r.id !== rollId);
+    if (this.activeRolls.length !== beforeCount) {
+      this.activeRollsListeners.forEach((cb) => cb(this.activeRolls));
+    }
+  }
+
   private addRoll(roll: DiceRollResult): void {
     // Reproducir sonido si no está silenciado
     playDiceRollSound(this.isMutedState);
@@ -318,11 +326,10 @@ class DiceManager {
     this.activeRollsListeners.forEach((cb) => cb(this.activeRolls));
     this.rollListeners.forEach((cb) => cb(roll));
 
-    // Desvanecer y retirar tras 6 segundos
+    // Descarte de seguridad amplio (30s) por si no se cierra desde la UI
     setTimeout(() => {
-      this.activeRolls = this.activeRolls.filter((r) => r.id !== roll.id);
-      this.activeRollsListeners.forEach((cb) => cb(this.activeRolls));
-    }, 6000);
+      this.dismissRoll(roll.id);
+    }, 30000);
   }
 }
 

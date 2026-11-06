@@ -303,6 +303,36 @@ describe('Bloque 2: Dice System with Master Authority', () => {
     });
     expect(n5).toBe('2d6+1d8@5,3,8');
   });
+
+  it('permite gestionar y descartar tiradas activas con dismissRoll sin afectar a otras', () => {
+    const roll1 = diceManager.executeMasterRoll({
+      rollerName: 'Gimli',
+      dieType: 'd20',
+      count: 1,
+      modifier: 0
+    });
+    const roll2 = diceManager.executeMasterRoll({
+      rollerName: 'Legolas',
+      dieType: 'd6',
+      count: 2,
+      modifier: 2
+    });
+
+    const activeBefore = diceManager.getActiveRolls();
+    expect(activeBefore.some((r) => r.id === roll1.id)).toBe(true);
+    expect(activeBefore.some((r) => r.id === roll2.id)).toBe(true);
+
+    // Descartar solo la primera tirada
+    diceManager.dismissRoll(roll1.id);
+
+    const activeAfter = diceManager.getActiveRolls();
+    expect(activeAfter.some((r) => r.id === roll1.id)).toBe(false);
+    expect(activeAfter.some((r) => r.id === roll2.id)).toBe(true);
+
+    // Descartar la segunda tirada
+    diceManager.dismissRoll(roll2.id);
+    expect(diceManager.getActiveRolls().some((r) => r.id === roll2.id)).toBe(false);
+  });
 });
 
 
