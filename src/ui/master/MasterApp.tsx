@@ -24,6 +24,7 @@ import { TokenVisibility } from '../../modules/vision/visibilityPolygon';
 import { audioManager } from '../../modules/audio/audioManager';
 import { cloudGameSync } from '../../modules/persistence/cloudGameSync';
 import { authManager } from '../../modules/auth/authManager';
+import { DiceRollOverlay } from '../dice/DiceRollOverlay';
 import { ShieldAlert } from 'lucide-react';
 
 export const MasterApp: React.FC = () => {
@@ -240,6 +241,7 @@ export const MasterApp: React.FC = () => {
       <CreditsModal isOpen={showCreditsModal} onClose={() => setShowCreditsModal(false)} />
       <TokenStatusesModal />
       <ToastContainer />
+      <DiceRollOverlay />
 
       {/* Indicador discreto de versión en esquina inferior izquierda (abre créditos al pulsar) */}
       <button

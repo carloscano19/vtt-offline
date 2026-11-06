@@ -36,9 +36,11 @@ import {
   PanelRight,
   KeyRound,
   SkipForward,
-  Globe
+  Globe,
+  Dices
 } from 'lucide-react';
 import { OnlineRoomModal } from './OnlineRoomModal';
+import { DicePanel } from '../../dice/DicePanel';
 import { onlineRoomManager } from '../../../modules/online/onlineRoomManager';
 import { useUIStore, ActiveTool } from '../../../stores/useUIStore';
 import { useGameStore } from '../../../stores/useGameStore';
@@ -88,6 +90,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
   }, []);
 
   const [showOnlineRoomModal, setShowOnlineRoomModal] = useState(false);
+  const [showDicePanel, setShowDicePanel] = useState(false);
   const [isRoomActive, setIsRoomActive] = useState(onlineRoomManager.isRoomActive());
   const [connectedPlayerCount, setConnectedPlayerCount] = useState(0);
 
@@ -601,6 +604,14 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           {isRoomActive && (
             <span className="absolute bottom-1 right-1 w-2 h-2 rounded-full bg-emerald-400 ring-1 ring-slate-900 animate-pulse" />
           )}
+        </button>
+
+        <button
+          onClick={() => setShowDicePanel(true)}
+          className="btn-icon text-slate-400 hover:text-white transition-colors"
+          title="Tirar dados (d4, d6, d8, d10, d12, d20, d100)"
+        >
+          <Dices className="w-5 h-5" />
         </button>
 
         <div className="w-[1px] h-6 bg-slate-700 mx-1" />
@@ -1233,6 +1244,14 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
       <OnlineRoomModal
         isOpen={showOnlineRoomModal}
         onClose={() => setShowOnlineRoomModal(false)}
+      />
+
+      {/* Panel de Dados */}
+      <DicePanel
+        isOpen={showDicePanel}
+        onClose={() => setShowDicePanel(false)}
+        isMaster={true}
+        playerName="Máster"
       />
     </header>
   );

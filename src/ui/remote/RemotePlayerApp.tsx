@@ -4,7 +4,9 @@ import { PixiCanvas } from '../../pixi/PixiCanvas';
 import { CanvasErrorBoundary } from '../common/CanvasErrorBoundary';
 import { onlineRoomManager } from '../../modules/online/onlineRoomManager';
 import { audioManager } from '../../modules/audio/audioManager';
-import { Maximize2, Minimize2, Volume2, VolumeX, Crosshair, User, AlertCircle, Wifi, WifiOff } from 'lucide-react';
+import { DicePanel } from '../dice/DicePanel';
+import { DiceRollOverlay } from '../dice/DiceRollOverlay';
+import { Maximize2, Minimize2, Volume2, VolumeX, Crosshair, User, AlertCircle, Wifi, WifiOff, Dices } from 'lucide-react';
 
 interface RemotePlayerAppProps {
   roomCode: string;
@@ -31,6 +33,7 @@ export const RemotePlayerApp: React.FC<RemotePlayerAppProps> = ({ roomCode }) =>
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [warningMessage, setWarningMessage] = useState<string | null>(null);
+  const [showDicePanel, setShowDicePanel] = useState(false);
 
   const hasCenteredInitiallyRef = useRef(false);
 
@@ -230,6 +233,16 @@ export const RemotePlayerApp: React.FC<RemotePlayerAppProps> = ({ roomCode }) =>
           {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5 text-slate-400" />}
           <span>{soundEnabled ? 'Sonido activo' : 'Activar sonido'}</span>
         </button>
+
+        {/* Botón Tirar Dados */}
+        <button
+          onClick={() => setShowDicePanel(true)}
+          className="bg-slate-900/90 hover:bg-slate-800 border border-slate-700/70 text-slate-200 hover:text-white px-3 py-1.5 rounded-lg shadow-lg backdrop-blur-xs text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer"
+          title="Tirar dados (d4, d6, d8, d10, d12, d20, d100)"
+        >
+          <Dices className="w-3.5 h-3.5 text-sky-400" />
+          <span className="hidden sm:inline">Dados</span>
+        </button>
       </div>
 
       {/* Botón Pantalla Completa (arriba a la derecha) */}
@@ -248,6 +261,17 @@ export const RemotePlayerApp: React.FC<RemotePlayerAppProps> = ({ roomCode }) =>
           <span>{warningMessage}</span>
         </div>
       )}
+
+      {/* Overlay de dados rodando en la esquina inferior derecha */}
+      <DiceRollOverlay />
+
+      {/* Panel de lanzamiento de dados */}
+      <DicePanel
+        isOpen={showDicePanel}
+        onClose={() => setShowDicePanel(false)}
+        isMaster={false}
+        playerName={savedName}
+      />
     </div>
   );
 };

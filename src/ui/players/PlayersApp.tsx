@@ -5,6 +5,7 @@ import { PixiCanvas } from '../../pixi/PixiCanvas';
 import { CanvasErrorBoundary } from '../common/CanvasErrorBoundary';
 import { syncChannel } from '../../modules/sync/syncChannel';
 import { invalidateCachedTexture } from '../../pixi/utils/textureCache';
+import { DiceRollOverlay } from '../dice/DiceRollOverlay';
 import { Maximize2, Minimize2, Tv } from 'lucide-react';
 
 export const PlayersApp: React.FC = () => {
@@ -198,6 +199,9 @@ export const PlayersApp: React.FC = () => {
           <span>El máster tiene una versión anterior: actualízalo</span>
         </div>
       )}
+
+      {/* Overlay de tiradas de dados en la esquina */}
+      <DiceRollOverlay />
     </div>
   );
 };

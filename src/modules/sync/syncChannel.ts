@@ -1,4 +1,5 @@
 import { GameState, RulerState, CameraState } from '../../types/game';
+import { DiceRollResult } from '../../types/dice';
 import { onlineRoomManager } from '../online/onlineRoomManager';
 
 export type SyncMessage =
@@ -12,6 +13,7 @@ export type SyncMessage =
   | { type: 'REQUEST_CURRENT_STATE' }
   | { type: 'ASSET_DOWNLOADED'; assetId: string }
   | { type: 'APP_RELOAD_REQUEST'; version?: string }
+  | { type: 'DICE_ROLL_SYNC'; roll: DiceRollResult }
   | { type: 'MASTER_HELLO'; id: string }
   | { type: 'MASTER_PRESENT'; id: string }
   | { type: 'MASTER_TAKEOVER'; id: string }
@@ -31,6 +33,7 @@ class SyncManager {
   private assetDownloadedListeners: Set<(assetId: string) => void> = new Set();
   private appReloadListeners: Set<() => void> = new Set();
   private playerVersionListeners: Set<(info: { appVersion: string; appBuildTime: number }) => void> = new Set();
+  private diceRollListeners: Set<(roll: DiceRollResult) => void> = new Set();
   private isDraggingActive = false;
 
   // Control de pestaña máster única
@@ -117,6 +120,9 @@ class SyncManager {
             break;
           case 'APP_RELOAD_REQUEST':
             this.appReloadListeners.forEach((listener) => listener());
+            break;
+          case 'DICE_ROLL_SYNC':
+            this.diceRollListeners.forEach((listener) => listener(msg.roll));
             break;
         }
       };
@@ -394,6 +400,16 @@ class SyncManager {
   public onAppReload(callback: () => void): () => void {
     this.appReloadListeners.add(callback);
     return () => this.appReloadListeners.delete(callback);
+  }
+
+  public sendDiceRoll(roll: DiceRollResult) {
+    if (!this.canEmit) return;
+    this.post({ type: 'DICE_ROLL_SYNC', roll });
+  }
+
+  public onDiceRoll(callback: (roll: DiceRollResult) => void): () => void {
+    this.diceRollListeners.add(callback);
+    return () => this.diceRollListeners.delete(callback);
   }
 }
 
