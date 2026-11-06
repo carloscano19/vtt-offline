@@ -651,6 +651,142 @@ describe('Asset download reactive reload and video management', () => {
     expect(updated?.width).toBe(384);
     expect(updated?.height).toBe(256);
   });
+
+  describe('Bloque 3: Resaltar en la oscuridad y brillo hasta 200%', () => {
+    it('soporta brillo de hasta 200% (2.0) en los filtros de cualquier entidad', () => {
+      const entityWithHighBrightness: Entity = {
+        id: 'tok_bright',
+        type: 'token',
+        name: 'Luz Radiante',
+        x: 0,
+        y: 0,
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+        zIndex: 10,
+        visibleToPlayers: true,
+        locked: false,
+        filters: {
+          hue: 45,
+          saturation: 1.5,
+          brightness: 2.0 // 200%
+        }
+      };
+
+      const normalized = normalizeEntity(entityWithHighBrightness);
+      expect(normalized.filters?.brightness).toBe(2.0);
+      expect(Math.round(normalized.filters!.brightness * 100)).toBe(200);
+    });
+
+    it('TokensLayer asigna las entidades con highlightInDarkness al highlightLayer (por encima de ambientLayer)', async () => {
+      const { TokensLayer } = await import('../src/pixi/layers/TokensLayer');
+      const { Container } = await import('pixi.js');
+
+      const tokensLayer = new TokensLayer(true);
+      const highlightLayer = new Container();
+      tokensLayer.setHighlightLayer(highlightLayer);
+
+      const regularToken: Entity = {
+        id: 'tok_reg',
+        type: 'token',
+        name: 'Normal',
+        x: 10,
+        y: 10,
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+        zIndex: 10,
+        visibleToPlayers: true,
+        locked: false,
+        highlightInDarkness: false
+      };
+
+      const highlightedToken: Entity = {
+        id: 'tok_high',
+        type: 'token',
+        name: 'Resaltado',
+        x: 20,
+        y: 20,
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+        zIndex: 10,
+        visibleToPlayers: true,
+        locked: false,
+        highlightInDarkness: true
+      };
+
+      await tokensLayer.syncEntities([regularToken, highlightedToken]);
+
+      const regContainer = (tokensLayer as any).containerMap.get('tok_reg');
+      const highContainer = (tokensLayer as any).containerMap.get('tok_high');
+
+      expect(regContainer).toBeDefined();
+      expect(highContainer).toBeDefined();
+
+      // El token normal es hijo de tokensLayer
+      expect(regContainer.parent).toBe(tokensLayer);
+
+      // El token con highlightInDarkness es hijo de highlightLayer
+      expect(highContainer.parent).toBe(highlightLayer);
+
+      // Cambiar highlightInDarkness a false en el segundo token
+      await tokensLayer.syncEntities([regularToken, { ...highlightedToken, highlightInDarkness: false }]);
+      expect(highContainer.parent).toBe(tokensLayer);
+    });
+
+    it('EffectsLayer asigna los efectos con highlightInDarkness al highlightLayer', async () => {
+      const { EffectsLayer } = await import('../src/pixi/layers/EffectsLayer');
+      const { Container } = await import('pixi.js');
+
+      const effectsLayer = new EffectsLayer(true);
+      const highlightLayer = new Container();
+      effectsLayer.setHighlightLayer(highlightLayer);
+
+      const camera = { x: 0, y: 0, zoom: 1 };
+
+      const regEffect: Entity = {
+        id: 'eff_reg',
+        type: 'effect',
+        name: 'Efecto Normal',
+        x: 0,
+        y: 0,
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+        zIndex: 10,
+        visibleToPlayers: true,
+        locked: false,
+        highlightInDarkness: false
+      };
+
+      const highEffect: Entity = {
+        id: 'eff_high',
+        type: 'effect',
+        name: 'Efecto Brillante',
+        x: 0,
+        y: 0,
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+        zIndex: 10,
+        visibleToPlayers: true,
+        locked: false,
+        highlightInDarkness: true
+      };
+
+      effectsLayer.update([regEffect, highEffect], camera, 1920, 1080);
+
+      const regNode = (effectsLayer as any).effectNodes.get('eff_reg');
+      const highNode = (effectsLayer as any).effectNodes.get('eff_high');
+
+      expect(regNode).toBeDefined();
+      expect(highNode).toBeDefined();
+
+      expect(regNode.parent).toBe(effectsLayer);
+      expect(highNode.parent).toBe(highlightLayer);
+    });
+  });
 });
 
 

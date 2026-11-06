@@ -32,6 +32,7 @@ export class PixiRenderer {
   public doorsLayer!: DoorsLayer;
   public tokensLayer!: TokensLayer;
   public ambientLayer!: AmbientLayer;
+  public highlightLayer!: Container;
   public fogLayer!: FogLayer;
   public weatherLayer!: WeatherLayer;
   public effectsLayer!: EffectsLayer;
@@ -131,6 +132,14 @@ export class PixiRenderer {
       this.ambientLayer = new AmbientLayer(this.isMaster);
       this.ambientLayer.label = 'AmbientLayer';
       this.worldContainer.addChild(this.ambientLayer);
+
+      // 6b. Capa de Entidades Resaltadas en la Oscuridad (por encima de AmbientLayer, bajo FogLayer)
+      this.highlightLayer = new Container();
+      this.highlightLayer.label = 'HighlightLayer';
+      this.worldContainer.addChild(this.highlightLayer);
+
+      this.tokensLayer.setHighlightLayer(this.highlightLayer);
+      this.effectsLayer.setHighlightLayer(this.highlightLayer);
 
       // 7. Capa de Niebla de Guerra (Fog of War)
       this.fogLayer = new FogLayer(this.isMaster);

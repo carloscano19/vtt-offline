@@ -810,10 +810,15 @@ class ProceduralEffectNode extends Container {
 export class EffectsLayer extends Container {
   private isMaster: boolean;
   private effectNodes: Map<string, ProceduralEffectNode> = new Map();
+  private highlightLayer: Container | null = null;
 
   constructor(isMaster: boolean) {
     super();
     this.isMaster = isMaster;
+  }
+
+  public setHighlightLayer(layer: Container) {
+    this.highlightLayer = layer;
   }
 
   public update(
@@ -846,7 +851,17 @@ export class EffectsLayer extends Container {
       if (!node) {
         node = new ProceduralEffectNode(ent.id);
         this.effectNodes.set(ent.id, node);
-        this.addChild(node);
+        const targetParent = (ent.highlightInDarkness && this.highlightLayer) ? this.highlightLayer : this;
+        targetParent.addChild(node);
+      }
+
+      // Si cambia el ajuste highlightInDarkness, mover el nodo a la capa correspondiente
+      const targetParent = (ent.highlightInDarkness && this.highlightLayer) ? this.highlightLayer : this;
+      if (node.parent !== targetParent) {
+        if (node.parent) {
+          node.parent.removeChild(node);
+        }
+        targetParent.addChild(node);
       }
 
       // Comprobar si está en el viewport visible para pausar si está fuera
@@ -863,7 +878,11 @@ export class EffectsLayer extends Container {
     for (const [id, node] of this.effectNodes.entries()) {
       if (!currentIds.has(id)) {
         videoManager.unregisterActiveEntityVideo(id);
-        this.removeChild(node);
+        if (node.parent) {
+          node.parent.removeChild(node);
+        } else {
+          this.removeChild(node);
+        }
         node.destroy({ children: true });
         this.effectNodes.delete(id);
       }

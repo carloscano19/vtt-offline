@@ -2255,6 +2255,28 @@ export const PropertiesTab: React.FC = () => {
             className="w-full accent-sky-500 cursor-pointer"
           />
         </div>
+
+        {/* Resaltar en la oscuridad */}
+        <div className="pt-2 border-t border-slate-700/60">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={Boolean(selectedEntity.highlightInDarkness)}
+              onChange={(e) =>
+                handleUpdate({
+                  highlightInDarkness: e.target.checked
+                })
+              }
+              className="accent-sky-500 w-3.5 h-3.5 rounded cursor-pointer"
+            />
+            <div className="flex flex-col">
+              <span className="text-xs text-slate-200 font-medium">Resaltar en la oscuridad</span>
+              <span className="text-[10px] text-slate-400">
+                Se dibuja sobre la oscuridad ambiental con sus colores reales (sigue oculta bajo la niebla de guerra)
+              </span>
+            </div>
+          </label>
+        </div>
       </div>
       )}
 

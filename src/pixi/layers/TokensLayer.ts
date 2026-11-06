@@ -53,10 +53,15 @@ export class TokensLayer extends Container {
   private animTime = 0;
   private gridSize = 70;
   private cameraZoom = 1.0;
+  private highlightLayer: Container | null = null;
 
   constructor(isMaster: boolean) {
     super();
     this.isMaster = isMaster;
+  }
+
+  public setHighlightLayer(layer: Container) {
+    this.highlightLayer = layer;
   }
 
   public tick(deltaSeconds: number) {
@@ -80,7 +85,11 @@ export class TokensLayer extends Container {
           const container = this.containerMap.get(id);
           if (container) {
             videoManager.unregisterActiveEntityVideo(id);
-            this.removeChild(container);
+            if (container.parent) {
+              container.parent.removeChild(container);
+            } else {
+              this.removeChild(container);
+            }
             container.destroy({ children: true });
             this.containerMap.delete(id);
           }
@@ -143,7 +152,8 @@ export class TokensLayer extends Container {
         entityContainer = new Container();
         entityContainer.label = entity.id;
         this.containerMap.set(entity.id, entityContainer);
-        this.addChild(entityContainer);
+        const targetParent = (entity.highlightInDarkness && this.highlightLayer) ? this.highlightLayer : this;
+        targetParent.addChild(entityContainer);
 
         const ck = entity.chromaKey;
         const currentCkKey = ck && ck.enabled ? `ck_${ck.color}_${ck.tolerance}` : 'no_ck';
@@ -251,6 +261,15 @@ export class TokensLayer extends Container {
       entityContainer.scale.set(entity.scaleX, entity.scaleY);
       entityContainer.zIndex = entity.zIndex ?? 10;
 
+      // Si cambia el ajuste highlightInDarkness, mover el contenedor a la capa adecuada
+      const targetParent = (entity.highlightInDarkness && this.highlightLayer) ? this.highlightLayer : this;
+      if (entityContainer.parent !== targetParent) {
+        if (entityContainer.parent) {
+          entityContainer.parent.removeChild(entityContainer);
+        }
+        targetParent.addChild(entityContainer);
+      }
+
       // Opacidad configurable combinada con visibilidad para jugadores
       const entityOpacity = typeof entity.opacity === 'number' ? entity.opacity : 1.0;
       (entityContainer as any)._entityOpacity = entityOpacity;
@@ -284,7 +303,11 @@ export class TokensLayer extends Container {
           }
         }
         videoManager.unregisterActiveEntityVideo(id);
-        this.removeChild(container);
+        if (container.parent) {
+          container.parent.removeChild(container);
+        } else {
+          this.removeChild(container);
+        }
         container.destroy({ children: true });
         this.containerMap.delete(id);
         this.fadeMap.delete(id);
