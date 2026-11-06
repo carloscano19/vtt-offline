@@ -573,7 +573,8 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
             movementBudget: budget,
             movementState: {
               remaining: budget,
-              path: []
+              path: [],
+              turnEnded: false
             }
           };
         } else if (ent.movementBudget !== undefined || ent.movementState !== undefined) {

@@ -289,6 +289,7 @@ export interface Entity {
   movementState?: {
     remaining: number;
     path: Point2D[];
+    turnEnded?: boolean;
   };
 }
 

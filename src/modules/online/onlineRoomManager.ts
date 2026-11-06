@@ -29,7 +29,8 @@ export type RoomMessage =
   | { type: 'MOVE_STEP_REQUEST'; payload: any }
   | { type: 'MOVE_STEP_APPLIED'; payload: any }
   | { type: 'MOVE_STEP_REJECTED'; payload: any }
-  | { type: 'MOVE_UNDO_REQUEST'; payload: any };
+  | { type: 'MOVE_UNDO_REQUEST'; payload: any }
+  | { type: 'END_TURN_REQUEST'; payload: { playerName: string } };
 
 /**
  * Genera un código de sala criptográficamente seguro de 18 caracteres.

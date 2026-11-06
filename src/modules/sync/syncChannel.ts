@@ -14,6 +14,7 @@ export type SyncMessage =
   | { type: 'ASSET_DOWNLOADED'; assetId: string }
   | { type: 'APP_RELOAD_REQUEST'; version?: string }
   | { type: 'DICE_ROLL_SYNC'; roll: DiceRollResult }
+  | { type: 'TURN_ENDED_NOTICE'; message: string }
   | { type: 'MASTER_HELLO'; id: string }
   | { type: 'MASTER_PRESENT'; id: string }
   | { type: 'MASTER_TAKEOVER'; id: string }
@@ -34,6 +35,7 @@ class SyncManager {
   private appReloadListeners: Set<() => void> = new Set();
   private playerVersionListeners: Set<(info: { appVersion: string; appBuildTime: number }) => void> = new Set();
   private diceRollListeners: Set<(roll: DiceRollResult) => void> = new Set();
+  private turnEndedNoticeListeners: Set<(message: string) => void> = new Set();
   private isDraggingActive = false;
 
   // Control de pestaña máster única
@@ -123,6 +125,9 @@ class SyncManager {
             break;
           case 'DICE_ROLL_SYNC':
             this.diceRollListeners.forEach((listener) => listener(msg.roll));
+            break;
+          case 'TURN_ENDED_NOTICE':
+            this.turnEndedNoticeListeners.forEach((listener) => listener(msg.message));
             break;
         }
       };
@@ -410,6 +415,16 @@ class SyncManager {
   public onDiceRoll(callback: (roll: DiceRollResult) => void): () => void {
     this.diceRollListeners.add(callback);
     return () => this.diceRollListeners.delete(callback);
+  }
+
+  public sendTurnEndedNotice(message: string) {
+    if (!this.canEmit) return;
+    this.post({ type: 'TURN_ENDED_NOTICE', message });
+  }
+
+  public onTurnEndedNotice(callback: (message: string) => void): () => void {
+    this.turnEndedNoticeListeners.add(callback);
+    return () => this.turnEndedNoticeListeners.delete(callback);
   }
 }
 

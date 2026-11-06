@@ -41,7 +41,12 @@ export function validateStep(
     return { success: false, reason: 'No tienes permiso para mover este token' };
   }
 
-  // 4. Comprobar presupuesto de movimiento
+  // 4. Comprobar si el turno ha terminado
+  if (token.movementState?.turnEnded) {
+    return { success: false, reason: 'Turno terminado. Espera al máster' };
+  }
+
+  // 5. Comprobar presupuesto de movimiento
   const budget = typeof token.movementBudget === 'number' ? token.movementBudget : 7;
   const currentRemaining = typeof token.movementState?.remaining === 'number'
     ? token.movementState.remaining
@@ -51,21 +56,21 @@ export function validateStep(
     return { success: false, reason: 'Sin casillas de movimiento restantes' };
   }
 
-  // 5. Calcular posición de destino (1 casilla en dirección dx, dy)
+  // 6. Calcular posición de destino (1 casilla en dirección dx, dy)
   const gridSize = game.grid?.size && game.grid.size > 0 ? game.grid.size : 70;
   const targetPos: Point2D = {
     x: Math.round(token.x + dx * gridSize),
     y: Math.round(token.y + dy * gridSize)
   };
 
-  // 6. Validación de paredes y puertas cerradas (reutiliza wallManager)
+  // 7. Validación de paredes y puertas cerradas (reutiliza wallManager)
   const from: Point2D = { x: token.x, y: token.y };
   const blocked = isMovementBlockedByWall(from, targetPos, game.entities);
   if (blocked) {
     return { success: false, reason: 'Hay una pared' };
   }
 
-  // 7. Construir nuevo camino verde y deducir 1 casilla
+  // 8. Construir nuevo camino verde y deducir 1 casilla
   const currentPath: Point2D[] = token.movementState?.path && token.movementState.path.length > 0
     ? [...token.movementState.path]
     : [{ x: token.x, y: token.y }];
@@ -105,6 +110,10 @@ export function validateUndo(
     token.controlledBy.trim().toLowerCase() !== playerName.trim().toLowerCase()
   ) {
     return { success: false, reason: 'No tienes permiso para mover este token' };
+  }
+
+  if (token.movementState?.turnEnded) {
+    return { success: false, reason: 'Turno terminado. Espera al máster' };
   }
 
   const path = token.movementState?.path;

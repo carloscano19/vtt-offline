@@ -24,6 +24,7 @@ export const PlayersApp: React.FC = () => {
   const [showHint, setShowHint] = useState(true);
   const [showConnected, setShowConnected] = useState(false);
   const [showMasterOlderWarning, setShowMasterOlderWarning] = useState(false);
+  const [turnNotice, setTurnNotice] = useState<string | null>(null);
   const hasConnectedRef = React.useRef(false);
 
   // Ocultar hint tras 6 segundos
@@ -150,6 +151,14 @@ export const PlayersApp: React.FC = () => {
       window.location.reload();
     });
 
+    // 7. Recibir aviso de turno terminado de jugador remoto
+    const cleanupTurnNotice = syncChannel.onTurnEndedNotice((msg) => {
+      setTurnNotice(msg);
+      setTimeout(() => {
+        setTurnNotice((curr) => (curr === msg ? null : curr));
+      }, 4000);
+    });
+
     return () => {
       cleanupState();
       cleanupEntityPos();
@@ -157,6 +166,7 @@ export const PlayersApp: React.FC = () => {
       cleanupCamera();
       cleanupAsset();
       cleanupReload();
+      cleanupTurnNotice();
     };
   }, [setGame, setPlayerCamera, setRulerMode, setRulerDiagonalRule, setRulerVisibleToPlayers, startRulerMeasure, updateRulerMeasure, clearRuler]);
 
@@ -202,6 +212,14 @@ export const PlayersApp: React.FC = () => {
 
       {/* Overlay de tiradas de dados en la esquina */}
       <DiceRollOverlay />
+
+      {/* Banner flotante de fin de turno del jugador remoto */}
+      {turnNotice && (
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-slate-900/95 border border-amber-500/80 text-amber-200 px-5 py-2.5 rounded-xl shadow-2xl backdrop-blur-md text-sm font-semibold flex items-center gap-2 pointer-events-none z-50 animate-fade-in select-none">
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
+          <span>{turnNotice}</span>
+        </div>
+      )}
     </div>
   );
 };

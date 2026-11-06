@@ -1,5 +1,7 @@
 import { onlineRoomManager } from '../online/onlineRoomManager';
 import { useGameStore } from '../../stores/useGameStore';
+import { useUIStore } from '../../stores/useUIStore';
+import { syncChannel } from '../sync/syncChannel';
 import { validateStep, validateUndo } from './movementValidator';
 import { movementSound } from './movementSound';
 
@@ -90,6 +92,11 @@ class MovementManager {
               }
             });
           }
+        } else if (msg.type === 'END_TURN_REQUEST') {
+          const { playerName } = msg.payload || {};
+          if (playerName) {
+            this.handleEndTurn(playerName);
+          }
         }
       }
 
@@ -134,6 +141,37 @@ class MovementManager {
         tokenId,
         playerName
       }
+    });
+  }
+
+  public handleEndTurn(playerName: string) {
+    const game = useGameStore.getState().game;
+    const playerTokens = game.entities.filter(
+      (ent) => ent.type === 'token' && ent.controlledBy && ent.controlledBy.trim().toLowerCase() === playerName.trim().toLowerCase()
+    );
+
+    for (const token of playerTokens) {
+      useGameStore.getState().updateEntity(token.id, {
+        movementState: {
+          remaining: 0,
+          path: token.movementState?.path || [],
+          turnEnded: true
+        }
+      });
+    }
+
+    const message = `${playerName} ha terminado su turno`;
+    try {
+      useUIStore.getState().addToast(message, 'info', 4000);
+    } catch {}
+    syncChannel.sendTurnEndedNotice(message);
+  }
+
+  public requestEndTurn(playerName: string) {
+    if (!onlineRoomManager.isRoomActive()) return;
+    onlineRoomManager.sendBroadcastMessage({
+      type: 'END_TURN_REQUEST',
+      payload: { playerName }
     });
   }
 }

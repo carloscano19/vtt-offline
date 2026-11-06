@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { validateStep, validateUndo } from '../src/modules/movement/movementValidator';
+import { movementManager } from '../src/modules/movement/movementManager';
 import { GameState } from '../src/types/game';
 import { Entity } from '../src/types/entity';
 import { useGameStore } from '../src/stores/useGameStore';
@@ -330,5 +331,64 @@ describe('Bloque 3: Movimiento limitado por casillas, paredes, camino verde y pa
     expect(normalizedControlled.movementBudget).toBe(7);
     expect(normalizedControlled.movementState?.remaining).toBe(7);
     expect(normalizedControlled.movementState?.path).toEqual([]);
+  });
+
+  it('terminar turno pone el movimiento a 0 y turnEnded a true, y bloquea nuevos pasos', () => {
+    // 1. Cargar el juego en useGameStore
+    useGameStore.getState().setGame(game);
+
+    // 2. Dar 1 paso antes de terminar turno
+    const stepBefore = validateStep(useGameStore.getState().game, 'token_player_1', 1, 0, 'Carlos');
+    expect(stepBefore.success).toBe(true);
+    expect(stepBefore.remaining).toBe(6);
+
+    // Aplicar el paso en el store
+    useGameStore.getState().updateEntity('token_player_1', {
+      x: stepBefore.newPos!.x,
+      y: stepBefore.newPos!.y,
+      movementState: {
+        remaining: stepBefore.remaining!,
+        path: stepBefore.path!
+      }
+    });
+
+    // 3. Ejecutar terminar turno para 'Carlos'
+    movementManager.handleEndTurn('Carlos');
+
+    const updatedGame = useGameStore.getState().game;
+    const token = updatedGame.entities.find((e) => e.id === 'token_player_1');
+    expect(token?.movementState?.remaining).toBe(0);
+    expect(token?.movementState?.turnEnded).toBe(true);
+
+    // 4. Intentar dar otro paso o deshacer debe ser bloqueado por turno terminado
+    const stepAfter = validateStep(updatedGame, 'token_player_1', 1, 0, 'Carlos');
+    expect(stepAfter.success).toBe(false);
+    expect(stepAfter.reason).toBe('Turno terminado. Espera al máster');
+
+    const undoAfter = validateUndo(updatedGame, 'token_player_1', 'Carlos');
+    expect(undoAfter.success).toBe(false);
+    expect(undoAfter.reason).toBe('Turno terminado. Espera al máster');
+  });
+
+  it('Siguiente turno recarga el movimiento al presupuesto, limpia el camino y restablece turnEnded a false', () => {
+    useGameStore.getState().setGame(game);
+
+    // Terminar turno
+    movementManager.handleEndTurn('Carlos');
+    expect(useGameStore.getState().game.entities.find((e) => e.id === 'token_player_1')?.movementState?.turnEnded).toBe(true);
+
+    // El máster avanza de turno
+    useGameStore.getState().nextTurn();
+
+    const refreshedGame = useGameStore.getState().game;
+    const refreshedToken = refreshedGame.entities.find((e) => e.id === 'token_player_1');
+    expect(refreshedToken?.movementState?.remaining).toBe(7);
+    expect(refreshedToken?.movementState?.turnEnded).toBe(false);
+    expect(refreshedToken?.movementState?.path).toEqual([]);
+
+    // Ahora puede volver a mover sin problemas
+    const step = validateStep(refreshedGame, 'token_player_1', 1, 0, 'Carlos');
+    expect(step.success).toBe(true);
+    expect(step.remaining).toBe(6);
   });
 });

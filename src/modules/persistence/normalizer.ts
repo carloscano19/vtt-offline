@@ -279,13 +279,15 @@ export function normalizeEntity(entity: Entity): Entity {
       const budget = typeof entity.movementBudget === 'number' && entity.movementBudget >= 0 ? entity.movementBudget : 7;
       const remaining = typeof entity.movementState?.remaining === 'number' ? entity.movementState.remaining : budget;
       const path = Array.isArray(entity.movementState?.path) ? entity.movementState.path : [];
+      const turnEnded = Boolean(entity.movementState?.turnEnded);
       entity = {
         ...entity,
         controlledBy,
         movementBudget: budget,
         movementState: {
           remaining,
-          path
+          path,
+          turnEnded
         }
       };
     } else {

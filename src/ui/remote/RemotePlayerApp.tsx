@@ -8,7 +8,7 @@ import { movementManager } from '../../modules/movement/movementManager';
 import { movementSound } from '../../modules/movement/movementSound';
 import { DicePanel } from '../dice/DicePanel';
 import { DiceRollOverlay } from '../dice/DiceRollOverlay';
-import { Maximize2, Minimize2, Volume2, VolumeX, Crosshair, User, AlertCircle, Wifi, WifiOff, Dices, Pause } from 'lucide-react';
+import { Maximize2, Minimize2, Volume2, VolumeX, Crosshair, User, AlertCircle, Wifi, WifiOff, Dices, Pause, CheckCircle2 } from 'lucide-react';
 
 interface RemotePlayerAppProps {
   roomCode: string;
@@ -107,19 +107,21 @@ export const RemotePlayerApp: React.FC<RemotePlayerAppProps> = ({ roomCode }) =>
     }
   }, [soundEnabled, music]);
 
+  const myToken = entities.find(
+    (ent) => ent.type === 'token' && ent.controlledBy && ent.controlledBy.trim().toLowerCase() === savedName.trim().toLowerCase()
+  );
+  const isTurnEnded = Boolean(myToken?.movementState?.turnEnded);
+
   // Centrar cámara en el token del jugador
   const centerOnMyToken = useCallback(() => {
     if (!savedName) return;
-    const myToken = entities.find(
-      (ent) => ent.type === 'token' && ent.controlledBy && ent.controlledBy.toLowerCase() === savedName.toLowerCase()
-    );
     if (myToken) {
       setPlayerCamera({ x: myToken.x, y: myToken.y });
     } else {
       // Si aún no tiene token asignado, centrar en encuadre de la tele
       setPlayerCamera({ x: playerCamera.x, y: playerCamera.y });
     }
-  }, [entities, savedName, playerCamera, setPlayerCamera]);
+  }, [myToken, savedName, playerCamera, setPlayerCamera]);
 
   const toggleSound = () => {
     if (!soundEnabled) {
@@ -168,8 +170,9 @@ export const RemotePlayerApp: React.FC<RemotePlayerAppProps> = ({ roomCode }) =>
         'KeyC'
       ].includes(e.code);
       const isUndo = e.key === 'Backspace';
+      const isEnter = e.key === 'Enter';
 
-      if (!isArrow && !isDiagonal && !isUndo) return;
+      if (!isArrow && !isDiagonal && !isUndo && !isEnter) return;
 
       const currentGame = useGameStore.getState().game;
 
@@ -180,22 +183,39 @@ export const RemotePlayerApp: React.FC<RemotePlayerAppProps> = ({ roomCode }) =>
         return;
       }
 
-      const myToken = currentGame.entities.find(
+      const currentToken = currentGame.entities.find(
         (ent) =>
           ent.type === 'token' &&
           ent.controlledBy &&
           ent.controlledBy.trim().toLowerCase() === savedName.trim().toLowerCase()
       );
 
-      if (!myToken) {
+      if (!currentToken) {
         e.preventDefault();
         setWarningMessage('No tienes ningún token asignado en la mesa');
         return;
       }
 
+      if (isEnter) {
+        e.preventDefault();
+        if (currentToken.movementState?.turnEnded) {
+          setWarningMessage('Ya has terminado tu turno. Espera al máster');
+          return;
+        }
+        movementManager.requestEndTurn(savedName);
+        return;
+      }
+
+      if (currentToken.movementState?.turnEnded) {
+        e.preventDefault();
+        setWarningMessage('Turno terminado. Espera a que el máster inicie el siguiente');
+        movementSound.playWallBump();
+        return;
+      }
+
       if (isUndo) {
         e.preventDefault();
-        movementManager.requestUndo(myToken.id, savedName);
+        movementManager.requestUndo(currentToken.id, savedName);
         return;
       }
 
@@ -245,9 +265,9 @@ export const RemotePlayerApp: React.FC<RemotePlayerAppProps> = ({ roomCode }) =>
 
       if (dx === 0 && dy === 0) return;
 
-      const budget = typeof myToken.movementBudget === 'number' ? myToken.movementBudget : 7;
-      const remaining = typeof myToken.movementState?.remaining === 'number'
-        ? myToken.movementState.remaining
+      const budget = typeof currentToken.movementBudget === 'number' ? currentToken.movementBudget : 7;
+      const remaining = typeof currentToken.movementState?.remaining === 'number'
+        ? currentToken.movementState.remaining
         : budget;
 
       if (remaining <= 0) {
@@ -256,7 +276,7 @@ export const RemotePlayerApp: React.FC<RemotePlayerAppProps> = ({ roomCode }) =>
         return;
       }
 
-      movementManager.requestStep(myToken.id, dx, dy, savedName);
+      movementManager.requestStep(currentToken.id, dx, dy, savedName);
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -373,6 +393,27 @@ export const RemotePlayerApp: React.FC<RemotePlayerAppProps> = ({ roomCode }) =>
           <Crosshair className="w-3.5 h-3.5 text-sky-400" />
           <span className="hidden sm:inline">Centrar en mi ficha</span>
         </button>
+
+        {/* Botón Terminar Turno */}
+        {myToken && (
+          <button
+            onClick={() => {
+              if (!isTurnEnded) {
+                movementManager.requestEndTurn(savedName);
+              }
+            }}
+            disabled={isTurnEnded}
+            className={`px-3 py-1.5 rounded-lg shadow-lg backdrop-blur-xs text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border ${
+              isTurnEnded
+                ? 'bg-slate-800/80 border-slate-700/60 text-slate-400 cursor-not-allowed opacity-80'
+                : 'bg-amber-600 hover:bg-amber-500 border-amber-400 text-white active:scale-95 shadow-amber-900/40'
+            }`}
+            title={isTurnEnded ? 'Turno terminado: espera al máster' : 'Terminar turno (Intro)'}
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>{isTurnEnded ? 'Turno terminado: espera al máster' : 'Terminar turno'}</span>
+          </button>
+        )}
 
         {/* Botón de Sonido / Autoplay */}
         <button
