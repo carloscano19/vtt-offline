@@ -315,10 +315,17 @@ export function normalizeEntity(entity: Entity): Entity {
 
   // Normalizar opacidad (0.0 a 1.0, por defecto 1.0 si es undefined o NaN)
   const rawOpacity = typeof entity.opacity === 'number' && Number.isFinite(entity.opacity) ? entity.opacity : 1.0;
+  const validShowAnimations = ['fade', 'pop', 'flash', 'fall'];
+  const showAnimation = entity.showAnimation && validShowAnimations.includes(entity.showAnimation)
+    ? entity.showAnimation
+    : undefined;
+
   entity = {
     ...entity,
     opacity: Math.max(0, Math.min(1, rawOpacity)),
-    snapToGrid: getDefaultSnapToGrid(entity)
+    snapToGrid: getDefaultSnapToGrid(entity),
+    showAnimation,
+    playOnceOnShow: entity.playOnceOnShow ? true : undefined
   };
 
   return entity;

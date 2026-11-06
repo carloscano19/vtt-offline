@@ -277,6 +277,48 @@ class VideoManager {
     this.loadingPromises.set(key, loadPromise);
     return loadPromise;
   }
+
+  /**
+   * Reinicia el vídeo desde el segundo 0, lo reproduce una vez y ejecuta onEnded al terminar.
+   */
+  public restartAndPlayOnce(assetId: string, onEnded?: () => void) {
+    let handled = false;
+
+    for (const inst of this.instances.values()) {
+      if (inst.assetId === assetId && !inst.destroyed && inst.video) {
+        handled = true;
+        const vid = inst.video;
+        vid.loop = false;
+        try {
+          vid.currentTime = 0;
+        } catch {}
+
+        let finished = false;
+        const finish = () => {
+          if (finished) return;
+          finished = true;
+          vid.removeEventListener('ended', finish);
+          vid.loop = true;
+          onEnded?.();
+        };
+
+        vid.addEventListener('ended', finish, { once: true });
+
+        const duration = vid.duration && Number.isFinite(vid.duration) && vid.duration > 0
+          ? vid.duration
+          : 2.5;
+        setTimeout(finish, Math.ceil(duration * 1000) + 200);
+
+        vid.play().catch(() => {});
+      }
+    }
+
+    if (!handled && onEnded) {
+      // Si aún no está instanciado, esperar brevemente y llamar callback para no colgarse
+      setTimeout(onEnded, 2500);
+    }
+  }
 }
 
 export const videoManager = new VideoManager();
+

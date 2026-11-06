@@ -6,6 +6,7 @@ import { TokenVisibility } from '../../modules/vision/visibilityPolygon';
 import { isPointInMultiPolygon } from '../../modules/vision/fogRegions';
 import { getFrameTextureForTime, AnimatedGifData } from '../../modules/media/gifDecoder';
 import { videoManager } from '../../modules/media/videoManager';
+import { ShowAnimationController } from '../utils/showAnimation';
 
 /**
  * Comprueba si un punto (x, y) está dentro de un polígono 2D (Ray-casting point in polygon)
@@ -54,15 +55,28 @@ export class TokensLayer extends Container {
   private gridSize = 70;
   private cameraZoom = 1.0;
   private highlightLayer: Container | null = null;
+  private showAnimCtrl = new ShowAnimationController();
+  private prevVisibleMap = new Map<string, boolean>();
 
   constructor(isMaster: boolean) {
     super();
     this.isMaster = isMaster;
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('vtt:preview-show-animation', (e: any) => {
+        const { entityId, animType } = e.detail || {};
+        if (entityId && this.containerMap.has(entityId)) {
+          const container = this.containerMap.get(entityId)!;
+          this.showAnimCtrl.trigger(entityId, animType || 'fade', container, this.gridSize);
+        }
+      });
+    }
   }
 
   public setHighlightLayer(layer: Container) {
     this.highlightLayer = layer;
   }
+
 
   public tick(deltaSeconds: number) {
     if (this.isMaster) return;
@@ -259,7 +273,19 @@ export class TokensLayer extends Container {
       entityContainer.y = entity.y;
       entityContainer.rotation = entity.rotation;
       entityContainer.scale.set(entity.scaleX, entity.scaleY);
+      (entityContainer as any)._baseScaleX = entity.scaleX;
+      (entityContainer as any)._baseScaleY = entity.scaleY;
       entityContainer.zIndex = entity.zIndex ?? 10;
+
+      const isVisibleNow = entity.visibleToPlayers !== false && targetVisibility > 0;
+      const wasVisible = this.prevVisibleMap.get(entity.id);
+      this.prevVisibleMap.set(entity.id, isVisibleNow);
+
+      if (wasVisible === false && isVisibleNow) {
+        if (!this.isMaster && entity.showAnimation && entity.showAnimation !== 'fade') {
+          this.showAnimCtrl.trigger(entity.id, entity.showAnimation, entityContainer, this.gridSize);
+        }
+      }
 
       // Si cambia el ajuste highlightInDarkness, mover el contenedor a la capa adecuada
       const targetParent = (entity.highlightInDarkness && this.highlightLayer) ? this.highlightLayer : this;
@@ -311,6 +337,7 @@ export class TokensLayer extends Container {
         container.destroy({ children: true });
         this.containerMap.delete(id);
         this.fadeMap.delete(id);
+        this.showAnimCtrl.stop(id);
       }
     }
   }
@@ -537,6 +564,7 @@ export class TokensLayer extends Container {
    */
   public animate(deltaSeconds: number, gridSize: number) {
     this.animTime += deltaSeconds;
+    this.showAnimCtrl.tick(deltaSeconds);
     const now = Date.now();
     const effectiveGrid = gridSize > 0 ? gridSize : 70;
 
@@ -633,6 +661,19 @@ export class TokensLayer extends Container {
       container.x = transformed.x + offsetX;
       container.y = transformed.y + offsetY;
       container.rotation = transformed.rotation;
+
+      const showT = this.showAnimCtrl.getTransform(container.label);
+      const baseScaleX = (container as any)._baseScaleX ?? container.scale.x;
+      const baseScaleY = (container as any)._baseScaleY ?? container.scale.y;
+      if (showT) {
+        container.y += showT.yOffset;
+        container.scale.set(baseScaleX * showT.scaleXMult, baseScaleY * showT.scaleYMult);
+        if (this.isMaster || showT.alphaMult < 1.0) {
+          container.alpha = ((container as any)._entityOpacity ?? 1.0) * showT.alphaMult;
+        }
+      } else if (baseScaleX !== undefined && baseScaleY !== undefined) {
+        container.scale.set(baseScaleX, baseScaleY);
+      }
     }
   }
 

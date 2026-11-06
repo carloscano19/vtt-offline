@@ -301,6 +301,8 @@ export interface EffectConfig {
   spikesOut?: boolean;     // Estado de pinchos
 }
 
+export type ShowAnimationType = 'fade' | 'pop' | 'flash' | 'fall';
+
 export interface Entity {
   id: string;
   type: EntityType;
@@ -317,6 +319,8 @@ export interface Entity {
 
   // Control de visibilidad, bloqueo y opacidad
   visibleToPlayers: boolean;
+  showAnimation?: ShowAnimationType; // 'fade' (default), 'pop', 'flash', 'fall'
+  playOnceOnShow?: boolean;          // Para vídeos: reproducir una vez al mostrar y auto-ocultar
   locked: boolean;
   opacity?: number; // 0.0 a 1.0 (1.0 = 100% opaco por defecto)
   snapToGrid?: boolean; // Ajuste individual a la cuadrícula (true para personajes, false para objetos/luces/efectos)

@@ -28,7 +28,7 @@ import {
   Sun,
   UserCheck
 } from 'lucide-react';
-import { TokenSide, recalculateDoorEndpoints, getDefaultSnapToGrid } from '../../../types/entity';
+import { TokenSide, recalculateDoorEndpoints, getDefaultSnapToGrid, ShowAnimationType } from '../../../types/entity';
 import { onlineRoomManager, RemoteUser } from '../../../modules/online/onlineRoomManager';
 import { getAsset, db } from '../../../db/dexie';
 import { cloudSync } from '../../../modules/sync/cloudSync';
@@ -295,6 +295,56 @@ export const PropertiesTab: React.FC = () => {
           className="w-full accent-sky-500 cursor-pointer"
         />
       </div>
+
+      {/* Al mostrar: animaciones al revelar para tokens y efectos */}
+      {(selectedEntity.type === 'token' || selectedEntity.type === 'effect') && (
+        <div className="bg-slate-800/60 p-2.5 rounded border border-slate-700 space-y-2">
+          <div className="flex justify-between items-center text-slate-300">
+            <span className="font-medium text-xs">Al mostrar</span>
+            <button
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(
+                  new CustomEvent('vtt:preview-show-animation', {
+                    detail: {
+                      entityId: selectedEntity.id,
+                      animType: selectedEntity.showAnimation || 'fade'
+                    }
+                  })
+                );
+              }}
+              className="px-2 py-0.5 text-[11px] bg-slate-700 hover:bg-slate-600 text-sky-300 rounded border border-slate-600 transition-colors"
+              title="Previsualizar cómo aparece para los jugadores"
+            >
+              Previsualizar
+            </button>
+          </div>
+          <select
+            value={selectedEntity.showAnimation || 'fade'}
+            onChange={(e) => handleUpdate({ showAnimation: e.target.value as ShowAnimationType })}
+            className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500"
+          >
+            <option value="fade">Fundido</option>
+            <option value="pop">Brotar del suelo</option>
+            <option value="flash">Fogonazo</option>
+            <option value="fall">Caer desde arriba</option>
+          </select>
+
+          {/* Para efectos de vídeo: Reproducir una vez al mostrar */}
+          {selectedEntity.type === 'effect' && (
+            <label className="flex items-center justify-between text-xs text-slate-300 cursor-pointer pt-1 border-t border-slate-700/60">
+              <span className="text-[11px]">Reproducir una vez al mostrar</span>
+              <input
+                type="checkbox"
+                checked={!!selectedEntity.playOnceOnShow}
+                onChange={(e) => handleUpdate({ playOnceOnShow: e.target.checked })}
+                className="w-3.5 h-3.5 accent-sky-500 cursor-pointer"
+              />
+            </label>
+          )}
+        </div>
+      )}
+
 
       {/* Ajuste / Alineación con la cuadrícula */}
       {selectedEntity.type === 'map' ? (

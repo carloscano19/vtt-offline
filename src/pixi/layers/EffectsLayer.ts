@@ -1,10 +1,12 @@
 import { Container, Graphics, Sprite, Texture, ColorMatrixFilter } from 'pixi.js';
-import { Entity, EffectConfig, EffectPresetId, Point2D } from '../../types/entity';
+import { Entity, EffectConfig, EffectPresetId, Point2D, ShowAnimationType } from '../../types/entity';
 import { CameraState } from '../../types/game';
 import { getTextureForAsset, getGifDataForAsset, getCachedTexture } from '../utils/textureCache';
 import { videoManager } from '../../modules/media/videoManager';
 import { AnimatedGifData, getFrameTextureForTime } from '../../modules/media/gifDecoder';
 import { parseColor } from '../../utils/color';
+import { ShowAnimationController } from '../utils/showAnimation';
+import { useGameStore } from '../../stores/useGameStore';
 
 interface EffectParticle {
   x: number;
@@ -36,6 +38,8 @@ class ProceduralEffectNode extends Container {
   public fadeFactor = 1.0;
   private hasInitializedFade = false;
   private spikeAnimProgress = 1.0;
+  public showAnimCtrl = new ShowAnimationController();
+  private prevVisibleToPlayers?: boolean;
 
   constructor(entityId: string) {
     super();
@@ -44,6 +48,10 @@ class ProceduralEffectNode extends Container {
     this.particleGfx = new Graphics();
     this.addChild(this.baseGfx);
     this.addChild(this.particleGfx);
+  }
+
+  public triggerShowPreview(animType: ShowAnimationType = 'fade') {
+    this.showAnimCtrl.trigger(this.entityId, animType, this, 70);
   }
 
   public update(entity: Entity, deltaSec: number, isVisible: boolean, isMaster: boolean) {
@@ -81,6 +89,33 @@ class ProceduralEffectNode extends Container {
         return;
       }
       this.visible = true;
+    }
+
+    // Transición de invisible a visible para animar al mostrar o reproducir vídeo una vez
+    const wasVisible = this.prevVisibleToPlayers;
+    this.prevVisibleToPlayers = entity.visibleToPlayers !== false;
+
+    if (wasVisible === false && entity.visibleToPlayers !== false) {
+      if (entity.playOnceOnShow && entity.assetId) {
+        videoManager.restartAndPlayOnce(entity.assetId, () => {
+          if (isMaster) {
+            useGameStore.getState().updateEntity(entity.id, { visibleToPlayers: false });
+          }
+        });
+      }
+      if (!isMaster && entity.showAnimation && entity.showAnimation !== 'fade') {
+        this.showAnimCtrl.trigger(entity.id, entity.showAnimation, this, 70);
+      }
+    }
+
+    this.showAnimCtrl.tick(deltaSec);
+    const showT = this.showAnimCtrl.getTransform(entity.id);
+    if (showT) {
+      this.y += showT.yOffset;
+      this.scale.set(entity.scaleX * showT.scaleXMult, entity.scaleY * showT.scaleYMult);
+      if (isMaster || showT.alphaMult < 1.0) {
+        this.alpha *= showT.alphaMult;
+      }
     }
 
     // 1. Si el efecto tiene un asset multimedia propio (GIF, vídeo MP4/WebM o imagen PNG)
@@ -1065,6 +1100,24 @@ export class EffectsLayer extends Container {
   constructor(isMaster: boolean) {
     super();
     this.isMaster = isMaster;
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('vtt:preview-show-animation', (e: any) => {
+        const { entityId, animType } = e.detail || {};
+        if (entityId && this.effectNodes.has(entityId)) {
+          const node = this.effectNodes.get(entityId)!;
+          const ent = (node as any)._lastEntity as Entity | undefined;
+          if (ent?.playOnceOnShow && ent?.assetId) {
+            videoManager.restartAndPlayOnce(ent.assetId, () => {
+              if (this.isMaster) {
+                useGameStore.getState().updateEntity(ent.id, { visibleToPlayers: false });
+              }
+            });
+          }
+          node.triggerShowPreview(animType);
+        }
+      });
+    }
   }
 
   public setHighlightLayer(layer: Container) {
@@ -1121,6 +1174,7 @@ export class EffectsLayer extends Container {
         ent.y >= minWorldY &&
         ent.y <= maxWorldY;
 
+      (node as any)._lastEntity = ent;
       node.update(ent, deltaSeconds, isVisibleInView, this.isMaster);
     }
 
@@ -1128,6 +1182,7 @@ export class EffectsLayer extends Container {
     for (const [id, node] of this.effectNodes.entries()) {
       if (!currentIds.has(id)) {
         videoManager.unregisterActiveEntityVideo(id);
+        node.showAnimCtrl.destroy();
         if (node.parent) {
           node.parent.removeChild(node);
         } else {
