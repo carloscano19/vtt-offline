@@ -52,6 +52,8 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
   const [draftWallPoints, setDraftWallPoints] = useState<Point2D[]>([]);
   const [fogDragRect, setFogDragRect] = useState<{ start: Point2D; current: Point2D } | null>(null);
   const [hoverCursor, setHoverCursor] = useState<string>('default');
+  const [isDragging, setIsDragging] = useState(false);
+  const capturedPointerRef = useRef<{ element: HTMLElement; pointerId: number } | null>(null);
 
   const [canvasDimensions, setCanvasDimensions] = useState({
     width: typeof window !== 'undefined' ? window.innerWidth : 1920,
@@ -481,11 +483,19 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     const camera = getCamera();
     const localMouse = getLocalPointer(e);
 
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+      capturedPointerRef.current = { element: e.currentTarget as HTMLElement, pointerId: e.pointerId };
+    } catch {
+      // Ignorar defensivamente si el entorno no soporta setPointerCapture
+    }
+
     // En la ventana de jugadores, arrastrar con ratón o trackpad desplaza la cámara
     if (!isMaster) {
       interactionState.current.isPanning = true;
       interactionState.current.startMouse = localMouse;
       interactionState.current.startCamera = { x: camera.x, y: camera.y };
+      setIsDragging(true);
       return;
     }
 
@@ -496,6 +506,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
       interactionState.current.isPanning = true;
       interactionState.current.startMouse = localMouse;
       interactionState.current.startCamera = { x: camera.x, y: camera.y };
+      setIsDragging(true);
       return;
     }
 
@@ -609,6 +620,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     if (activeTool === 'fogReveal' || activeTool === 'fogHide') {
       interactionState.current.startMouse = worldPos;
       setFogDragRect({ start: worldPos, current: worldPos });
+      setIsDragging(true);
       return;
     }
 
@@ -635,6 +647,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     // Herramienta Regla
     if (activeTool === 'ruler') {
       startRulerMeasure(worldPos);
+      setIsDragging(true);
       return;
     }
 
@@ -666,6 +679,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
             interactionState.current.startMouse = worldPos;
             interactionState.current.startPlayerCamera = { ...pCam };
             hitFrameCorner = true;
+            setIsDragging(true);
             break;
           }
         }
@@ -687,6 +701,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           interactionState.current.isDraggingPlayerFrame = true;
           interactionState.current.startMouse = worldPos;
           interactionState.current.startPlayerCamera = { ...pCam };
+          setIsDragging(true);
           return;
         }
       }
@@ -747,6 +762,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
               : selectedEntity.door.p1;
           }
           interactionState.current.startRotationMouseAngle = Math.atan2(worldPos.y - pivot.y, worldPos.x - pivot.x);
+          setIsDragging(true);
           return;
         }
 
@@ -767,6 +783,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
             interactionState.current.startMouse = localMouse;
             interactionState.current.startEntityScale = { x: selectedEntity.scaleX, y: selectedEntity.scaleY };
             hitCorner = true;
+            setIsDragging(true);
             break;
           }
         }
@@ -782,6 +799,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
             interactionState.current.dragWallEntityId = selectedEntity.id;
             interactionState.current.dragWallNodeIndex = i;
             interactionState.current.startMouse = worldPos;
+            setIsDragging(true);
             return;
           }
         }
@@ -887,6 +905,7 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           interactionState.current.dragEntityId = hitEntity.id;
           interactionState.current.startMouse = worldPos;
           interactionState.current.startEntityPos = { x: hitEntity.x, y: hitEntity.y };
+          setIsDragging(true);
         }
       } else {
         if (!e.shiftKey) {
@@ -912,6 +931,10 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         });
       }
       return;
+    }
+
+    if (!isDragging && e.buttons > 0) {
+      setIsDragging(true);
     }
 
     const worldPos = screenToWorld(localMouse, camera, width, height);
@@ -1252,6 +1275,27 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
+    setIsDragging(false);
+    try {
+      if (capturedPointerRef.current) {
+        const { element, pointerId } = capturedPointerRef.current;
+        if (element && typeof element.hasPointerCapture === 'function' && element.hasPointerCapture(pointerId)) {
+          element.releasePointerCapture(pointerId);
+        }
+      }
+    } catch {
+      // Ignorar defensivamente
+    } finally {
+      capturedPointerRef.current = null;
+    }
+    try {
+      if (e.currentTarget && typeof e.currentTarget.hasPointerCapture === 'function' && e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+    } catch {
+      // Ignorar
+    }
+
     if (!isMaster) {
       interactionState.current.isPanning = false;
       return;
@@ -1644,6 +1688,12 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
     activeCursor = `cursor-${hoverCursor}`;
   }
 
+  const handlePointerLeave = (e: React.PointerEvent) => {
+    // Si tenemos captura de puntero activa en el elemento, no cortar el arrastre al salir del área
+    if (capturedPointerRef.current) return;
+    handlePointerUp(e);
+  };
+
   return (
     <div className="relative w-full h-full overflow-hidden select-none">
       <div
@@ -1653,17 +1703,19 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onPointerLeave={handlePointerLeave}
         onDoubleClick={handleDoubleClick}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       />
-      {isMaster && !isPlayerPreviewMode && selectedEntityIds.length === 1 && (
+      {isMaster && !isPlayerPreviewMode && activeTool === 'select' && selectedEntityIds.length === 1 && (
         <FastActionBar
           selectedEntityId={selectedEntityIds[0]}
           canvasWidth={canvasDimensions.width}
           canvasHeight={canvasDimensions.height}
           renderer={rendererRef.current}
+          isDragging={isDragging}
         />
       )}
     </div>

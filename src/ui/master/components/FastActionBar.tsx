@@ -11,13 +11,15 @@ interface FastActionBarProps {
   canvasWidth: number;
   canvasHeight: number;
   renderer?: PixiRenderer | null;
+  isDragging?: boolean;
 }
 
 export const FastActionBar: React.FC<FastActionBarProps> = ({
   selectedEntityId,
   canvasWidth,
   canvasHeight,
-  renderer
+  renderer,
+  isDragging = false
 }) => {
   const entity = useGameStore((s) => s.game.entities.find((e) => e.id === selectedEntityId));
   const camera = useGameStore((s) => s.game.masterCamera);
@@ -191,12 +193,16 @@ export const FastActionBar: React.FC<FastActionBarProps> = ({
 
   return (
     <div
-      className="absolute flex items-center gap-0.5 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-lg p-1 shadow-2xl text-slate-200 z-40 select-none animate-in fade-in zoom-in-95 duration-100"
+      className={`absolute flex items-center gap-0.5 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-lg p-1 shadow-2xl text-slate-200 z-40 select-none transition-all duration-150 ${
+        isDragging
+          ? 'opacity-0 pointer-events-none scale-95'
+          : 'opacity-100 pointer-events-auto scale-100 animate-in fade-in zoom-in-95'
+      }`}
       style={{
         left: `${Math.round(leftClamped)}px`,
         top: `${Math.round(topClamped)}px`,
         transform: transformStyle,
-        pointerEvents: 'auto'
+        pointerEvents: isDragging ? 'none' : 'auto'
       }}
       onPointerDown={handlePointerDown}
       onMouseDown={handleMouseDown}
