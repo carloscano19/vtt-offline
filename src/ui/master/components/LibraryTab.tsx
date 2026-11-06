@@ -10,6 +10,8 @@ import { cloudSync, SyncStatus } from '../../../modules/sync/cloudSync';
 import { authManager } from '../../../modules/auth/authManager';
 import { AuthModal } from './AuthModal';
 import { StorageIndicator } from './StorageIndicator';
+import { getMediaDimensions, persistAssetDimensions } from '../../../utils/mediaDimensions';
+import { shouldTrimAsset, trimTokenImage } from '../../../utils/tokenImageTrimmer';
 
 export const LibraryTab: React.FC = () => {
   const [assets, setAssets] = useState<AssetItem[]>([]);
@@ -81,7 +83,7 @@ export const LibraryTab: React.FC = () => {
     }
   };
 
-  const handleAddToBoard = (asset: AssetItem) => {
+  const handleAddToBoard = async (asset: AssetItem) => {
     const isMap = asset.type === 'map';
     const currentGridSize = game.grid.size || 70;
 
@@ -126,7 +128,17 @@ export const LibraryTab: React.FC = () => {
       }
     } else {
       // Token: lado mayor ocupa 1 casilla y centrado en la cuadrícula
-      const maxDim = Math.max(asset.width || 70, asset.height || 70);
+      let assetW = asset.width;
+      let assetH = asset.height;
+      if ((!assetW || !assetH) && asset.blob) {
+        const dims = await getMediaDimensions(asset.blob);
+        if (dims) {
+          assetW = dims.width;
+          assetH = dims.height;
+          persistAssetDimensions(asset.id, dims.width, dims.height);
+        }
+      }
+      const maxDim = Math.max(assetW || 70, assetH || 70);
       scale = maxDim > 0 ? currentGridSize / maxDim : 1;
       const halfGrid = currentGridSize / 2;
       posX = Math.floor(game.masterCamera.x / currentGridSize) * currentGridSize + halfGrid;
@@ -269,33 +281,42 @@ export const LibraryTab: React.FC = () => {
           if (file.type.includes('gif') || lower.endsWith('.gif')) type = 'gif';
           if (file.type.includes('video') || lower.endsWith('.mp4') || lower.endsWith('.webm')) type = 'video';
 
+          let finalBlob: Blob = file;
+          let mimeType = file.type || 'image/png';
           let width: number | undefined;
           let height: number | undefined;
-          try {
-            const objectUrl = URL.createObjectURL(file);
-            const img = new Image();
-            img.src = objectUrl;
-            if (typeof img.decode === 'function') {
-              await img.decode();
-            } else {
-              await new Promise<void>((res, rej) => {
-                img.onload = () => res();
-                img.onerror = rej;
-              });
+
+          // Si es PNG, WebP o GIF estático, recortar márgenes transparentes a un cuadrado centrado con 4 % de margen
+          const canTrim = await shouldTrimAsset(file, file.type, name);
+          if (canTrim) {
+            const trimmed = await trimTokenImage(file);
+            if (trimmed) {
+              finalBlob = trimmed.blob;
+              width = trimmed.width;
+              height = trimmed.height;
+              mimeType = 'image/png';
+              type = 'image';
             }
-            width = img.naturalWidth || img.width;
-            height = img.naturalHeight || img.height;
-            URL.revokeObjectURL(objectUrl);
-          } catch {
-            // Si falla la decodificación previa, continuar
+          }
+
+          if (!width || !height) {
+            try {
+              const dims = await getMediaDimensions(finalBlob);
+              if (dims) {
+                width = dims.width;
+                height = dims.height;
+              }
+            } catch {
+              // Si falla la decodificación previa, continuar
+            }
           }
 
           const asset: AssetItem = {
             id: `asset_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
             name: name.replace(/\.[^/.]+$/, ''),
             type,
-            mimeType: file.type || 'image/png',
-            blob: file,
+            mimeType,
+            blob: finalBlob,
             createdAt: Date.now(),
             width,
             height

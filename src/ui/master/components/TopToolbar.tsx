@@ -48,6 +48,8 @@ import { cloudSync } from '../../../modules/sync/cloudSync';
 import { authManager } from '../../../modules/auth/authManager';
 import { parseColor, colorToHex } from '../../../utils/color';
 import { fitMapInViewport } from '../../../modules/camera/cameraUtils';
+import { shouldTrimAsset, trimTokenImage } from '../../../utils/tokenImageTrimmer';
+import { getMediaDimensions } from '../../../utils/mediaDimensions';
 import { syncChannel } from '../../../modules/sync/syncChannel';
 import { EyeDropperButton } from '../../common/EyeDropperButton';
 
@@ -356,26 +358,34 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
             type = 'video';
           }
 
-          // Obtener dimensiones reales de la imagen
+          let finalBlob: Blob = file;
+          let mimeType = file.type || 'image/png';
           let natW = 70;
           let natH = 70;
-          try {
-            const objUrl = URL.createObjectURL(file);
-            const img = new Image();
-            img.src = objUrl;
-            if (typeof img.decode === 'function') {
-              await img.decode();
-            } else {
-              await new Promise<void>((res, rej) => {
-                img.onload = () => res();
-                img.onerror = rej;
-              });
+
+          // Si es PNG, WebP o GIF estático, recortar márgenes transparentes a un cuadrado centrado con 4 % de margen
+          const canTrim = await shouldTrimAsset(file, file.type, name);
+          if (canTrim) {
+            const trimmed = await trimTokenImage(file);
+            if (trimmed) {
+              finalBlob = trimmed.blob;
+              natW = trimmed.width;
+              natH = trimmed.height;
+              mimeType = 'image/png';
+              type = 'image';
             }
-            natW = img.naturalWidth || img.width || 70;
-            natH = img.naturalHeight || img.height || 70;
-            URL.revokeObjectURL(objUrl);
-          } catch {
-            // Fallback si falla decode
+          }
+
+          if (natW === 70 && natH === 70) {
+            try {
+              const dims = await getMediaDimensions(finalBlob);
+              if (dims) {
+                natW = dims.width;
+                natH = dims.height;
+              }
+            } catch {
+              // Fallback
+            }
           }
 
           const assetId = `asset_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
@@ -383,8 +393,8 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
             id: assetId,
             name: name.replace(/\.[^/.]+$/, ''),
             type,
-            mimeType: file.type || 'image/png',
-            blob: file,
+            mimeType,
+            blob: finalBlob,
             createdAt: Date.now(),
             width: natW,
             height: natH

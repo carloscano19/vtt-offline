@@ -1514,7 +1514,17 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           finalY = Math.round(finalY / currentGridSize) * currentGridSize;
         }
       } else {
-        const maxDim = Math.max(asset.width || 70, asset.height || 70);
+        let assetW = asset.width;
+        let assetH = asset.height;
+        if ((!assetW || !assetH) && asset.blob) {
+          const dims = await getMediaDimensions(asset.blob);
+          if (dims) {
+            assetW = dims.width;
+            assetH = dims.height;
+            persistAssetDimensions(asset.id, dims.width, dims.height);
+          }
+        }
+        const maxDim = Math.max(assetW || 70, assetH || 70);
         scale = maxDim > 0 ? currentGridSize / maxDim : 1;
         const halfGrid = currentGridSize / 2;
         finalX = Math.floor(worldPos.x / currentGridSize) * currentGridSize + halfGrid;

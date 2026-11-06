@@ -21,13 +21,18 @@ import {
   RefreshCcw,
   Sparkles,
   FlipHorizontal,
-  FlipVertical
+  FlipVertical,
+  Crop,
+  Check,
+  RefreshCw
 } from 'lucide-react';
 import { TokenSide, recalculateDoorEndpoints, getDefaultSnapToGrid } from '../../../types/entity';
 import { getAsset, db } from '../../../db/dexie';
 import { cloudSync } from '../../../modules/sync/cloudSync';
 import { syncChannel } from '../../../modules/sync/syncChannel';
 import { getMediaDimensions, persistAssetDimensions } from '../../../utils/mediaDimensions';
+import { invalidateCachedTexture } from '../../../pixi/utils/textureCache';
+import { shouldTrimAsset, trimTokenImage, calculateEntityPositionShift } from '../../../utils/tokenImageTrimmer';
 import { EyeDropperButton } from '../../common/EyeDropperButton';
 
 const EFFECT_PRESET_NAMES: Record<string, string> = {
@@ -66,6 +71,91 @@ export const PropertiesTab: React.FC = () => {
   const parentMap = useGameStore((s) => selectedEntity?.mapId ? s.game.entities.find((m) => m.id === selectedEntity.mapId) : undefined);
 
   const [assetDims, setAssetDims] = React.useState<{ width: number; height: number } | null>(null);
+  const [showTrimModal, setShowTrimModal] = React.useState(false);
+  const [isTrimming, setIsTrimming] = React.useState(false);
+  const [trimFeedback, setTrimFeedback] = React.useState<string | null>(null);
+
+  const handleConfirmTrim = async () => {
+    if (!selectedEntity?.assetId) return;
+    setIsTrimming(true);
+    setTrimFeedback(null);
+    try {
+      const asset = await getAsset(selectedEntity.assetId);
+      if (!asset || !asset.blob) {
+        setTrimFeedback('No se encontró el archivo del asset.');
+        setIsTrimming(false);
+        return;
+      }
+
+      const canTrim = await shouldTrimAsset(asset.blob, asset.mimeType, asset.name);
+      if (!canTrim) {
+        setTrimFeedback('Los vídeos y GIFs animados no se pueden recortar.');
+        setIsTrimming(false);
+        return;
+      }
+
+      const trimmed = await trimTokenImage(asset.blob);
+      if (!trimmed) {
+        setTrimFeedback('La imagen no tiene píxeles no transparentes.');
+        setIsTrimming(false);
+        return;
+      }
+
+      // 1. Actualizar asset en Dexie
+      await db.assets.update(asset.id, {
+        blob: trimmed.blob,
+        width: trimmed.width,
+        height: trimmed.height,
+        mimeType: 'image/png',
+        type: 'image'
+      });
+
+      // 2. Persistir dimensiones en Supabase si está autenticado
+      await persistAssetDimensions(asset.id, trimmed.width, trimmed.height);
+
+      // 3. Encolar subida a la nube
+      if (cloudSync.isCloudEligible('image')) {
+        cloudSync.enqueueUpload(asset.id);
+      }
+
+      // 4. Invalidar textura en caché local de Pixi
+      invalidateCachedTexture(asset.id);
+
+      // 5. Notificar a la tele (PlayersApp) para recargar la textura sin recargar la página
+      syncChannel.sendAssetDownloaded(asset.id);
+
+      // 6. Actualizar assetDims en el estado local
+      setAssetDims({ width: trimmed.width, height: trimmed.height });
+
+      // 7. Reajustar la posición de todas las entidades en el tablero actual que usen este asset
+      // para que el dibujo permanezca exactamente en el mismo sitio visible, teniendo en cuenta rotación y volteo
+      const allEntities = useGameStore.getState().game.entities;
+      for (const ent of allEntities) {
+        if (ent.assetId === asset.id) {
+          const shift = calculateEntityPositionShift(
+            trimmed.cropResult.offsetX,
+            trimmed.cropResult.offsetY,
+            ent.scaleX,
+            ent.scaleY,
+            ent.rotation
+          );
+          updateEntity(ent.id, {
+            x: ent.x + shift.shiftX,
+            y: ent.y + shift.shiftY
+          });
+        }
+      }
+
+      setShowTrimModal(false);
+      setTrimFeedback('¡Ajustado al dibujo!');
+      setTimeout(() => setTrimFeedback(null), 3000);
+    } catch (err) {
+      console.error('Error recortando token:', err);
+      setTrimFeedback('Error al ajustar el token.');
+    } finally {
+      setIsTrimming(false);
+    }
+  };
 
   React.useEffect(() => {
     let isCancelled = false;
@@ -254,6 +344,34 @@ export const PropertiesTab: React.FC = () => {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Botón Ajustar al dibujo para tokens */}
+      {selectedEntity.type === 'token' && selectedEntity.assetId && (
+        <div className="bg-slate-800/60 p-2.5 rounded border border-slate-700 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-slate-300 font-medium text-xs flex items-center gap-1.5">
+              <Crop className="w-3.5 h-3.5 text-sky-400" />
+              Márgenes del dibujo
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowTrimModal(true)}
+              disabled={isTrimming}
+              className="px-2.5 py-1 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white rounded text-xs font-medium flex items-center gap-1.5 shadow-sm transition-colors"
+              title="Recortar los márgenes transparentes para que el anillo y la casilla se ajusten al dibujo"
+            >
+              <Crop className="w-3.5 h-3.5" />
+              <span>Ajustar al dibujo</span>
+            </button>
+          </div>
+          {trimFeedback && (
+            <p className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
+              <Check className="w-3 h-3 text-emerald-400" />
+              {trimFeedback}
+            </p>
+          )}
         </div>
       )}
 
@@ -1915,6 +2033,55 @@ export const PropertiesTab: React.FC = () => {
           <span>Eliminar entidad</span>
         </button>
       </div>
+
+      {/* Modal de confirmación para Ajustar al dibujo */}
+      {showTrimModal && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4 select-none animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 max-w-sm w-full shadow-2xl text-slate-200 space-y-4">
+            <div className="flex items-center gap-2.5 text-sky-400 font-bold text-sm">
+              <Crop className="w-4 h-4 text-sky-400" />
+              <span>Ajustar al dibujo</span>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              La imagen se recortará para todas las partidas. En las partidas guardadas el dibujo puede quedar algo desplazado.
+            </p>
+
+            <p className="text-xs text-slate-400 leading-relaxed">
+              En el tablero actual se reajustará automáticamente su posición para que no se mueva de lugar y el anillo de bando se ciña al dibujo.
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowTrimModal(false)}
+                disabled={isTrimming}
+                className="px-3 py-1.5 rounded text-xs font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-600 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmTrim}
+                disabled={isTrimming}
+                className="px-3 py-1.5 rounded text-xs font-semibold text-white bg-sky-600 hover:bg-sky-500 border border-sky-400 shadow-sm transition-colors flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isTrimming ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Ajustando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Crop className="w-3.5 h-3.5" />
+                    <span>Recortar y ajustar</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
