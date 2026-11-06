@@ -333,7 +333,11 @@ export class PixiRenderer {
     this.effectsLayer.update(game.entities, camera, width, height, 0.016);
     this.ambientLayer.update(game.ambient, lights, worldBounds, 0.016, visibilities);
     this.weatherLayer.update(game.weather, camera, width, height, 0.016);
-    this.movementPathLayer.update(game.entities, game.grid.size, camera.zoom);
+    const isRoomOpen = Boolean(
+      game.onlineRoomOpen ||
+      (typeof window !== 'undefined' && window.location.search.includes('play='))
+    );
+    this.movementPathLayer.update(game.entities, game.grid.size, camera.zoom, isRoomOpen);
     this.lightsLayer.update(game.entities, selectedIds, isPlayerPreview);
     this.wallsLayer.update(game.entities, selectedIds, activeDraftWallPoints);
     this.rulerLayer.update(ruler, game.grid.size, camera.zoom);

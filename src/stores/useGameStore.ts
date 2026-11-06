@@ -120,7 +120,8 @@ function createDefaultGame(): GameState {
     cloudSavedId: null,
     cloudSavedName: null,
     cloudSavedOwner: null,
-    remotePlayersFrozen: false
+    remotePlayersFrozen: false,
+    onlineRoomOpen: false
   };
 }
 
@@ -185,6 +186,7 @@ interface GameStoreState {
 
   // Jugadores remotos y movimiento limitado
   setRemotePlayersFrozen: (frozen: boolean) => void;
+  setOnlineRoomOpen: (open: boolean) => void;
   resetTokenMovement: (tokenId: string) => void;
   adjustTokenMovement: (tokenId: string, delta: number) => void;
 
@@ -562,17 +564,9 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
 
         let updatedEnt = ent;
 
-        // 1. Recargar presupuesto de movimiento y borrar camino verde
-        const budget = typeof ent.movementBudget === 'number' ? ent.movementBudget : 7;
-        const currentRemaining = ent.movementState?.remaining;
-        const currentPathLen = ent.movementState?.path?.length || 0;
-        if (
-          ent.movementState ||
-          ent.controlledBy ||
-          ent.movementBudget !== undefined ||
-          currentRemaining !== budget ||
-          currentPathLen > 0
-        ) {
+        // 1. Recargar presupuesto de movimiento y borrar camino verde SOLO si tiene controlledBy
+        if (ent.controlledBy && ent.controlledBy.trim()) {
+          const budget = typeof ent.movementBudget === 'number' ? ent.movementBudget : 7;
           anyChanged = true;
           updatedEnt = {
             ...updatedEnt,
@@ -582,6 +576,13 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
               path: []
             }
           };
+        } else if (ent.movementBudget !== undefined || ent.movementState !== undefined) {
+          // Limpiar en tokens sin controlledBy
+          const clean = { ...updatedEnt };
+          delete clean.movementBudget;
+          delete clean.movementState;
+          updatedEnt = clean;
+          anyChanged = true;
         }
 
         // 2. Decrementar estados con turnos restantes
@@ -633,6 +634,16 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       game: {
         ...state.game,
         remotePlayersFrozen: frozen,
+        updatedAt: Date.now()
+      }
+    }));
+  },
+
+  setOnlineRoomOpen: (open: boolean) => {
+    set((state) => ({
+      game: {
+        ...state.game,
+        onlineRoomOpen: open,
         updatedAt: Date.now()
       }
     }));

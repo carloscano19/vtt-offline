@@ -267,20 +267,34 @@ export function normalizeEntity(entity: Entity): Entity {
     };
   }
 
-  // Normalizar movimiento y control para tokens
+  // Normalizar movimiento y control para tokens:
+  // Solo se asigna movementBudget y movementState si tiene controlledBy asignado.
+  // Limpia esos campos en los tokens que no tengan controlledBy al cargar partidas existentes.
   if (entity.type === 'token') {
-    const budget = typeof entity.movementBudget === 'number' && entity.movementBudget >= 0 ? entity.movementBudget : 7;
-    const remaining = typeof entity.movementState?.remaining === 'number' ? entity.movementState.remaining : budget;
-    const path = Array.isArray(entity.movementState?.path) ? entity.movementState.path : [];
-    entity = {
-      ...entity,
-      controlledBy: entity.controlledBy ? String(entity.controlledBy) : undefined,
-      movementBudget: budget,
-      movementState: {
-        remaining,
-        path
-      }
-    };
+    const controlledBy = typeof entity.controlledBy === 'string' && entity.controlledBy.trim()
+      ? entity.controlledBy.trim()
+      : undefined;
+
+    if (controlledBy) {
+      const budget = typeof entity.movementBudget === 'number' && entity.movementBudget >= 0 ? entity.movementBudget : 7;
+      const remaining = typeof entity.movementState?.remaining === 'number' ? entity.movementState.remaining : budget;
+      const path = Array.isArray(entity.movementState?.path) ? entity.movementState.path : [];
+      entity = {
+        ...entity,
+        controlledBy,
+        movementBudget: budget,
+        movementState: {
+          remaining,
+          path
+        }
+      };
+    } else {
+      const clean = { ...entity };
+      delete clean.controlledBy;
+      delete clean.movementBudget;
+      delete clean.movementState;
+      entity = clean;
+    }
   }
 
   // Normalizar opacidad (0.0 a 1.0, por defecto 1.0 si es undefined o NaN)
@@ -430,6 +444,7 @@ export function normalizeGameState(game: GameState): GameState {
       cloudSavedId: game.cloudSavedId ?? null,
       cloudSavedName: game.cloudSavedName ?? null,
       cloudSavedOwner: game.cloudSavedOwner ?? null,
-      remotePlayersFrozen: Boolean(game.remotePlayersFrozen ?? false)
+      remotePlayersFrozen: Boolean(game.remotePlayersFrozen ?? false),
+      onlineRoomOpen: Boolean(game.onlineRoomOpen ?? false)
     };
 }

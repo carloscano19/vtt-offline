@@ -20,9 +20,23 @@ export class MovementPathLayer extends Container {
     this.addChild(this.badgesContainer);
   }
 
-  public update(entities: Entity[], gridSize: number = 70, cameraZoom: number = 1.0) {
+  public update(
+    entities: Entity[],
+    gridSize: number = 70,
+    cameraZoom: number = 1.0,
+    isRoomOpen: boolean = false
+  ) {
     this.pathGraphics.clear();
     const activeBadgeIds = new Set<string>();
+
+    // Si NO hay sala online abierta, NO se dibuja ningún camino verde ni ninguna píldora
+    if (!isRoomOpen) {
+      for (const badgeItem of this.badgePool.values()) {
+        badgeItem.container.visible = false;
+      }
+      return;
+    }
+
     const zoom = Math.max(0.1, cameraZoom || 1.0);
 
     for (const ent of entities) {
@@ -30,6 +44,10 @@ export class MovementPathLayer extends Container {
 
       // En la tele o jugador remoto, no mostrar info de tokens ocultos
       if (!this.isMaster && ent.visibleToPlayers === false) continue;
+
+      // Solo tokens con controlledBy asignado a un jugador remoto
+      const controlledBy = typeof ent.controlledBy === 'string' ? ent.controlledBy.trim() : '';
+      if (!controlledBy) continue;
 
       const path = ent.movementState?.path;
 
@@ -57,15 +75,6 @@ export class MovementPathLayer extends Container {
       }
 
       // 2. Contador flotante de casillas ("4 / 7")
-      // Se muestra si el token está controlado por un jugador o tiene presupuesto de movimiento configurado
-      const hasMovementTracking = Boolean(
-        ent.controlledBy ||
-        ent.movementBudget !== undefined ||
-        (path && path.length > 0)
-      );
-
-      if (!hasMovementTracking) continue;
-
       const budget = typeof ent.movementBudget === 'number' ? ent.movementBudget : 7;
       const remaining = typeof ent.movementState?.remaining === 'number'
         ? ent.movementState.remaining
@@ -108,7 +117,14 @@ export class MovementPathLayer extends Container {
 
       // Fondo píldora con color verde si quedan casillas, o rojo si está agotado
       badgeItem.bg.clear();
-      const textWidth = badgeItem.text.width || 42;
+      let textWidth = 42;
+      try {
+        if (typeof document !== 'undefined') {
+          textWidth = badgeItem.text.width || 42;
+        }
+      } catch {
+        textWidth = 42;
+      }
       const padX = 8;
       const bgWidth = textWidth + padX * 2;
       const bgHeight = 22;

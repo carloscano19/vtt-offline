@@ -3,6 +3,8 @@ import { validateStep, validateUndo } from '../src/modules/movement/movementVali
 import { GameState } from '../src/types/game';
 import { Entity } from '../src/types/entity';
 import { useGameStore } from '../src/stores/useGameStore';
+import { MovementPathLayer } from '../src/pixi/layers/MovementPathLayer';
+import { normalizeEntity, normalizeGameState } from '../src/modules/persistence/normalizer';
 
 function createMockGame(): GameState {
   const token: Entity = {
@@ -234,5 +236,99 @@ describe('Bloque 3: Movimiento limitado por casillas, paredes, camino verde y pa
     const updatedToken = updatedGame.entities.find((e) => e.id === 'token_player_1')!;
     expect(updatedToken.movementState?.remaining).toBe(7);
     expect(updatedToken.movementState?.path).toEqual([]);
+  });
+
+  it('sin sala abierta ni controlledBy, no se dibuja ninguna píldora ni camino verde', () => {
+    const layer = new MovementPathLayer(true);
+
+    const tokenWithoutControl: Entity = {
+      id: 'token_npc_1',
+      type: 'token',
+      name: 'Goblin',
+      x: 200,
+      y: 200,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      visibleToPlayers: true
+    };
+
+    const tokenWithControl: Entity = {
+      id: 'token_hero_1',
+      type: 'token',
+      name: 'Carlos Hero',
+      x: 300,
+      y: 300,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      visibleToPlayers: true,
+      controlledBy: 'Carlos',
+      movementBudget: 7,
+      movementState: {
+        remaining: 5,
+        path: [{ x: 300, y: 300 }, { x: 370, y: 300 }]
+      }
+    };
+
+    const entities = [tokenWithoutControl, tokenWithControl];
+
+    // Caso 1: Sin sala abierta (isRoomOpen = false)
+    layer.update(entities, 70, 1.0, false);
+    // Comprobar que en badgePool no hay badges visibles y el contenedor de badges no tiene elementos visibles
+    const badgesContainer = (layer as any).badgesContainer;
+    const visibleBadges = badgesContainer.children.filter((child: any) => child.visible === true);
+    expect(visibleBadges.length).toBe(0);
+
+    // Caso 2: Con sala abierta (isRoomOpen = true), solo el token con controlledBy muestra píldora
+    layer.update(entities, 70, 1.0, true);
+    const visibleBadgesWithRoom = badgesContainer.children.filter((child: any) => child.visible === true);
+    expect(visibleBadgesWithRoom.length).toBe(1);
+
+    // Caso 3: Si se quita controlledBy al token mientras hay sala abierta, tampoco se muestra
+    const tokenNowWithoutControl = { ...tokenWithControl, controlledBy: undefined };
+    layer.update([tokenWithoutControl, tokenNowWithoutControl], 70, 1.0, true);
+    const visibleBadgesNoControl = badgesContainer.children.filter((child: any) => child.visible === true);
+    expect(visibleBadgesNoControl.length).toBe(0);
+  });
+
+  it('el normalizador no asigna movementBudget ni movementState por defecto a tokens sin controlledBy y los limpia si existen', () => {
+    // Token sin controlledBy pero con movementBudget/movementState heredados de partida antigua
+    const rawLegacyToken: Entity = {
+      id: 'token_legacy',
+      type: 'token',
+      name: 'Orco',
+      x: 100,
+      y: 100,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      movementBudget: 7,
+      movementState: { remaining: 7, path: [] }
+    };
+
+    const normalizedLegacy = normalizeEntity(rawLegacyToken);
+    expect(normalizedLegacy.controlledBy).toBeUndefined();
+    expect(normalizedLegacy.movementBudget).toBeUndefined();
+    expect(normalizedLegacy.movementState).toBeUndefined();
+
+    // Token con controlledBy asignado: sí recibe presupuesto y estado normalizados
+    const controlledToken: Entity = {
+      id: 'token_player',
+      type: 'token',
+      name: 'Mago',
+      x: 100,
+      y: 100,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      controlledBy: 'Zeyr'
+    };
+
+    const normalizedControlled = normalizeEntity(controlledToken);
+    expect(normalizedControlled.controlledBy).toBe('Zeyr');
+    expect(normalizedControlled.movementBudget).toBe(7);
+    expect(normalizedControlled.movementState?.remaining).toBe(7);
+    expect(normalizedControlled.movementState?.path).toEqual([]);
   });
 });

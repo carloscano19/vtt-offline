@@ -42,6 +42,7 @@ export const OnlineRoomModal: React.FC<OnlineRoomModalProps> = ({ isOpen, onClos
     try {
       const code = await onlineRoomManager.openRoom();
       setRoomCode(code);
+      useGameStore.getState().setOnlineRoomOpen(true);
       // Emitir estado actual
       const currentGame = useGameStore.getState().game;
       onlineRoomManager.broadcastState(currentGame, true);
@@ -55,6 +56,7 @@ export const OnlineRoomModal: React.FC<OnlineRoomModalProps> = ({ isOpen, onClos
 
   const handleCloseRoom = async () => {
     await onlineRoomManager.closeRoom();
+    useGameStore.getState().setOnlineRoomOpen(false);
     setRoomCode(null);
   };
 

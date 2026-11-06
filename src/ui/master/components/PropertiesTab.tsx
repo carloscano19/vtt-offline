@@ -407,11 +407,25 @@ export const PropertiesTab: React.FC = () => {
                     : ''
                 }
                 onChange={(e) => {
-                  const val = e.target.value;
+                  const val = e.target.value.trim();
                   if (val === '__custom__') {
                     // Espera que escriba en el input
+                  } else if (val) {
+                    const budget = selectedEntity.movementBudget ?? 7;
+                    handleUpdate({
+                      controlledBy: val,
+                      movementBudget: budget,
+                      movementState: selectedEntity.movementState ?? {
+                        remaining: budget,
+                        path: []
+                      }
+                    });
                   } else {
-                    handleUpdate({ controlledBy: val || undefined });
+                    handleUpdate({
+                      controlledBy: undefined,
+                      movementBudget: undefined,
+                      movementState: undefined
+                    });
                   }
                 }}
                 className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500"
@@ -436,55 +450,73 @@ export const PropertiesTab: React.FC = () => {
                 placeholder="Nombre del jugador o personaje..."
                 value={selectedEntity.controlledBy || ''}
                 onChange={(e) => {
-                  const val = e.target.value;
-                  handleUpdate({ controlledBy: val.trim() || undefined });
+                  const val = e.target.value.trim();
+                  if (val) {
+                    const budget = selectedEntity.movementBudget ?? 7;
+                    handleUpdate({
+                      controlledBy: val,
+                      movementBudget: budget,
+                      movementState: selectedEntity.movementState ?? {
+                        remaining: budget,
+                        path: []
+                      }
+                    });
+                  } else {
+                    handleUpdate({
+                      controlledBy: undefined,
+                      movementBudget: undefined,
+                      movementState: undefined
+                    });
+                  }
                 }}
                 className="w-full bg-slate-900/80 border border-slate-700 rounded px-2.5 py-1 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-sky-500"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <div>
-              <label className="text-slate-400 text-xs font-medium block mb-1">Casillas / turno</label>
-              <input
-                type="number"
-                min={1}
-                max={99}
-                value={selectedEntity.movementBudget ?? 7}
-                onChange={(e) => {
-                  const num = Math.max(1, parseInt(e.target.value, 10) || 7);
-                  handleUpdate({
-                    movementBudget: num,
-                    movementState: {
-                      remaining: num,
-                      path: []
-                    }
-                  });
-                }}
-                className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
-              />
+          {Boolean(selectedEntity.controlledBy && selectedEntity.controlledBy.trim()) && (
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <div>
+                <label className="text-slate-400 text-xs font-medium block mb-1">Casillas / turno</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={selectedEntity.movementBudget ?? 7}
+                  onChange={(e) => {
+                    const num = Math.max(1, parseInt(e.target.value, 10) || 7);
+                    handleUpdate({
+                      movementBudget: num,
+                      movementState: {
+                        remaining: num,
+                        path: []
+                      }
+                    });
+                  }}
+                  className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono"
+                />
+              </div>
+              <div className="flex flex-col justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const budget = selectedEntity.movementBudget ?? 7;
+                    handleUpdate({
+                      movementState: {
+                        remaining: budget,
+                        path: []
+                      }
+                    });
+                  }}
+                  className="w-full py-1.5 px-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-xs font-medium flex items-center justify-center gap-1 transition-colors"
+                  title="Restablece el presupuesto y borra el camino verde de este token"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Reiniciar</span>
+                </button>
+              </div>
             </div>
-            <div className="flex flex-col justify-end">
-              <button
-                type="button"
-                onClick={() => {
-                  const budget = selectedEntity.movementBudget ?? 7;
-                  handleUpdate({
-                    movementState: {
-                      remaining: budget,
-                      path: []
-                    }
-                  });
-                }}
-                className="w-full py-1.5 px-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-xs font-medium flex items-center justify-center gap-1 transition-colors"
-                title="Restablece el presupuesto y borra el camino verde de este token"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Reiniciar</span>
-              </button>
-            </div>
-          </div>
+          )}
         </div>
       )}
 
