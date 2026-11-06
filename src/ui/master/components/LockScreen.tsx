@@ -47,10 +47,14 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
       if (error) {
         setErrorMessage('Clave incorrecta');
       } else {
-        // Carga la aventura de la nube y sincroniza
-        await cloudGameSync.syncOnStartupOrLogin();
-        cloudSync.syncOnLogin().catch((err) => console.warn('[LockScreen] Error en syncOnLogin:', err));
+        // Desbloqueo inmediato: la mesa se abre al momento sin bloquearse por la red
         if (onUnlock) onUnlock();
+        setLoading(false);
+
+        // En segundo plano: sincroniza la partida y descarga assets por prioridad
+        cloudGameSync.syncOnStartupOrLogin()
+          .then(() => cloudSync.syncOnLogin())
+          .catch((err) => console.warn('[LockScreen] Error en sincronización de fondo:', err));
       }
     } catch {
       setErrorMessage('Clave incorrecta');

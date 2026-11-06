@@ -4,6 +4,8 @@ import { db, saveAsset, deleteAsset as deleteLocalAsset, getAllAssets } from '..
 import { AssetItem, AssetType } from '../../types/game';
 import { invalidateCachedTexture } from '../../pixi/utils/textureCache';
 import { syncChannel } from './syncChannel';
+import { useGameStore } from '../../stores/useGameStore';
+import { cloudGameSync } from '../persistence/cloudGameSync';
 
 export type SyncState = 'synced' | 'syncing' | 'offline' | 'unauthenticated' | 'error';
 
@@ -246,53 +248,30 @@ class CloudSyncManager {
   }
 
   /**
-   * Sincronización al iniciar sesión o cambiar de dispositivo:
-   * 1. Consulta la lista de library_assets en la nube del usuario.
-   * 2. Compara con los assets locales en IndexedDB.
-   * 3. Descarga los que falten localmente y los guarda en IndexedDB.
-   * 4. Sube los elementos locales reutilizables que no estén aún en la nube.
+   * Descarga un lote de assets de la nube con concurrencia limitada (por defecto 4).
    */
-  public async syncOnLogin(): Promise<void> {
-    if (!supabase || !authManager.isAuthenticated()) return;
-    const user = authManager.getUser();
-    if (!user) return;
+  public async downloadBatchWithConcurrency(
+    items: CloudAssetRecord[],
+    concurrency = 4,
+    onItemDone?: (item: CloudAssetRecord) => void
+  ): Promise<number> {
+    if (!supabase || items.length === 0) return 0;
+    let nextIndex = 0;
+    let successCount = 0;
 
-    this.updateStatus('syncing', 0, 'Descargando biblioteca de la nube...');
+    const worker = async () => {
+      while (nextIndex < items.length) {
+        const idx = nextIndex++;
+        const cloudItem = items[idx];
 
-    try {
-      // 1. Obtener lista de todos los assets en la biblioteca compartida
-      const { data: cloudAssets, error } = await supabase
-        .from('library_assets')
-        .select('*');
+        try {
+          const { data: blobData, error: downloadError } = await supabase!.storage
+            .from('vtt-assets')
+            .download(cloudItem.storage_path);
 
-      if (error) {
-        throw error;
-      }
-
-      const cloudList = (cloudAssets || []) as CloudAssetRecord[];
-      const localAssets = await getAllAssets();
-      const localMap = new Map(localAssets.map((a) => [a.id, a]));
-
-      // 2. Descargar los que están en la nube y no existen localmente
-      let downloadedCount = 0;
-      for (const cloudItem of cloudList) {
-        if (!localMap.has(cloudItem.id)) {
-          this.updateStatus(
-            'syncing',
-            cloudList.length - downloadedCount,
-            `Descargando "${cloudItem.name}"...`
-          );
-
-          try {
-            const { data: blobData, error: downloadError } = await supabase.storage
-              .from('vtt-assets')
-              .download(cloudItem.storage_path);
-
-            if (downloadError || !blobData) {
-              console.warn(`[cloudSync] No se pudo descargar archivo para ${cloudItem.id}:`, downloadError);
-              continue;
-            }
-
+          if (downloadError || !blobData) {
+            console.warn(`[cloudSync] No se pudo descargar archivo para ${cloudItem.id}:`, downloadError);
+          } else {
             const newLocalAsset: AssetItem = {
               id: cloudItem.id,
               name: cloudItem.name,
@@ -306,13 +285,120 @@ class CloudSyncManager {
             };
 
             await saveAsset(newLocalAsset);
-            downloadedCount++;
             invalidateCachedTexture(newLocalAsset.id);
             syncChannel.sendAssetDownloaded(newLocalAsset.id);
-          } catch (dlErr) {
-            console.error(`[cloudSync] Error descargando ${cloudItem.id}:`, dlErr);
+            successCount++;
+          }
+        } catch (dlErr) {
+          console.error(`[cloudSync] Error descargando ${cloudItem.id}:`, dlErr);
+        } finally {
+          if (onItemDone) {
+            onItemDone(cloudItem);
           }
         }
+      }
+    };
+
+    const pool = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
+    await Promise.all(pool);
+    return successCount;
+  }
+
+  /**
+   * Sincronización al iniciar sesión o cambiar de dispositivo:
+   * 1. Espera a que la sincronización de la aventura activa termine para conocer su estado real.
+   * 2. Consulta library_assets en la nube y compara con IndexedDB.
+   * 3. Descarga primero los assets que usa la partida abierta (mapas, tokens, efectos y música activa).
+   * 4. Descarga el resto de la biblioteca a continuación con concurrencia de 4.
+   * 5. Sube los elementos locales reutilizables que no estén aún en la nube.
+   */
+  public async syncOnLogin(): Promise<void> {
+    if (!supabase || !authManager.isAuthenticated()) return;
+    const user = authManager.getUser();
+    if (!user) return;
+
+    this.updateStatus('syncing', 0, 'Sincronizando biblioteca de la nube...');
+
+    try {
+      // Asegurarse de que la partida real (de la nube o local) ya ha sido cargada en el store
+      await cloudGameSync.waitForStartupSync();
+
+      // 1. Obtener lista de todos los assets en la biblioteca compartida
+      const { data: cloudAssets, error } = await supabase
+        .from('library_assets')
+        .select('*');
+
+      if (error) {
+        throw error;
+      }
+
+      const cloudList = (cloudAssets || []) as CloudAssetRecord[];
+      const localAssets = await getAllAssets();
+      const localMap = new Map(localAssets.map((a) => [a.id, a]));
+
+      // 2. Extraer los assetIds que realmente utiliza la partida abierta actualmente
+      const currentGame = useGameStore.getState().game;
+      const priorityAssetIds = new Set<string>();
+
+      if (currentGame) {
+        // Entidades (mapas, tokens, objetos, efectos)
+        for (const ent of currentGame.entities || []) {
+          if (ent.assetId) {
+            priorityAssetIds.add(ent.assetId);
+          }
+        }
+        // Música que suene activamente
+        if (currentGame.music?.isPlaying && currentGame.music.currentTrackId) {
+          const activeTrack = currentGame.music.playlist?.find(
+            (t) => t.id === currentGame.music.currentTrackId
+          );
+          if (activeTrack?.assetId) {
+            priorityAssetIds.add(activeTrack.assetId);
+          }
+        }
+      }
+
+      // Separar los faltantes en prioritarios (partida abierta) y resto de biblioteca
+      const missingAssets = cloudList.filter((c) => !localMap.has(c.id));
+      const priorityItems = missingAssets.filter((c) => priorityAssetIds.has(c.id));
+      const remainingItems = missingAssets.filter((c) => !priorityAssetIds.has(c.id));
+      const totalMissing = missingAssets.length;
+      let downloadedCount = 0;
+
+      // Fase 1: Descargar primero con concurrencia 4 los assets de la partida abierta
+      if (priorityItems.length > 0) {
+        this.updateStatus(
+          'syncing',
+          totalMissing - downloadedCount,
+          `Cargando assets de la partida (${priorityItems.length} restantes)...`
+        );
+
+        await this.downloadBatchWithConcurrency(priorityItems, 4, (item) => {
+          downloadedCount++;
+          this.updateStatus(
+            'syncing',
+            totalMissing - downloadedCount,
+            `Descargando "${item.name}"...`
+          );
+        });
+      }
+
+      // Fase 2: Descargar el resto de la biblioteca con concurrencia 4
+      if (remainingItems.length > 0) {
+        this.updateStatus(
+          'syncing',
+          totalMissing - downloadedCount,
+          `Sincronizando biblioteca (${remainingItems.length} restantes)...`
+        );
+
+        await this.downloadBatchWithConcurrency(remainingItems, 4, (item) => {
+          downloadedCount++;
+          this.updateStatus(
+            'syncing',
+            totalMissing - downloadedCount,
+            `Descargando "${item.name}"...`
+          );
+        });
       }
 
       // 3. Encolar los elementos locales que no están en la nube

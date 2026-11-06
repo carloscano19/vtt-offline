@@ -201,6 +201,8 @@ class CloudGameSync {
     }
   }
 
+  private startupSyncPromise: Promise<void> | null = null;
+
   /**
    * Sincronización al arrancar o al iniciar sesión:
    * Compara marcas de tiempo de autoguardado local vs la nube y carga la más reciente.
@@ -210,35 +212,54 @@ class CloudGameSync {
       return;
     }
 
-    try {
-      const [localAuto, cloudResult] = await Promise.all([
-        loadAutoSaveFromDb(),
-        this.loadGameFromCloud()
-      ]);
+    if (this.startupSyncPromise) {
+      return this.startupSyncPromise;
+    }
 
-      const localUpdatedAt = localAuto?.updatedAt || 0;
-      const cloudUpdatedAt = cloudResult?.updatedAt || 0;
+    this.startupSyncPromise = (async () => {
+      try {
+        const [localAuto, cloudResult] = await Promise.all([
+          loadAutoSaveFromDb(),
+          this.loadGameFromCloud()
+        ]);
 
-      if (cloudResult && cloudUpdatedAt > localUpdatedAt) {
-        console.log('[cloudGameSync] Restaurando versión más reciente desde la nube...');
-        const restoredGame = cloudResult.game;
-        const storedCloudId = getStoredActiveCloudGameId();
-        if (restoredGame.cloudSavedId) {
-          setStoredActiveCloudGameId(restoredGame.cloudSavedId);
-        } else if (storedCloudId) {
-          restoredGame.cloudSavedId = storedCloudId;
+        const localUpdatedAt = localAuto?.updatedAt || 0;
+        const cloudUpdatedAt = cloudResult?.updatedAt || 0;
+
+        if (cloudResult && cloudUpdatedAt > localUpdatedAt) {
+          console.log('[cloudGameSync] Restaurando versión más reciente desde la nube...');
+          const restoredGame = cloudResult.game;
+          const storedCloudId = getStoredActiveCloudGameId();
+          if (restoredGame.cloudSavedId) {
+            setStoredActiveCloudGameId(restoredGame.cloudSavedId);
+          } else if (storedCloudId) {
+            restoredGame.cloudSavedId = storedCloudId;
+          }
+          useGameStore.getState().setGame(restoredGame);
+          await saveAutoSaveToDb(restoredGame);
+        } else if (localAuto && localAuto.entities && localAuto.entities.length > 0) {
+          console.log('[cloudGameSync] Subiendo versión local a la nube...');
+          if (localAuto.cloudSavedId) {
+            setStoredActiveCloudGameId(localAuto.cloudSavedId);
+          }
+          await this.saveGameToCloud(localAuto);
         }
-        useGameStore.getState().setGame(restoredGame);
-        await saveAutoSaveToDb(restoredGame);
-      } else if (localAuto && localAuto.entities && localAuto.entities.length > 0) {
-        console.log('[cloudGameSync] Subiendo versión local a la nube...');
-        if (localAuto.cloudSavedId) {
-          setStoredActiveCloudGameId(localAuto.cloudSavedId);
-        }
-        await this.saveGameToCloud(localAuto);
+      } catch (err) {
+        console.warn('[cloudGameSync] Error en syncOnStartupOrLogin:', err);
+      } finally {
+        this.startupSyncPromise = null;
       }
-    } catch (err) {
-      console.warn('[cloudGameSync] Error en syncOnStartupOrLogin:', err);
+    })();
+
+    return this.startupSyncPromise;
+  }
+
+  /**
+   * Espera a que termine la sincronización de arranque si está en curso
+   */
+  public async waitForStartupSync(): Promise<void> {
+    if (this.startupSyncPromise) {
+      await this.startupSyncPromise;
     }
   }
 
