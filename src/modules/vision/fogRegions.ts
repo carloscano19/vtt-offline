@@ -196,3 +196,46 @@ export function computeFogRegions(
     visible: mapVisibleTotal
   };
 }
+
+/**
+ * Comprueba si un punto (x, y) está dentro de un anillo (polígono simple cerrado).
+ */
+export function isPointInRing(point: Point2D, ring: [number, number][]): boolean {
+  const x = point.x;
+  const y = point.y;
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0];
+    const yi = ring[i][1];
+    const xj = ring[j][0];
+    const yj = ring[j][1];
+    const intersect = (yi > y !== yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Comprueba si un punto (x, y) está dentro de un multipolígono con huecos.
+ * Devuelve true si cae en el contorno exterior de algún polígono y NO en sus huecos.
+ */
+export function isPointInMultiPolygon(point: Point2D, multi: ExploredMultiPolygon): boolean {
+  if (!multi || multi.length === 0) return false;
+  for (const poly of multi) {
+    const outer = poly[0];
+    if (!outer || outer.length < 3) continue;
+    if (isPointInRing(point, outer)) {
+      let inHole = false;
+      for (let h = 1; h < poly.length; h++) {
+        const hole = poly[h];
+        if (hole && hole.length >= 3 && isPointInRing(point, hole)) {
+          inHole = true;
+          break;
+        }
+      }
+      if (!inHole) return true;
+    }
+  }
+  return false;
+}
+

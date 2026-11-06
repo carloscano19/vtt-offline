@@ -1,7 +1,9 @@
 import { Container, Sprite, Graphics, Text, TextStyle, Texture, ColorMatrixFilter } from 'pixi.js';
 import { Entity, TokenSide, Point2D, EntityAnimations } from '../../types/entity';
+import { ExploredMultiPolygon } from '../../types/game';
 import { getTextureForAsset, getGifDataForAsset, getCachedTexture } from '../utils/textureCache';
 import { TokenVisibility } from '../../modules/vision/visibilityPolygon';
+import { isPointInMultiPolygon } from '../../modules/vision/fogRegions';
 import { getFrameTextureForTime, AnimatedGifData } from '../../modules/media/gifDecoder';
 import { videoManager } from '../../modules/media/videoManager';
 
@@ -95,7 +97,8 @@ export class TokensLayer extends Container {
     isPlayerPreview = false,
     fogEnabled = true,
     gridSize = 70,
-    cameraZoom = 1.0
+    cameraZoom = 1.0,
+    totalVisibleRegion?: ExploredMultiPolygon
   ) {
     this.gridSize = gridSize > 0 ? gridSize : 70;
     this.cameraZoom = cameraZoom > 0 ? cameraZoom : 1.0;
@@ -112,8 +115,10 @@ export class TokensLayer extends Container {
           targetVisibility = 0.0;
         } else if (fogEnabled && (entity.side === 'enemigo' || entity.side === 'neutral' || entity.type === 'object')) {
           const pt = { x: entity.x, y: entity.y };
-          const isInsideAnyVision = visibilities.some((v) => isPointInPolygon(pt, v.polygon));
-          if (!isInsideAnyVision) {
+          const isInside = totalVisibleRegion && totalVisibleRegion.length > 0
+            ? isPointInMultiPolygon(pt, totalVisibleRegion)
+            : visibilities.some((v) => isPointInPolygon(pt, v.polygon));
+          if (!isInside) {
             targetVisibility = 0.0;
           }
         }

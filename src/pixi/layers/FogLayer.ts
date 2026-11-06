@@ -30,6 +30,11 @@ export class FogLayer extends Container {
   private darknessFilter: DarknessInvertFilter | null = null;
 
   private lastKey = '';
+  private lastVisibleRegion: ExploredMultiPolygon = [];
+
+  public getVisibleRegion(): ExploredMultiPolygon {
+    return this.lastVisibleRegion;
+  }
 
   constructor(isMaster: boolean) {
     super();
@@ -88,6 +93,7 @@ export class FogLayer extends Container {
     const shouldRenderFog = fogEnabled && (!this.isMaster || isPlayerPreview);
     if (!shouldRenderFog) {
       this.visible = false;
+      this.lastVisibleRegion = [];
       return;
     }
     this.visible = true;
@@ -122,6 +128,7 @@ export class FogLayer extends Container {
       rememberExplored,
       lights
     );
+    this.lastVisibleRegion = regions.visible;
 
     // 1. Dibuja noExplorado con negro opaco
     this.unexploredGfx.clear();

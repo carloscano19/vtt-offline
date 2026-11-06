@@ -301,9 +301,6 @@ export class PixiRenderer {
     const clipGrid = (!this.isMaster || isPlayerPreview) && game.fog.enabled;
     this.gridLayer.update(game.grid, camera, width, height, clipGrid ? worldBounds : undefined);
     this.doorsLayer.update(game.entities, selectedIds, gridSize);
-    this.tokensLayer.syncEntities(game.entities, selectedIds, visibilities, isPlayerPreview, game.fog.enabled, gridSize, camera.zoom);
-    this.effectsLayer.update(game.entities, camera, width, height, 0.016);
-    this.ambientLayer.update(game.ambient, lights, worldBounds, 0.016, visibilities);
     this.fogLayer.update(
       this.app.renderer as Renderer,
       game.fog.enabled,
@@ -316,6 +313,18 @@ export class PixiRenderer {
       game.fog.rememberExplored ?? false,
       lights
     );
+    this.tokensLayer.syncEntities(
+      game.entities,
+      selectedIds,
+      visibilities,
+      isPlayerPreview,
+      game.fog.enabled,
+      gridSize,
+      camera.zoom,
+      this.fogLayer.getVisibleRegion()
+    );
+    this.effectsLayer.update(game.entities, camera, width, height, 0.016);
+    this.ambientLayer.update(game.ambient, lights, worldBounds, 0.016, visibilities);
     this.weatherLayer.update(game.weather, camera, width, height, 0.016);
     this.lightsLayer.update(game.entities, selectedIds, isPlayerPreview);
     this.wallsLayer.update(game.entities, selectedIds, activeDraftWallPoints);
