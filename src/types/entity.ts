@@ -280,6 +280,9 @@ export interface Entity {
 
   // Fase 4: Tokens y combate
   side?: TokenSide;
+  showRing?: boolean; // Control opcional del anillo de bando
+  showRingCustom?: boolean; // Si el usuario ha ajustado manualmente el anillo
+  highlightInDarkness?: boolean; // Si la entidad se dibuja por encima de la oscuridad ambiental
   statuses?: TokenStatus[];
   hp?: TokenHp;
 

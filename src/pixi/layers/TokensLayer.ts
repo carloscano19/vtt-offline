@@ -335,13 +335,19 @@ export class TokensLayer extends Container {
       sprite.filters = null;
     }
 
-    // 2. Si es token, dibujar anillo según bando
+    // 2. Si es token, dibujar anillo según bando si está activado
     if (entity.type === 'token') {
-      const sideColor = this.getSideColor(entity.side);
-      const sideStroke = Math.max(1.5, (3 / cameraZoom) * invSx);
-      const sideOffset = (2 / cameraZoom) * invSx;
-      ring.circle(0, 0, radius + sideOffset);
-      ring.stroke({ width: sideStroke, color: sideColor, alpha: 0.9 });
+      const showRing = entity.showRing !== undefined
+        ? entity.showRing
+        : (entity.side === 'jugador' || entity.side === 'enemigo');
+
+      if (showRing) {
+        const sideColor = this.getSideColor(entity.side);
+        const sideStroke = Math.max(1.5, (3 / cameraZoom) * invSx);
+        const sideOffset = (2 / cameraZoom) * invSx;
+        ring.circle(0, 0, radius + sideOffset);
+        ring.stroke({ width: sideStroke, color: sideColor, alpha: 0.9 });
+      }
     }
 
     // 3. Gestión de estados para tokens (borde rojo sutil y badges apilados)

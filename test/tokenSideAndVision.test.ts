@@ -222,4 +222,164 @@ describe('Bloque 1: Tokens nuevos sin visión y bando neutral por defecto', () =
     expect(boss.vision?.active).toBe(false);
     expect(boss.vision?.brightRangeInSquares).toBe(4);
   });
+
+  describe('Bloque 2: Anillo de bando opcional', () => {
+    it('los tokens de bando neutral no muestran anillo por defecto; jugador y enemigo sí', () => {
+      const neutralToken: Entity = {
+        id: 'tok_neutral',
+        type: 'token',
+        name: 'Aldeano',
+        x: 0,
+        y: 0,
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+        zIndex: 10,
+        visibleToPlayers: false,
+        locked: false,
+        side: 'neutral'
+      };
+      const playerToken: Entity = {
+        id: 'tok_player',
+        type: 'token',
+        name: 'Héroe',
+        x: 0,
+        y: 0,
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+        zIndex: 10,
+        visibleToPlayers: true,
+        locked: false,
+        side: 'jugador'
+      };
+      const enemyToken: Entity = {
+        id: 'tok_enemy',
+        type: 'token',
+        name: 'Goblin',
+        x: 0,
+        y: 0,
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+        zIndex: 10,
+        visibleToPlayers: false,
+        locked: false,
+        side: 'enemigo'
+      };
+
+      const normNeutral = normalizeGameState({ id: 'g', entities: [neutralToken] } as any).entities[0];
+      const normPlayer = normalizeGameState({ id: 'g', entities: [playerToken] } as any).entities[0];
+      const normEnemy = normalizeGameState({ id: 'g', entities: [enemyToken] } as any).entities[0];
+
+      expect(normNeutral.showRing).toBe(false);
+      expect(normPlayer.showRing).toBe(true);
+      expect(normEnemy.showRing).toBe(true);
+    });
+
+    it('al cambiar el bando de un token se aplica el valor por defecto del nuevo bando salvo que el usuario lo haya cambiado a mano', () => {
+      const token: Entity = {
+        id: 'tok_change',
+        type: 'token',
+        name: 'Cambiante',
+        x: 0,
+        y: 0,
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+        zIndex: 10,
+        visibleToPlayers: false,
+        locked: false,
+        side: 'neutral',
+        showRing: false
+      };
+      useGameStore.getState().addEntity(token);
+
+      // Cambiar a jugador -> activa anillo por defecto
+      useGameStore.getState().updateEntity('tok_change', { side: 'jugador' });
+      let ent = useGameStore.getState().game.entities.find((e) => e.id === 'tok_change')!;
+      expect(ent.side).toBe('jugador');
+      expect(ent.showRing).toBe(true);
+
+      // Cambiar a neutral -> desactiva anillo por defecto
+      useGameStore.getState().updateEntity('tok_change', { side: 'neutral' });
+      ent = useGameStore.getState().game.entities.find((e) => e.id === 'tok_change')!;
+      expect(ent.side).toBe('neutral');
+      expect(ent.showRing).toBe(false);
+
+      // El usuario activa a mano el anillo en el token neutral
+      useGameStore.getState().updateEntity('tok_change', { showRing: true, showRingCustom: true });
+      ent = useGameStore.getState().game.entities.find((e) => e.id === 'tok_change')!;
+      expect(ent.showRing).toBe(true);
+      expect(ent.showRingCustom).toBe(true);
+
+      // Cambiar de nuevo de bando (a enemigo o neutral): se respeta la decisión manual del usuario
+      useGameStore.getState().updateEntity('tok_change', { side: 'neutral' });
+      ent = useGameStore.getState().game.entities.find((e) => e.id === 'tok_change')!;
+      expect(ent.side).toBe('neutral');
+      expect(ent.showRing).toBe(true); // Se conserva porque showRingCustom es true
+    });
+
+    it('las partidas existentes se actualizan al cargar: neutrales pierden anillo, los demás lo conservan', () => {
+      const legacyGame = {
+        id: 'legacy',
+        entities: [
+          {
+            id: 'tok_old_neutral',
+            type: 'token',
+            name: 'Aldeano Legacy',
+            side: 'neutral'
+          },
+          {
+            id: 'tok_old_player',
+            type: 'token',
+            name: 'Guerrero Legacy',
+            side: 'jugador'
+          },
+          {
+            id: 'tok_old_enemy',
+            type: 'token',
+            name: 'Orco Legacy',
+            side: 'enemigo'
+          }
+        ]
+      };
+
+      const normalized = normalizeGameState(legacyGame as any);
+      const neutral = normalized.entities.find((e) => e.id === 'tok_old_neutral')!;
+      const player = normalized.entities.find((e) => e.id === 'tok_old_player')!;
+      const enemy = normalized.entities.find((e) => e.id === 'tok_old_enemy')!;
+
+      expect(neutral.showRing).toBe(false);
+      expect(player.showRing).toBe(true);
+      expect(enemy.showRing).toBe(true);
+    });
+
+    it('al duplicar un token, la copia conserva el estado del anillo y la marca personalizada', () => {
+      const original: Entity = {
+        id: 'tok_custom_ring',
+        type: 'token',
+        name: 'Mago Con Anillo Desactivado',
+        x: 0,
+        y: 0,
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+        zIndex: 10,
+        visibleToPlayers: true,
+        locked: false,
+        side: 'jugador',
+        showRing: false,
+        showRingCustom: true
+      };
+      useGameStore.getState().addEntity(original);
+      const copyId = useGameStore.getState().duplicateEntity('tok_custom_ring')!;
+      expect(copyId).toBeDefined();
+
+      const copy = useGameStore.getState().game.entities.find((e) => e.id === copyId)!;
+      expect(copy.side).toBe('jugador');
+      expect(copy.showRing).toBe(false);
+      expect(copy.showRingCustom).toBe(true);
+    });
+  });
 });

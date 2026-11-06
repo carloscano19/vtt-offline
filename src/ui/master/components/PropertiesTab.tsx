@@ -315,8 +315,28 @@ export const PropertiesTab: React.FC = () => {
 
       {/* Selector de bando para tokens */}
       {selectedEntity.type === 'token' && (
-        <div className="space-y-1.5">
-          <label className="text-slate-400 font-medium">Bando</label>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-slate-400 font-medium">Bando</label>
+            <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-slate-300">
+              <input
+                type="checkbox"
+                checked={
+                  selectedEntity.showRing !== undefined
+                    ? selectedEntity.showRing
+                    : (selectedEntity.side === 'jugador' || selectedEntity.side === 'enemigo')
+                }
+                onChange={(e) => {
+                  handleUpdate({
+                    showRing: e.target.checked,
+                    showRingCustom: true
+                  });
+                }}
+                className="accent-sky-500 w-3.5 h-3.5 rounded cursor-pointer"
+              />
+              <span>Mostrar anillo</span>
+            </label>
+          </div>
           <div className="grid grid-cols-3 gap-1.5">
             {(['jugador', 'enemigo', 'neutral'] as TokenSide[]).map((side) => {
               const isSelected = (selectedEntity.side || 'neutral') === side;

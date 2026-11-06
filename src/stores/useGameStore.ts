@@ -348,6 +348,12 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
         const updated = { ...ent, ...partial };
         if (updated.type === 'token') {
           if (partial.side !== undefined) {
+            // Al cambiar el bando de un token, se aplica el valor por defecto del nuevo bando
+            // (activado para Jugador y Enemigo, desactivado para Neutral), salvo que el usuario lo haya cambiado a mano en ese token.
+            if (!ent.showRingCustom && partial.showRing === undefined) {
+              updated.showRing = partial.side === 'jugador' || partial.side === 'enemigo';
+            }
+
             if (partial.side === 'jugador') {
               updated.vision = {
                 active: true,

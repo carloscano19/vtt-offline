@@ -297,6 +297,20 @@ export function normalizeEntity(entity: Entity): Entity {
       delete clean.movementState;
       entity = clean;
     }
+
+    // Normalizar anillo de bando para tokens:
+    // Las partidas existentes se actualizan al cargar: los tokens Neutrales pierden el anillo, los demás lo conservan.
+    // Si el usuario lo cambió a mano (showRingCustom: true), se respeta su preferencia.
+    const showRingCustom = Boolean(entity.showRingCustom);
+    const showRing = showRingCustom
+      ? Boolean(entity.showRing)
+      : entity.side === 'jugador' || entity.side === 'enemigo';
+
+    entity = {
+      ...entity,
+      showRing,
+      showRingCustom: showRingCustom ? true : undefined
+    };
   }
 
   // Normalizar opacidad (0.0 a 1.0, por defecto 1.0 si es undefined o NaN)
