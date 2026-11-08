@@ -4,6 +4,7 @@ import { useGameStore } from '../stores/useGameStore';
 import { useUIStore } from '../stores/useUIStore';
 import { screenToWorld, snapPointToGrid, snapPointToGridOrMidpoint, localToWorld, worldToLocal } from './utils/coordinates';
 import { findEntityAtPosition } from './utils/hitTesting';
+import { snapDoorRotation, snapDoorMovement, snapDoorLength } from './utils/doorSnapping';
 import { Entity, Point2D, recalculateDoorEndpoints, rotateDoorAroundHinge, getDefaultSnapToGrid, DEFAULT_STATUS_DESCRIPTIONS } from '../types/entity';
 import { CameraState } from '../types/game';
 import { syncChannel } from '../modules/sync/syncChannel';
@@ -1063,8 +1064,10 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
         let newWorldRot = interactionState.current.startEntityRotation + deltaAngle;
 
-        // Manteniendo Shift mientras se gira, se ajusta a pasos de 15°
-        if (e.shiftKey) {
+        // Rotación de puertas con imán a ángulos rectos (±5°) o pasos de 15° con Shift
+        if (entity.type === 'door') {
+          newWorldRot = snapDoorRotation(newWorldRot, e.shiftKey);
+        } else if (e.shiftKey) {
           const step = (15 * Math.PI) / 180;
           newWorldRot = Math.round(newWorldRot / step) * step;
         }
@@ -1118,11 +1121,19 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
           const rawLength = distAlongAxis * 2;
 
           let newLength = rawLength;
-          if (game.grid.snapToGrid && !e.altKey) {
-            const gridSize = parentMap?.mapData?.pixelsPerGrid ?? (game.grid.size > 0 ? game.grid.size : 70);
-            const halfGrid = gridSize / 2;
-            const snappedHalves = Math.max(1, Math.round(rawLength / halfGrid));
-            newLength = snappedHalves * halfGrid;
+          if (!e.altKey) {
+            // Imán a extremos de paredes (< 10px en pantalla) para encajar la puerta en el hueco
+            const snappedWallLen = snapDoorLength(entity, rawLength, game.entities, camera.zoom, false);
+            if (snappedWallLen !== rawLength) {
+              newLength = snappedWallLen;
+            } else if (game.grid.snapToGrid) {
+              const gridSize = parentMap?.mapData?.pixelsPerGrid ?? (game.grid.size > 0 ? game.grid.size : 70);
+              const halfGrid = gridSize / 2;
+              const snappedHalves = Math.max(1, Math.round(rawLength / halfGrid));
+              newLength = snappedHalves * halfGrid;
+            } else {
+              newLength = Math.max(10, rawLength);
+            }
           } else {
             newLength = Math.max(10, rawLength);
           }
@@ -1184,8 +1195,14 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
             localDx = (dx * cosM + dy * sinM) / parentMap.scaleX;
             localDy = (-dx * sinM + dy * cosM) / parentMap.scaleY;
           }
-          const newX = interactionState.current.startEntityPos.x + localDx;
-          const newY = interactionState.current.startEntityPos.y + localDy;
+          let newX = interactionState.current.startEntityPos.x + localDx;
+          let newY = interactionState.current.startEntityPos.y + localDy;
+
+          // Imán de extremos (bisagra y punta) a paredes (< 10 px en pantalla) salvo con Alt
+          const snapped = snapDoorMovement(entity, newX, newY, game.entities, camera.zoom, e.altKey);
+          newX = snapped.x;
+          newY = snapped.y;
+
           const { p1, p2 } = recalculateDoorEndpoints(newX, newY, entity.rotation, entity.door.length ?? 70, entity.door.isHingeInverted);
           updateEntity(entity.id, { x: newX, y: newY, door: { ...entity.door, p1, p2 } }, false);
           const now = performance.now();
@@ -1523,7 +1540,11 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         let finalY = entity.y;
 
         if (entity.type === 'door' && entity.door) {
-          if (game.grid.snapToGrid && !e.altKey) {
+          // Imán a extremos de paredes (< 10 px en pantalla) al soltar salvo con Alt
+          const snapped = snapDoorMovement(entity, entity.x, entity.y, game.entities, camera.zoom, e.altKey);
+          finalX = snapped.x;
+          finalY = snapped.y;
+          if (snapped.x === entity.x && snapped.y === entity.y && game.grid.snapToGrid && !e.altKey) {
             const parentMap = entity.mapId ? game.entities.find((m) => m.id === entity.mapId) : undefined;
             const gridSize = parentMap?.mapData?.pixelsPerGrid ?? (game.grid.size > 0 ? game.grid.size : 70);
             const halfGrid = gridSize / 2;
