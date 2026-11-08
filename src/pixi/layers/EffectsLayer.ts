@@ -7,6 +7,7 @@ import { AnimatedGifData, getFrameTextureForTime } from '../../modules/media/gif
 import { parseColor } from '../../utils/color';
 import { ShowAnimationController } from '../utils/showAnimation';
 import { useGameStore } from '../../stores/useGameStore';
+import { playSpikeTrapSound } from '../../modules/audio/trapAudio';
 
 interface EffectParticle {
   x: number;
@@ -18,6 +19,7 @@ interface EffectParticle {
   size: number;
   alpha: number;
   color: number;
+  isRock?: boolean;
 }
 
 class ProceduralEffectNode extends Container {
@@ -38,6 +40,10 @@ class ProceduralEffectNode extends Container {
   public fadeFactor = 1.0;
   private hasInitializedFade = false;
   private spikeAnimProgress = 1.0;
+  private trapAnimTime = 2.0;
+  private lastTriggerTime?: number;
+  private hasPlayedSound = true;
+  private spikesLandedHoles = new Set<string>();
   public showAnimCtrl = new ShowAnimationController();
   private prevVisibleToPlayers?: boolean;
 
@@ -105,6 +111,21 @@ class ProceduralEffectNode extends Container {
       }
       if (!isMaster && entity.showAnimation && entity.showAnimation !== 'fade') {
         this.showAnimCtrl.trigger(entity.id, entity.showAnimation, this, 70);
+      }
+    }
+
+    // Activación sincronizada de trampas
+    if (entity.effect?.preset === 'spike_trap') {
+      const triggerTime = entity.effect.trapTriggerTime;
+      if (triggerTime && triggerTime !== this.lastTriggerTime) {
+        this.lastTriggerTime = triggerTime;
+        this.trapAnimTime = 0;
+        this.hasPlayedSound = false;
+        this.spikesLandedHoles.clear();
+      } else if (wasVisible === false && entity.visibleToPlayers !== false) {
+        this.trapAnimTime = 0;
+        this.hasPlayedSound = false;
+        this.spikesLandedHoles.clear();
       }
     }
 
@@ -972,108 +993,214 @@ class ProceduralEffectNode extends Container {
     bg.fill({ color: 0xd1d5db });
   }
 
-  // 18. Trampa de pinchos
+  // 18. Trampa de pinchos espectacular (3D, oleada, temblor y piedras)
   private renderSpikeTrap(entity: Entity, color: number, _intensity: number, dt: number) {
     const bg = this.baseGfx;
     const effect = entity.effect;
     const hasBlood = effect?.hasBlood ?? false;
+    const soundEnabled = effect?.soundEnabled ?? true;
 
-    // Animación de pinchos al revelarse (0 a 1 en ~0.4s)
-    if (this.fadeFactor > 0.05) {
-      if (this.spikeAnimProgress < 1) {
-        this.spikeAnimProgress = Math.min(1, this.spikeAnimProgress + dt / 0.4);
-        if (this.spikeAnimProgress > 0.1 && this.spikeAnimProgress < 0.8) {
-          // Generar polvo durante la salida de pinchos
-          this.initParticlePool(10);
-          for (const p of this.particles) {
-            if (p.life <= 0) {
-              p.life = 0.3 + Math.random() * 0.3;
-              p.maxLife = p.life;
-              p.x = (Math.random() - 0.5) * 50;
-              p.y = (Math.random() - 0.5) * 50;
-              p.vx = (Math.random() - 0.5) * 30;
-              p.vy = (Math.random() - 0.5) * 30;
-              p.size = 2 + Math.random() * 3;
-              p.color = 0x94a3b8;
-              p.alpha = 0.6;
-            }
-          }
-        }
+    // Progresión del tiempo de la trampa
+    if (this.trapAnimTime < 1.5) {
+      this.trapAnimTime += dt;
+      if (this.trapAnimTime <= 0.05 && !this.hasPlayedSound) {
+        this.hasPlayedSound = true;
+        playSpikeTrapSound(!soundEnabled);
       }
-    } else {
-      this.spikeAnimProgress = 0;
     }
 
-    const progress = this.spikeAnimProgress;
+    const t = this.trapAnimTime;
+    const isTremoring = t < 0.15;
+    let slabOffsetX = 0;
+    let slabOffsetY = 0;
 
-    // 1. Baldosa de piedra base (64x64)
-    bg.roundRect(-32, -32, 64, 64, 4);
+    if (isTremoring) {
+      const tremorDecay = (0.15 - t) / 0.15;
+      slabOffsetX = Math.sin(t * 85) * 2.0 * tremorDecay;
+      slabOffsetY = Math.cos(t * 95) * 1.5 * tremorDecay;
+
+      // Partículas de polvo levantadas por el temblor en los bordes de la losa
+      this.initParticlePool(30);
+      for (const p of this.particles) {
+        if (p.life <= 0 && Math.random() < 0.35) {
+          p.life = 0.25 + Math.random() * 0.2;
+          p.maxLife = p.life;
+          p.isRock = false;
+          const edge = Math.floor(Math.random() * 4);
+          if (edge === 0) { p.x = -32; p.y = (Math.random() - 0.5) * 64; }
+          else if (edge === 1) { p.x = 32; p.y = (Math.random() - 0.5) * 64; }
+          else if (edge === 2) { p.x = (Math.random() - 0.5) * 64; p.y = -32; }
+          else { p.x = (Math.random() - 0.5) * 64; p.y = 32; }
+          p.vx = (p.x === -32 ? -1 : p.x === 32 ? 1 : 0) * (15 + Math.random() * 20);
+          p.vy = (p.y === -32 ? -1 : p.y === 32 ? 1 : 0) * (15 + Math.random() * 20);
+          p.size = 1.5 + Math.random() * 2;
+          p.color = 0x94a3b8;
+          p.alpha = 0.5;
+        }
+      }
+    }
+
+    // 1. Baldosa de piedra base (64x64) con offset de temblor
+    const bx = slabOffsetX;
+    const by = slabOffsetY;
+    bg.roundRect(bx - 32, by - 32, 64, 64, 4);
     bg.fill({ color: 0x334155, alpha: 0.95 });
     bg.stroke({ width: 2, color: 0x1e293b });
 
+    // Biselado sutil de la losa
+    bg.moveTo(bx - 31, by - 31);
+    bg.lineTo(bx + 31, by - 31);
+    bg.stroke({ width: 1, color: 0x64748b, alpha: 0.5 });
+    bg.moveTo(bx - 31, by + 31);
+    bg.lineTo(bx + 31, by + 31);
+    bg.stroke({ width: 1, color: 0x0f172a, alpha: 0.7 });
+
     // Ranuras decorativas de piedra
-    bg.moveTo(-32, 0);
-    bg.lineTo(32, 0);
-    bg.stroke({ width: 1, color: 0x1e293b, alpha: 0.6 });
-    bg.moveTo(0, -32);
-    bg.lineTo(0, 32);
-    bg.stroke({ width: 1, color: 0x1e293b, alpha: 0.6 });
+    bg.moveTo(bx - 32, by);
+    bg.lineTo(bx + 32, by);
+    bg.stroke({ width: 1.2, color: 0x1e293b, alpha: 0.7 });
+    bg.moveTo(bx, by - 32);
+    bg.lineTo(bx, by + 32);
+    bg.stroke({ width: 1.2, color: 0x1e293b, alpha: 0.7 });
 
-    // Rejilla de 9 agujeros (3x3)
+    // 2. Rejilla de 9 agujeros (3x3) y pinchos metálicos 3D en oleada
     const holeCoords = [-20, 0, 20];
-    for (const hx of holeCoords) {
-      for (const hy of holeCoords) {
-        // Agujero oscuro
-        bg.circle(hx, hy, 5.5);
+    const maxSpikeH = 26; // Pinchos más grandes y amenazantes
+    const baseW = 6.5;
+
+    for (let row = 0; row < 3; row++) {
+      for (let col = 0; col < 3; col++) {
+        const hx = bx + holeCoords[col];
+        const hy = by + holeCoords[row];
+        const holeKey = `${col}_${row}`;
+
+        // Oleada escalonada: ~0.3s entre la primera y la última esquina
+        const waveDelay = (col + row) * 0.075;
+        const holeStartTime = 0.15 + waveDelay;
+        const holeElapsed = t - holeStartTime;
+
+        let spikeProgress = 0;
+        if (t >= 1.5) {
+          spikeProgress = 1.0;
+        } else if (holeElapsed > 0) {
+          // Salida rápida en ~0.10s con impacto al final
+          spikeProgress = Math.min(1.0, holeElapsed / 0.10);
+        }
+
+        // Salto de pequeñas piedras / esquirlas y polvo al golpear el tope arriba
+        if (spikeProgress >= 0.98 && !this.spikesLandedHoles.has(holeKey)) {
+          this.spikesLandedHoles.add(holeKey);
+          this.initParticlePool(30);
+          let spawned = 0;
+          for (const p of this.particles) {
+            if (p.life <= 0 && spawned < 3) {
+              spawned++;
+              p.life = 0.3 + Math.random() * 0.25;
+              p.maxLife = p.life;
+              p.x = hx;
+              p.y = hy - 4;
+              p.vx = (Math.random() - 0.5) * 45;
+              p.vy = -(25 + Math.random() * 35);
+              p.isRock = Math.random() > 0.4;
+              p.size = p.isRock ? 1.8 + Math.random() * 2.2 : 2.5 + Math.random() * 3;
+              p.color = p.isRock ? 0x475569 : 0x94a3b8;
+              p.alpha = p.isRock ? 0.9 : 0.6;
+            }
+          }
+        }
+
+        // Agujero de piedra con bisel
+        bg.circle(hx, hy, 7);
         bg.fill({ color: 0x090d16 });
-        bg.stroke({ width: 1, color: 0x475569 });
+        bg.stroke({ width: 1.5, color: 0x1e293b });
+        bg.circle(hx, hy, 5.5);
+        bg.fill({ color: 0x020617 });
 
-        // Pinchos si han salido
-        if (progress > 0.05) {
-          const spikeH = 14 * progress;
+        // Pinchos metálicos en 3D
+        if (spikeProgress > 0.02) {
+          const currentH = maxSpikeH * spikeProgress;
           const tipX = hx;
-          const tipY = hy - spikeH;
+          const tipY = hy - currentH;
+          const ridgeBottomY = hy + 2.5;
 
-          // Triángulo/cono del pincho
-          bg.moveTo(hx - 4 * progress, hy);
-          bg.lineTo(tipX, tipY);
-          bg.lineTo(hx + 4 * progress, hy);
-          bg.closePath();
-          bg.fill({ color: color });
-          bg.stroke({ width: 1, color: 0xe2e8f0 });
+          // Sombra proyectada en el suelo debajo del pincho
+          bg.ellipse(hx + 3, hy + 2, baseW * 0.9, 3);
+          bg.fill({ color: 0x020617, alpha: 0.55 * spikeProgress });
 
-          // Sombra lateral del pincho
-          bg.moveTo(hx, hy);
-          bg.lineTo(tipX, tipY);
-          bg.lineTo(hx + 4 * progress, hy);
+          // Faceta izquierda metálica con brillo
+          bg.moveTo(tipX, tipY);
+          bg.lineTo(hx - baseW, hy);
+          bg.lineTo(hx, ridgeBottomY);
           bg.closePath();
-          bg.fill({ color: 0x1e293b, alpha: 0.4 });
+          bg.fill({ color: 0xcfd8dc, alpha: 0.98 });
+          // Brillo especular en el borde izquierdo
+          bg.moveTo(tipX, tipY);
+          bg.lineTo(hx - baseW, hy);
+          bg.stroke({ width: 1.2, color: 0xffffff, alpha: 0.95 });
+
+          // Faceta derecha metálica con sombra
+          bg.moveTo(tipX, tipY);
+          bg.lineTo(hx, ridgeBottomY);
+          bg.lineTo(hx + baseW, hy);
+          bg.closePath();
+          bg.fill({ color: 0x374151, alpha: 0.98 });
+          // Sombra en el borde derecho
+          bg.moveTo(tipX, tipY);
+          bg.lineTo(hx + baseW, hy);
+          bg.stroke({ width: 1, color: 0x1f2937, alpha: 0.8 });
+
+          // Arista central afilada
+          bg.moveTo(tipX, tipY);
+          bg.lineTo(hx, ridgeBottomY);
+          bg.stroke({ width: 1.2, color: 0xf8fafc, alpha: 0.9 });
+
+          // Punta afilada brillante
+          bg.circle(tipX, tipY, 1.2);
+          bg.fill({ color: 0xffffff });
         }
       }
     }
 
-    // 2. Mancha de sangre opcional
-    if (hasBlood && progress > 0.3) {
-      const bloodAlpha = Math.min(1, progress * 1.2);
-      bg.circle(-6, 4, 7);
-      bg.fill({ color: 0x991b1b, alpha: 0.8 * bloodAlpha });
-      bg.circle(12, -8, 5);
-      bg.fill({ color: 0x7f1d1d, alpha: 0.75 * bloodAlpha });
-      bg.circle(-14, -12, 4);
-      bg.fill({ color: 0x991b1b, alpha: 0.7 * bloodAlpha });
-      bg.circle(4, 14, 6);
-      bg.fill({ color: 0x880808, alpha: 0.85 * bloodAlpha });
+    // 3. Mancha de sangre opcional
+    if (hasBlood && (t >= 0.25 || t >= 1.5)) {
+      const bloodAlpha = Math.min(1, (t - 0.25) / 0.25);
+      // Salpicaduras sobre los pinchos y losa
+      bg.circle(bx - 6, by + 4, 7);
+      bg.fill({ color: 0x991b1b, alpha: 0.85 * bloodAlpha });
+      bg.circle(bx + 12, by - 8, 5.5);
+      bg.fill({ color: 0x7f1d1d, alpha: 0.8 * bloodAlpha });
+      bg.circle(bx - 14, by - 12, 4.5);
+      bg.fill({ color: 0x991b1b, alpha: 0.75 * bloodAlpha });
+      bg.circle(bx + 4, by + 14, 6.5);
+      bg.fill({ color: 0x880808, alpha: 0.9 * bloodAlpha });
+
+      // Gotas y regueros en puntas
+      bg.circle(bx, by - 18, 2.5);
+      bg.fill({ color: 0x991b1b, alpha: 0.9 * bloodAlpha });
+      bg.circle(bx - 20, by - 38, 2);
+      bg.fill({ color: 0x7f1d1d, alpha: 0.85 * bloodAlpha });
     }
 
-    // 3. Polvo levantado
+    // 4. Actualización y renderizado de partículas (polvo y piedras)
     for (const p of this.particles) {
-      p.life -= dt;
       if (p.life > 0) {
+        p.life -= dt;
+        if (p.isRock) {
+          p.vy += 150 * dt; // Gravedad en piedras
+        }
         p.x += p.vx * dt;
         p.y += p.vy * dt;
-        const norm = p.life / p.maxLife;
-        this.particleGfx.circle(p.x, p.y, p.size * (1 - norm * 0.3));
-        this.particleGfx.fill({ color: p.color, alpha: norm * p.alpha });
+        const norm = Math.max(0, p.life / p.maxLife);
+        if (p.isRock) {
+          // Pequeñas piedras/esquirlas angulares
+          this.particleGfx.rect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+          this.particleGfx.fill({ color: p.color, alpha: norm * p.alpha });
+          this.particleGfx.stroke({ width: 0.8, color: 0x1e293b, alpha: norm * 0.7 });
+        } else {
+          // Polvo suave
+          this.particleGfx.circle(p.x, p.y, p.size * (1 - norm * 0.2));
+          this.particleGfx.fill({ color: p.color, alpha: norm * p.alpha });
+        }
       }
     }
   }

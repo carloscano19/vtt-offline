@@ -93,4 +93,31 @@ describe('Trampas procedurales (Bloque 3)', () => {
     expect(spikeTrap.effect?.preset).toBe('spike_trap');
     expect(spikeTrap.effect?.hasBlood).toBe(true);
   });
+
+  it('permite configurar soundEnabled y trapTriggerTime en trampa de pinchos', () => {
+    const spikeTrap: Entity = {
+      id: 'effect_trap_spike',
+      type: 'effect',
+      name: 'Trampa de pinchos mejorada',
+      x: 100,
+      y: 100,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      effect: {
+        preset: 'spike_trap',
+        color: '#94a3b8',
+        intensity: 80,
+        speed: 1.0,
+        emitsLight: false,
+        baseLightRadius: 0,
+        hasBlood: true,
+        soundEnabled: true,
+        trapTriggerTime: 123456789
+      }
+    };
+
+    expect(spikeTrap.effect?.soundEnabled).toBe(true);
+    expect(spikeTrap.effect?.trapTriggerTime).toBe(123456789);
+  });
 });

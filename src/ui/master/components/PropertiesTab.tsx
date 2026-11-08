@@ -2092,7 +2092,53 @@ export const PropertiesTab: React.FC = () => {
           )}
 
           {selectedEntity.effect.preset === 'spike_trap' && (
-            <div className="pt-2 border-t border-slate-700/60">
+            <div className="pt-2 border-t border-slate-700/60 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-slate-300 block">Probar activación</span>
+                  <span className="text-[10px] text-slate-500 block">
+                    Dispara la oleada de pinchos, temblor y sonido
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleUpdate({
+                      effect: {
+                        ...selectedEntity.effect!,
+                        trapTriggerTime: Date.now()
+                      }
+                    })
+                  }
+                  className="px-2.5 py-1 text-xs font-medium rounded bg-amber-600 hover:bg-amber-500 text-white transition-colors flex items-center gap-1 shadow-sm"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  Activar
+                </button>
+              </div>
+
+              <label className="flex items-center justify-between text-xs cursor-pointer">
+                <div>
+                  <span className="text-slate-300 block">Sonido de la trampa</span>
+                  <span className="text-[10px] text-slate-500 block">
+                    Crujido de piedra y clac seco metálico
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={selectedEntity.effect.soundEnabled ?? true}
+                  onChange={(e) =>
+                    handleUpdate({
+                      effect: {
+                        ...selectedEntity.effect!,
+                        soundEnabled: e.target.checked
+                      }
+                    })
+                  }
+                  className="w-4 h-4 accent-amber-500 rounded cursor-pointer ml-3 shrink-0"
+                />
+              </label>
+
               <label className="flex items-center justify-between text-xs cursor-pointer">
                 <div>
                   <span className="text-slate-300 block">Mancha de sangre</span>

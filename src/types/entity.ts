@@ -309,6 +309,7 @@ export type EffectPresetId =
   | 'blade_pendulum'
   | 'saw_blade'
   | 'spike_trap'
+  | 'cross_revolving_door'
   | 'custom';
 
 export interface EffectConfig {
@@ -327,6 +328,11 @@ export interface EffectConfig {
   hasRail?: boolean;       // Si la sierra giratoria tiene carril lineal
   hasBlood?: boolean;      // Mancha de sangre en trampa de pinchos
   spikesOut?: boolean;     // Estado de pinchos
+  soundEnabled?: boolean;  // Sonido de trampa activado (default true)
+  trapTriggerTime?: number;// Marca temporal de activación sincronizada
+  trapMaterial?: 'wood' | 'stone'; // Para cruz giratoria (madera o piedra)
+  trapGridSize?: number;   // Tamaño en casillas para trampa (default 3x3 para cruz)
+  launchDistance?: number; // Casillas de expulsión fuera del cruce (default 2)
 }
 
 export type ShowAnimationType = 'fade' | 'pop' | 'flash' | 'fall';

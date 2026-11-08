@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, EyeOff, Lock, Unlock, Copy, Trash2, Sparkles, FlipHorizontal, FlipVertical, RotateCcw } from 'lucide-react';
+import { Eye, EyeOff, Lock, Unlock, Copy, Trash2, Sparkles, FlipHorizontal, FlipVertical, RotateCcw, Play, Volume2, VolumeX } from 'lucide-react';
 import { useGameStore } from '../../../stores/useGameStore';
 import { useUIStore } from '../../../stores/useUIStore';
 import { worldToScreen, localToWorld } from '../../../pixi/utils/coordinates';
@@ -277,6 +277,71 @@ export const FastActionBar: React.FC<FastActionBarProps> = ({
       >
         <Trash2 className="w-4 h-4" />
       </button>
+
+      {/* Botones de Trampa de pinchos */}
+      {entity.type === 'effect' && entity.effect?.preset === 'spike_trap' && (
+        <>
+          <div className="w-[1px] h-4 bg-slate-700/80 mx-0.5" />
+          <button
+            type="button"
+            onClick={() => {
+              updateEntity(
+                entity.id,
+                {
+                  effect: {
+                    ...entity.effect!,
+                    trapTriggerTime: Date.now()
+                  }
+                },
+                true
+              );
+              addToast('¡Trampa de pinchos activada!', 'info', 1500);
+            }}
+            className="p-1.5 rounded-md text-amber-400 bg-amber-950/40 hover:bg-amber-900/60 hover:text-amber-300 transition-colors"
+            title="Activar trampa (dispara oleada de pinchos y sonido)"
+          >
+            <Play className="w-4 h-4 fill-current" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const currentEnabled = entity.effect?.soundEnabled ?? true;
+              updateEntity(
+                entity.id,
+                {
+                  effect: {
+                    ...entity.effect!,
+                    soundEnabled: !currentEnabled
+                  }
+                },
+                true
+              );
+              addToast(
+                currentEnabled ? 'Sonido de trampa silenciado' : 'Sonido de trampa activado',
+                'info',
+                1500
+              );
+            }}
+            className={`p-1.5 rounded-md transition-colors ${
+              (entity.effect?.soundEnabled ?? true)
+                ? 'text-emerald-400 hover:text-emerald-300 hover:bg-slate-800'
+                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+            }`}
+            title={
+              (entity.effect?.soundEnabled ?? true)
+                ? 'Sonido activado (clic para silenciar)'
+                : 'Sonido silenciado (clic para activar)'
+            }
+          >
+            {(entity.effect?.soundEnabled ?? true) ? (
+              <Volume2 className="w-4 h-4" />
+            ) : (
+              <VolumeX className="w-4 h-4" />
+            )}
+          </button>
+        </>
+      )}
 
       {/* Botón Estados (Solo tokens) */}
       {isToken && (
