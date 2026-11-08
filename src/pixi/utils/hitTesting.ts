@@ -128,14 +128,22 @@ export function isEntityHit(
   return dist <= effectiveRadius;
 }
 
+function sortByPriorityAndZ(list: Entity[]): Entity[] {
+  return list.slice().sort((a, b) => {
+    const pDiff = (TYPE_PRIORITY[b.type] ?? 0) - (TYPE_PRIORITY[a.type] ?? 0);
+    if (pDiff !== 0) return pDiff;
+    return (b.zIndex ?? 0) - (a.zIndex ?? 0);
+  });
+}
+
 /**
  * Busca la entidad que debe seleccionarse al hacer clic en worldPos.
  *
- * Reglas de prioridad:
- * 1. Excepción: mapas bloqueados no se seleccionan al hacer clic en el suelo.
- * 2. Si en ese punto hay alguna entidad sin bloquear, se selecciona esa;
- *    la bloqueada solo se selecciona si es la única en ese punto (o si todas están bloqueadas).
- * 3. Entre entidades con el mismo estado de bloqueo, se ordena por tipo (TYPE_PRIORITY) y zIndex.
+ * Orden estricto de prioridad al hacer clic:
+ * 1. Entidades no bloqueadas que no son mapa (tokens, objetos, efectos, puertas, luces).
+ * 2. Entidades bloqueadas que no son mapa.
+ * 3. Mapas no bloqueados.
+ * 4. Los mapas bloqueados nunca se seleccionan al hacer clic en el tablero.
  */
 export function findEntityAtPosition(
   entities: Entity[],
@@ -144,21 +152,30 @@ export function findEntityAtPosition(
   getCustomBounds?: (ent: Entity) => { width: number; height: number } | null
 ): Entity | undefined {
   const matching = entities.filter((ent) => {
+    // 4. Los mapas bloqueados nunca se seleccionan al hacer clic en el tablero
     if (ent.locked && ent.type === 'map') return false;
     return isEntityHit(ent, worldPos, zoom, entities, getCustomBounds);
   });
 
   if (matching.length === 0) return undefined;
 
-  // Si hay alguna entidad desbloqueada, descartamos las bloqueadas para no robar el clic
-  const unlocked = matching.filter((ent) => !ent.locked);
-  const pool = unlocked.length > 0 ? unlocked : matching;
+  // 1. Entidades no bloqueadas que no son mapa (tokens, objetos, efectos, puertas, luces)
+  const nonMapUnlocked = matching.filter((ent) => !ent.locked && ent.type !== 'map');
+  if (nonMapUnlocked.length > 0) {
+    return sortByPriorityAndZ(nonMapUnlocked)[0];
+  }
 
-  pool.sort((a, b) => {
-    const pDiff = (TYPE_PRIORITY[b.type] ?? 0) - (TYPE_PRIORITY[a.type] ?? 0);
-    if (pDiff !== 0) return pDiff;
-    return (b.zIndex ?? 0) - (a.zIndex ?? 0);
-  });
+  // 2. Entidades bloqueadas que no son mapa
+  const nonMapLocked = matching.filter((ent) => ent.locked && ent.type !== 'map');
+  if (nonMapLocked.length > 0) {
+    return sortByPriorityAndZ(nonMapLocked)[0];
+  }
 
-  return pool[0];
+  // 3. Mapas no bloqueados
+  const unlockedMaps = matching.filter((ent) => !ent.locked && ent.type === 'map');
+  if (unlockedMaps.length > 0) {
+    return sortByPriorityAndZ(unlockedMaps)[0];
+  }
+
+  return undefined;
 }

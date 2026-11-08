@@ -112,4 +112,57 @@ describe('Bloque 1: Entidades bloqueadas seleccionables y prioridad al hacer cli
     expect(result).toBeDefined();
     expect(result?.id).toBe('dungeon_map_unlocked');
   });
+
+  it('mapa sin bloquear + token bloqueado encima → clic sobre el token selecciona el token y no se mueve al arrastrar', () => {
+    const unlockedMap: Entity = {
+      id: 'unlocked_map',
+      type: 'map',
+      name: 'Mapa Suelo',
+      x: 0,
+      y: 0,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      locked: false,
+      visibleToPlayers: true,
+      mapData: {
+        gridWidth: 20,
+        gridHeight: 20,
+        pixelsPerGrid: 70
+      }
+    };
+
+    const lockedToken: Entity = {
+      id: 'locked_token',
+      type: 'token',
+      name: 'Estatua / Token Bloqueado',
+      x: 140,
+      y: 140,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      locked: true,
+      visibleToPlayers: true,
+      zIndex: 10
+    };
+
+    // 1. Al hacer clic sobre las coordenadas del token, debe seleccionarse el token y NO el mapa
+    const clickedEntity = findEntityAtPosition([unlockedMap, lockedToken], { x: 140, y: 140 }, 1.0);
+    expect(clickedEntity).toBeDefined();
+    expect(clickedEntity?.id).toBe('locked_token');
+    expect(clickedEntity?.locked).toBe(true);
+
+    // 2. Comprobar que no se inicia el arrastre al ser una entidad bloqueada
+    // (En PixiCanvas: hitEntity.type !== 'wall' && !hitEntity.locked)
+    let isDraggingEntity = false;
+    let dragEntityId: string | null = null;
+    if (clickedEntity && clickedEntity.type !== 'wall' && !clickedEntity.locked) {
+      isDraggingEntity = true;
+      dragEntityId = clickedEntity.id;
+    }
+
+    expect(isDraggingEntity).toBe(false);
+    expect(dragEntityId).toBeNull();
+  });
 });
+
