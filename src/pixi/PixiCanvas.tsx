@@ -1064,8 +1064,8 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
 
         let newWorldRot = interactionState.current.startEntityRotation + deltaAngle;
 
-        // Rotación de puertas con imán a ángulos rectos (±5°) o pasos de 15° con Shift
-        if (entity.type === 'door') {
+        // Rotación de puertas y cruz giratoria con imán a ángulos rectos (±5°) o pasos de 15° con Shift
+        if (!e.altKey && (entity.type === 'door' || entity.effect?.preset === 'cross_revolving_door')) {
           newWorldRot = snapDoorRotation(newWorldRot, e.shiftKey);
         } else if (e.shiftKey) {
           const step = (15 * Math.PI) / 180;

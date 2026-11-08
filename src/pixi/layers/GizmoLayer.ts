@@ -172,7 +172,11 @@ export class GizmoLayer extends Container {
     if (entity.type === 'effect') {
       let w = 70;
       let h = 70;
-      if (this.effectsLayer && typeof this.effectsLayer.getEntityBounds === 'function') {
+      if (entity.effect?.preset === 'cross_revolving_door') {
+        const size = (entity.effect.trapGridSize ?? 3) * this.gridSize;
+        w = size;
+        h = size;
+      } else if (this.effectsLayer && typeof this.effectsLayer.getEntityBounds === 'function') {
         const bounds = this.effectsLayer.getEntityBounds(entity.id);
         if (bounds) {
           w = bounds.width;

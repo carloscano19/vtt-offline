@@ -103,6 +103,40 @@ export function getAllWallSegments(entities: Entity[]): WallSegment[] {
         source: 'door'
       });
     }
+
+    // 5. Puerta giratoria en X (tipo 'effect' con preset 'cross_revolving_door')
+    // Los 4 brazos actúan como paredes perpendiculares que bloquean visión y movimiento
+    if (ent.type === 'effect' && ent.effect?.preset === 'cross_revolving_door') {
+      const parentMap = ent.mapId ? mapEntitiesById.get(ent.mapId) : undefined;
+      const mapPos = parentMap ? { x: parentMap.x, y: parentMap.y } : { x: 0, y: 0 };
+      const mapRot = parentMap ? parentMap.rotation : 0;
+      const mapScaleX = parentMap ? parentMap.scaleX : 1;
+      const mapScaleY = parentMap ? parentMap.scaleY : 1;
+
+      const centerWorld = parentMap
+        ? localToWorld({ x: ent.x, y: ent.y }, mapPos, mapRot, mapScaleX, mapScaleY)
+        : { x: ent.x, y: ent.y };
+
+      const baseRot = parentMap ? ent.rotation + mapRot : ent.rotation;
+      const gridSize = parentMap?.mapData?.pixelsPerGrid ?? 70;
+      const trapGridSize = ent.effect.trapGridSize ?? 3;
+      const armLength = (trapGridSize / 2) * gridSize * (ent.scaleX || 1);
+
+      // 4 brazos perpendiculares a 0, 90, 180, 270 grados
+      for (let i = 0; i < 4; i++) {
+        const armAngle = baseRot + (i * Math.PI) / 2;
+        const armTipWorld: Point2D = {
+          x: centerWorld.x + armLength * Math.cos(armAngle),
+          y: centerWorld.y + armLength * Math.sin(armAngle)
+        };
+        segments.push({
+          p1: centerWorld,
+          p2: armTipWorld,
+          entityId: ent.id,
+          source: 'door'
+        });
+      }
+    }
   }
 
   return segments;

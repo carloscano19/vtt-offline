@@ -333,6 +333,10 @@ export interface EffectConfig {
   trapMaterial?: 'wood' | 'stone'; // Para cruz giratoria (madera o piedra)
   trapGridSize?: number;   // Tamaño en casillas para trampa (default 3x3 para cruz)
   launchDistance?: number; // Casillas de expulsión fuera del cruce (default 2)
+  crossSpinning?: boolean;
+  crossSpinStartTime?: number;
+  crossSpinStartAngle?: number;
+  crossTargetAngle?: number;
 }
 
 export type ShowAnimationType = 'fade' | 'pop' | 'flash' | 'fall';

@@ -34,14 +34,28 @@ export const ToastContainer: React.FC = () => {
               <Icon className={`w-4 h-4 shrink-0 ${iconColor}`} />
               <span className="font-medium leading-snug">{toast.message}</span>
             </div>
-            <button
-              type="button"
-              onClick={() => removeToast(toast.id)}
-              className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-              title="Cerrar notificación"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {toast.action && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    toast.action?.onClick();
+                    removeToast(toast.id);
+                  }}
+                  className="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-500 text-white font-medium text-[11px] transition-colors shadow-sm"
+                >
+                  {toast.action.label}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => removeToast(toast.id)}
+                className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                title="Cerrar notificación"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         );
       })}

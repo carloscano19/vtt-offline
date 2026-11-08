@@ -63,7 +63,23 @@ class ProceduralEffectNode extends Container {
   public update(entity: Entity, deltaSec: number, isVisible: boolean, isMaster: boolean) {
     this.x = entity.x;
     this.y = entity.y;
-    this.rotation = entity.rotation;
+    if (
+      entity.effect?.preset === 'cross_revolving_door' &&
+      entity.effect.crossSpinning &&
+      entity.effect.crossSpinStartTime
+    ) {
+      const elapsed = (Date.now() - entity.effect.crossSpinStartTime) / 2200;
+      if (elapsed < 1.0) {
+        const ease = 1 - Math.pow(1 - elapsed, 3);
+        const startA = entity.effect.crossSpinStartAngle ?? entity.rotation;
+        const targetA = entity.effect.crossTargetAngle ?? entity.rotation;
+        this.rotation = startA + (targetA - startA) * ease;
+      } else {
+        this.rotation = entity.rotation;
+      }
+    } else {
+      this.rotation = entity.rotation;
+    }
     this.scale.set(entity.scaleX, entity.scaleY);
     this.zIndex = entity.zIndex ?? 25;
 
@@ -326,6 +342,9 @@ class ProceduralEffectNode extends Container {
         break;
       case 'spike_trap':
         this.renderSpikeTrap(entity, color, intensity, dt);
+        break;
+      case 'cross_revolving_door':
+        this.renderCrossRevolvingDoor(entity, color, intensity, dt);
         break;
       default:
         this.renderFireSmall(color, intensity, dt);
@@ -1203,6 +1222,114 @@ class ProceduralEffectNode extends Container {
         }
       }
     }
+  }
+
+  // 19. Puerta giratoria en X (trampa de cruce de 4 brazos)
+  private renderCrossRevolvingDoor(entity: Entity, _color: number, _intensity: number, _dt: number) {
+    const bg = this.baseGfx;
+    const effect = entity.effect;
+    const material = effect?.trapMaterial ?? 'wood';
+    const trapGridSize = effect?.trapGridSize ?? 3;
+    const gridSize = 70;
+    const armLength = (trapGridSize / 2) * gridSize;
+    const armThickness = material === 'stone' ? 14 : 12;
+    const halfThick = armThickness / 2;
+
+    // 1. Dibujar los 4 brazos perpendiculares
+    for (let i = 0; i < 4; i++) {
+      const a = (i * Math.PI) / 2;
+      const cosA = Math.cos(a);
+      const sinA = Math.sin(a);
+      const perpX = -sinA;
+      const perpY = cosA;
+
+      const p1X = -perpX * halfThick;
+      const p1Y = -perpY * halfThick;
+      const p2X = armLength * cosA - perpX * halfThick;
+      const p2Y = armLength * sinA - perpY * halfThick;
+      const p3X = armLength * cosA + perpX * halfThick;
+      const p3Y = armLength * sinA + perpY * halfThick;
+      const p4X = perpX * halfThick;
+      const p4Y = perpY * halfThick;
+
+      if (material === 'wood') {
+        // Viga de madera maciza
+        bg.moveTo(p1X, p1Y);
+        bg.lineTo(p2X, p2Y);
+        bg.lineTo(p3X, p3Y);
+        bg.lineTo(p4X, p4Y);
+        bg.closePath();
+        bg.fill({ color: 0x5c2b09 }); // Madera oscura
+        bg.stroke({ width: 1.5, color: 0x291403 });
+
+        // Veta interior más clara
+        bg.moveTo(15 * cosA, 15 * sinA);
+        bg.lineTo((armLength - 12) * cosA, (armLength - 12) * sinA);
+        bg.stroke({ width: 3, color: 0x92400e, alpha: 0.8 });
+
+        // Refuerzo / cantonera metálica en el extremo del brazo
+        const capStart = armLength - 10;
+        bg.moveTo(capStart * cosA - perpX * (halfThick + 0.5), capStart * sinA - perpY * (halfThick + 0.5));
+        bg.lineTo(armLength * cosA - perpX * (halfThick + 0.5), armLength * sinA - perpY * (halfThick + 0.5));
+        bg.lineTo(armLength * cosA + perpX * (halfThick + 0.5), armLength * sinA + perpY * (halfThick + 0.5));
+        bg.lineTo(capStart * cosA + perpX * (halfThick + 0.5), capStart * sinA + perpY * (halfThick + 0.5));
+        bg.closePath();
+        bg.fill({ color: 0x334155 });
+        bg.stroke({ width: 1.2, color: 0x1e293b });
+
+        // Remaches / pernos de hierro a lo largo del brazo
+        for (const frac of [0.35, 0.65]) {
+          const sx = armLength * frac * cosA;
+          const sy = armLength * frac * sinA;
+          bg.circle(sx, sy, 2.2);
+          bg.fill({ color: 0x1e293b });
+          bg.circle(sx - 0.5, sy - 0.5, 0.8);
+          bg.fill({ color: 0x94a3b8 });
+        }
+      } else {
+        // Losa maciza de piedra cincelada
+        bg.moveTo(p1X, p1Y);
+        bg.lineTo(p2X, p2Y);
+        bg.lineTo(p3X, p3Y);
+        bg.lineTo(p4X, p4Y);
+        bg.closePath();
+        bg.fill({ color: 0x334155 }); // Pizarra / granito
+        bg.stroke({ width: 1.5, color: 0x1e293b });
+
+        // Bisel superior iluminado
+        bg.moveTo(p1X, p1Y);
+        bg.lineTo(p2X, p2Y);
+        bg.stroke({ width: 1.2, color: 0x64748b });
+
+        // División entre bloques de piedra
+        const midDist = armLength * 0.52;
+        bg.moveTo(midDist * cosA - perpX * halfThick, midDist * sinA - perpY * halfThick);
+        bg.lineTo(midDist * cosA + perpX * halfThick, midDist * sinA + perpY * halfThick);
+        bg.stroke({ width: 1.5, color: 0x1e293b });
+
+        // Ranura rúnica central grabada en la piedra
+        bg.moveTo(18 * cosA, 18 * sinA);
+        bg.lineTo((armLength - 8) * cosA, (armLength - 8) * sinA);
+        bg.stroke({ width: 2, color: 0x0f172a, alpha: 0.9 });
+      }
+    }
+
+    // 2. Buje / eje central reforzado
+    // Bridas radiales de anclaje de los brazos
+    bg.circle(0, 0, 18);
+    bg.fill({ color: 0x1e293b });
+    bg.stroke({ width: 2, color: material === 'wood' ? 0x475569 : 0x64748b });
+
+    // Corona metálica central
+    bg.circle(0, 0, 11);
+    bg.fill({ color: 0x334155 });
+    bg.stroke({ width: 1.5, color: 0x0f172a });
+
+    // Perno / pivote de giro
+    bg.circle(0, 0, 4.5);
+    bg.fill({ color: 0x94a3b8 });
+    bg.circle(-1, -1, 1.2);
+    bg.fill({ color: 0xffffff });
   }
 
   public reloadAsset(assetId?: string) {

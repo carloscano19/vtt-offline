@@ -37,6 +37,7 @@ import { getMediaDimensions, persistAssetDimensions } from '../../../utils/media
 import { invalidateCachedTexture } from '../../../pixi/utils/textureCache';
 import { shouldTrimAsset, trimTokenImage, calculateEntityPositionShift } from '../../../utils/tokenImageTrimmer';
 import { EyeDropperButton } from '../../common/EyeDropperButton';
+import { crossTrapManager } from '../../../modules/traps/crossTrapManager';
 
 const EFFECT_PRESET_NAMES: Record<string, string> = {
   torch: 'Antorcha de pared',
@@ -56,7 +57,8 @@ const EFFECT_PRESET_NAMES: Record<string, string> = {
   ice_zone: 'Zona de hielo',
   blade_pendulum: 'Péndulo con cuchilla',
   saw_blade: 'Sierra giratoria',
-  spike_trap: 'Trampa de pinchos'
+  spike_trap: 'Trampa de pinchos',
+  cross_revolving_door: 'Puerta giratoria en X'
 };
 
 import { useShallow } from 'zustand/react/shallow';
@@ -2160,6 +2162,115 @@ export const PropertiesTab: React.FC = () => {
                   className="w-4 h-4 accent-amber-500 rounded cursor-pointer ml-3 shrink-0"
                 />
               </label>
+            </div>
+          )}
+
+          {selectedEntity.effect.preset === 'cross_revolving_door' && (
+            <div className="pt-2 border-t border-slate-700/60 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-slate-300 block">Activar trampa</span>
+                  <span className="text-[10px] text-slate-500 block">
+                    Tira 1d4, hace girar la cruz y expulsa tokens
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => crossTrapManager.trigger(selectedEntity.id)}
+                  className="px-2.5 py-1 text-xs font-medium rounded bg-amber-600 hover:bg-amber-500 text-white transition-colors flex items-center gap-1 shadow-sm"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  Activar
+                </button>
+              </div>
+
+              <div>
+                <span className="text-xs text-slate-300 block mb-1">Material de la cruz</span>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[
+                    { id: 'wood', label: 'Madera y hierro' },
+                    { id: 'stone', label: 'Losas de piedra' }
+                  ].map((mat) => (
+                    <button
+                      key={mat.id}
+                      type="button"
+                      onClick={() =>
+                        handleUpdate({
+                          effect: {
+                            ...selectedEntity.effect!,
+                            trapMaterial: mat.id as 'wood' | 'stone'
+                          }
+                        })
+                      }
+                      className={`py-1 text-xs rounded border transition-colors ${
+                        (selectedEntity.effect?.trapMaterial ?? 'wood') === mat.id
+                          ? 'bg-amber-950/80 border-amber-500 text-amber-300 font-medium'
+                          : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {mat.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <span className="text-xs text-slate-300 block mb-1">
+                  Tamaño de cruce: {selectedEntity.effect?.trapGridSize ?? 3}x{selectedEntity.effect?.trapGridSize ?? 3} casillas
+                </span>
+                <div className="grid grid-cols-4 gap-1">
+                  {[2, 3, 4, 5].map((sz) => (
+                    <button
+                      key={sz}
+                      type="button"
+                      onClick={() =>
+                        handleUpdate({
+                          effect: {
+                            ...selectedEntity.effect!,
+                            trapGridSize: sz
+                          }
+                        })
+                      }
+                      className={`py-1 text-xs rounded border transition-colors ${
+                        (selectedEntity.effect?.trapGridSize ?? 3) === sz
+                          ? 'bg-amber-950/80 border-amber-500 text-amber-300 font-medium'
+                          : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {sz}x{sz}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <span className="text-xs text-slate-300 block mb-1">
+                  Distancia de expulsión: {selectedEntity.effect?.launchDistance ?? 2} casillas fuera
+                </span>
+                <div className="grid grid-cols-4 gap-1">
+                  {[1, 2, 3, 4].map((dist) => (
+                    <button
+                      key={dist}
+                      type="button"
+                      onClick={() =>
+                        handleUpdate({
+                          effect: {
+                            ...selectedEntity.effect!,
+                            launchDistance: dist
+                          }
+                        })
+                      }
+                      className={`py-1 text-xs rounded border transition-colors ${
+                        (selectedEntity.effect?.launchDistance ?? 2) === dist
+                          ? 'bg-amber-950/80 border-amber-500 text-amber-300 font-medium'
+                          : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {dist} cas.
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 

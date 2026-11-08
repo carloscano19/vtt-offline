@@ -10,6 +10,10 @@ export interface ToastNotification {
   id: string;
   message: string;
   type?: 'info' | 'success' | 'warning';
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
 }
 
 interface UIStoreState {
@@ -60,7 +64,12 @@ interface UIStoreState {
   setShowCreditsModal: (show: boolean) => void;
   setEditingTokenStatusesId: (id: string | null) => void;
   setWallDrawMode: (mode: WallDrawMode) => void;
-  addToast: (message: string, type?: 'info' | 'success' | 'warning', durationMs?: number) => void;
+  addToast: (
+    message: string,
+    type?: 'info' | 'success' | 'warning',
+    durationMs?: number,
+    action?: { label: string; onClick: () => void }
+  ) => void;
   removeToast: (id: string) => void;
 }
 
@@ -191,10 +200,10 @@ export const useUIStore = create<UIStoreState>((set) => ({
   setIsPlayerPreviewMode: (isPlayerPreviewMode) => set({ isPlayerPreviewMode }),
   setShowPlayerFrame: (showPlayerFrame) => set({ showPlayerFrame }),
   setEditingTokenStatusesId: (editingTokenStatusesId) => set({ editingTokenStatusesId }),
-  addToast: (message, type = 'info', durationMs = 3500) => {
+  addToast: (message, type = 'info', durationMs = 3500, action) => {
     const id = `toast_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     set((state) => ({
-      toasts: [...state.toasts, { id, message, type }]
+      toasts: [...state.toasts, { id, message, type, action }]
     }));
     if (durationMs > 0) {
       setTimeout(() => {

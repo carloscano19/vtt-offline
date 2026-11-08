@@ -249,6 +249,17 @@ const CATALOG_ITEMS: EffectCatalogItem[] = [
     emitsLight: false,
     baseLightRadius: 0,
     icon: AlertTriangle
+  },
+  {
+    id: 'cross_revolving_door',
+    name: 'Puerta giratoria en X',
+    category: 'traps',
+    description: 'Molinete de 4 brazos para cruces. Gira con tirada 1d4 y expulsa tokens.',
+    defaultColor: '#78350f',
+    defaultScale: 1.0,
+    emitsLight: false,
+    baseLightRadius: 0,
+    icon: Compass
   }
 ];
 
@@ -558,7 +569,10 @@ export const EffectsTab: React.FC = () => {
         trapLength: item.id === 'blade_pendulum' ? 2 : (item.id === 'saw_blade' ? 3 : undefined),
         trapAngle: item.id === 'blade_pendulum' ? 45 : undefined,
         hasRail: item.id === 'saw_blade',
-        hasBlood: false
+        hasBlood: false,
+        trapMaterial: item.id === 'cross_revolving_door' ? 'wood' : undefined,
+        trapGridSize: item.id === 'cross_revolving_door' ? 3 : undefined,
+        launchDistance: item.id === 'cross_revolving_door' ? 2 : undefined
       },
       light: item.emitsLight
         ? {

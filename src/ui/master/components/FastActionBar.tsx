@@ -3,6 +3,7 @@ import { Eye, EyeOff, Lock, Unlock, Copy, Trash2, Sparkles, FlipHorizontal, Flip
 import { useGameStore } from '../../../stores/useGameStore';
 import { useUIStore } from '../../../stores/useUIStore';
 import { worldToScreen, localToWorld } from '../../../pixi/utils/coordinates';
+import { crossTrapManager } from '../../../modules/traps/crossTrapManager';
 
 import type { PixiRenderer } from '../../../pixi/PixiRenderer';
 
@@ -339,6 +340,21 @@ export const FastActionBar: React.FC<FastActionBarProps> = ({
             ) : (
               <VolumeX className="w-4 h-4" />
             )}
+          </button>
+        </>
+      )}
+
+      {/* Botón de Puerta giratoria en X */}
+      {entity.type === 'effect' && entity.effect?.preset === 'cross_revolving_door' && (
+        <>
+          <div className="w-[1px] h-4 bg-slate-700/80 mx-0.5" />
+          <button
+            type="button"
+            onClick={() => crossTrapManager.trigger(entity.id)}
+            className="p-1.5 rounded-md text-amber-400 bg-amber-950/40 hover:bg-amber-900/60 hover:text-amber-300 transition-colors"
+            title="Activar trampa de cruce (tira 1d4, gira y expulsa tokens)"
+          >
+            <Play className="w-4 h-4 fill-current" />
           </button>
         </>
       )}
