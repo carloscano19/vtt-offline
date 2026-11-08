@@ -697,7 +697,7 @@ export const EffectsTab: React.FC = () => {
         </div>
 
         {/* Filtros de categoría */}
-        <div className="flex items-center gap-1 overflow-x-auto scrollbar-none pb-0.5">
+        <div className="flex flex-wrap items-center gap-1.5 pb-1">
           {[
             { id: 'all', label: 'Todos' },
             { id: 'lights', label: 'Luces' },
