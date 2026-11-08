@@ -310,6 +310,6 @@ export class GizmoLayer extends Container {
     const sx = Math.max(0.001, Math.abs(entity.scaleX || 1));
     const lockedStroke = 2 / (zoom * sx);
     this.graphics.rect(bounds.offsetX, bounds.offsetY, bounds.width, bounds.height);
-    this.graphics.stroke({ width: lockedStroke, color: 0xef4444, alpha: 0.75 });
+    this.graphics.stroke({ width: lockedStroke, color: 0x94a3b8, alpha: 0.8 });
   }
 }

@@ -3,6 +3,7 @@ import { PixiRenderer } from './PixiRenderer';
 import { useGameStore } from '../stores/useGameStore';
 import { useUIStore } from '../stores/useUIStore';
 import { screenToWorld, snapPointToGrid, snapPointToGridOrMidpoint, localToWorld, worldToLocal } from './utils/coordinates';
+import { findEntityAtPosition } from './utils/hitTesting';
 import { Entity, Point2D, recalculateDoorEndpoints, rotateDoorAroundHinge, getDefaultSnapToGrid, DEFAULT_STATUS_DESCRIPTIONS } from '../types/entity';
 import { CameraState } from '../types/game';
 import { syncChannel } from '../modules/sync/syncChannel';
@@ -882,101 +883,27 @@ export const PixiCanvas: React.FC<PixiCanvasProps> = ({ isMaster }) => {
         }
       }
 
-      // 5. Buscar entidad bajo el cursor (prioridad: luces > efectos > tokens > objetos > puertas > paredes > mapas)
-      const typePriority: Record<string, number> = { light: 350, effect: 320, token: 300, object: 200, door: 180, wall: 150, map: 100 };
-      const sortedEntities = [...game.entities].sort((a, b) => {
-        const pDiff = (typePriority[b.type] ?? 0) - (typePriority[a.type] ?? 0);
-        if (pDiff !== 0) return pDiff;
-        return (b.zIndex ?? 0) - (a.zIndex ?? 0);
-      });
-
-      const hitEntity = sortedEntities.find((ent) => {
-        if (ent.locked) return false;
-
-        if (ent.type === 'light') {
-          return Math.hypot(worldPos.x - ent.x, worldPos.y - ent.y) <= Math.max(20 / camera.zoom, 25);
-        }
-
-        if (ent.type === 'wall' && ent.points && ent.points.length >= 2) {
-          const pts = ent.points;
-          const count = ent.closed ? pts.length : pts.length - 1;
-          for (let i = 0; i < count; i++) {
-            const p1 = getWallNodeWorldPos(ent, pts[i]);
-            const p2 = getWallNodeWorldPos(ent, pts[(i + 1) % pts.length]);
-            const l2 = (p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2;
-            if (l2 === 0) continue;
-            let t = ((worldPos.x - p1.x) * (p2.x - p1.x) + (worldPos.y - p1.y) * (p2.y - p1.y)) / l2;
-            t = Math.max(0, Math.min(1, t));
-            const projX = p1.x + t * (p2.x - p1.x);
-            const projY = p1.y + t * (p2.y - p1.y);
-            if (Math.hypot(worldPos.x - projX, worldPos.y - projY) <= 12 / camera.zoom) {
-              return true;
-            }
+      // 5. Buscar entidad bajo el cursor (prioridad: no bloqueadas > bloqueadas; luces > efectos > tokens > objetos > puertas > paredes > mapas)
+      const hitEntity = findEntityAtPosition(
+        game.entities,
+        worldPos,
+        camera.zoom,
+        (ent) => {
+          if (rendererRef.current?.gizmoLayer) {
+            return rendererRef.current.gizmoLayer.getEntityLocalBounds(ent);
           }
-          return false;
-        }
-
-        if (ent.type === 'door' && ent.door) {
-          const parentMap = ent.mapId ? game.entities.find((m) => m.id === ent.mapId) : undefined;
-          const p1 = parentMap ? localToWorld(ent.door.p1, { x: parentMap.x, y: parentMap.y }, parentMap.rotation, parentMap.scaleX, parentMap.scaleY) : ent.door.p1;
-          const p2 = parentMap ? localToWorld(ent.door.p2, { x: parentMap.x, y: parentMap.y }, parentMap.rotation, parentMap.scaleX, parentMap.scaleY) : ent.door.p2;
-
-          const l2 = (p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2;
-          if (l2 > 0) {
-            let t = ((worldPos.x - p1.x) * (p2.x - p1.x) + (worldPos.y - p1.y) * (p2.y - p1.y)) / l2;
-            t = Math.max(0, Math.min(1, t));
-            const projX = p1.x + t * (p2.x - p1.x);
-            const projY = p1.y + t * (p2.y - p1.y);
-            if (Math.hypot(worldPos.x - projX, worldPos.y - projY) <= Math.max(16 / camera.zoom, 18)) {
-              return true;
-            }
+          if (rendererRef.current?.tokensLayer) {
+            const tb = rendererRef.current.tokensLayer.getEntityBounds(ent.id);
+            if (tb) return { width: tb.radius * 2, height: tb.radius * 2 };
           }
-          if (ent.door.isOpen) {
-            const length = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-            const baseAngle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-            const currentAngle = baseAngle + (ent.door.openAngle ?? Math.PI / 2);
-            const leafEnd = {
-              x: p1.x + Math.cos(currentAngle) * length,
-              y: p1.y + Math.sin(currentAngle) * length
-            };
-            const leafL2 = (leafEnd.x - p1.x) ** 2 + (leafEnd.y - p1.y) ** 2;
-            if (leafL2 > 0) {
-              let t = ((worldPos.x - p1.x) * (leafEnd.x - p1.x) + (worldPos.y - p1.y) * (leafEnd.y - p1.y)) / leafL2;
-              t = Math.max(0, Math.min(1, t));
-              const projX = p1.x + t * (leafEnd.x - p1.x);
-              const projY = p1.y + t * (leafEnd.y - p1.y);
-              if (Math.hypot(worldPos.x - projX, worldPos.y - projY) <= Math.max(16 / camera.zoom, 18)) {
-                return true;
-              }
-            }
-          }
-          return false;
+          return null;
         }
-
-        if (ent.type === 'map') {
-          const mapW = (ent.mapData?.gridWidth ?? 10) * (ent.mapData?.pixelsPerGrid ?? 70) * ent.scaleX;
-          const mapH = (ent.mapData?.gridHeight ?? 10) * (ent.mapData?.pixelsPerGrid ?? 70) * ent.scaleY;
-          return worldPos.x >= ent.x && worldPos.x <= ent.x + mapW && worldPos.y >= ent.y && worldPos.y <= ent.y + mapH;
-        }
-
-        let baseRadius = ent.type === 'token' || ent.type === 'effect' ? 35 : 45;
-        if (rendererRef.current?.gizmoLayer) {
-          const lb = rendererRef.current.gizmoLayer.getEntityLocalBounds(ent);
-          if (lb) {
-            baseRadius = Math.max(lb.width, lb.height) / 2;
-          }
-        } else if (rendererRef.current?.tokensLayer) {
-          const tb = rendererRef.current.tokensLayer.getEntityBounds(ent.id);
-          if (tb) baseRadius = tb.radius;
-        }
-        const effectiveRadius = Math.max(25, baseRadius * Math.max(Math.abs(ent.scaleX), Math.abs(ent.scaleY)));
-        const dist = Math.hypot(worldPos.x - ent.x, worldPos.y - ent.y);
-        return dist <= effectiveRadius;
-      });
+      );
 
       if (hitEntity) {
         selectEntity(hitEntity.id, e.shiftKey);
-        if (hitEntity.type !== 'wall') {
+        // Las entidades bloqueadas se pueden seleccionar y muestran FastActionBar, pero NO se pueden arrastrar
+        if (hitEntity.type !== 'wall' && !hitEntity.locked) {
           syncChannel.setDraggingActive(true);
           interactionState.current.isDraggingEntity = true;
           interactionState.current.dragEntityId = hitEntity.id;
