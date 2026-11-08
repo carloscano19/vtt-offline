@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, EyeOff, Lock, Unlock, Copy, Trash2, Sparkles, FlipHorizontal, FlipVertical, RotateCcw, Play, Volume2, VolumeX } from 'lucide-react';
+import { Eye, EyeOff, Lock, Unlock, Copy, Trash2, Sparkles, FlipHorizontal, FlipVertical, RotateCcw, Play, Pause, Volume2, VolumeX } from 'lucide-react';
 import { useGameStore } from '../../../stores/useGameStore';
 import { useUIStore } from '../../../stores/useUIStore';
 import { worldToScreen, localToWorld } from '../../../pixi/utils/coordinates';
@@ -344,17 +344,21 @@ export const FastActionBar: React.FC<FastActionBarProps> = ({
         </>
       )}
 
-      {/* Botón de Puerta giratoria en X */}
+      {/* Botón de Puerta giratoria en X (Pausar / Reanudar) */}
       {entity.type === 'effect' && entity.effect?.preset === 'cross_revolving_door' && (
         <>
           <div className="w-[1px] h-4 bg-slate-700/80 mx-0.5" />
           <button
             type="button"
-            onClick={() => crossTrapManager.trigger(entity.id)}
+            onClick={() => crossTrapManager.togglePause(entity.id)}
             className="p-1.5 rounded-md text-amber-400 bg-amber-950/40 hover:bg-amber-900/60 hover:text-amber-300 transition-colors"
-            title="Activar trampa de cruce (tira 1d4, gira y expulsa tokens)"
+            title={entity.effect?.crossPaused ? 'Reanudar rotación' : 'Pausar rotación'}
           >
-            <Play className="w-4 h-4 fill-current" />
+            {entity.effect?.crossPaused ? (
+              <Play className="w-4 h-4 fill-current" />
+            ) : (
+              <Pause className="w-4 h-4 fill-current" />
+            )}
           </button>
         </>
       )}

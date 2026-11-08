@@ -572,7 +572,10 @@ export const EffectsTab: React.FC = () => {
         hasBlood: false,
         trapMaterial: item.id === 'cross_revolving_door' ? 'wood' : undefined,
         trapGridSize: item.id === 'cross_revolving_door' ? 3 : undefined,
-        launchDistance: item.id === 'cross_revolving_door' ? 2 : undefined
+        crossSpeed: item.id === 'cross_revolving_door' ? 6 : undefined,
+        crossDirection: item.id === 'cross_revolving_door' ? 'cw' : undefined,
+        crossPaused: item.id === 'cross_revolving_door' ? false : undefined,
+        crossStartTime: item.id === 'cross_revolving_door' ? Date.now() : undefined
       },
       light: item.emitsLight
         ? {

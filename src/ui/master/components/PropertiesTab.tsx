@@ -16,6 +16,7 @@ import {
   Flame,
   Sliders,
   Play,
+  Pause,
   Pipette,
   RotateCw,
   RefreshCcw,
@@ -2169,19 +2170,75 @@ export const PropertiesTab: React.FC = () => {
             <div className="pt-2 border-t border-slate-700/60 space-y-2.5">
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-xs text-slate-300 block">Activar trampa</span>
+                  <span className="text-xs text-slate-300 block">
+                    {selectedEntity.effect.crossPaused ? 'Rotación en pausa' : 'Rotación continua activa'}
+                  </span>
                   <span className="text-[10px] text-slate-500 block">
-                    Tira 1d4, hace girar la cruz y expulsa tokens
+                    {selectedEntity.effect.crossPaused ? 'Los brazos están congelados' : 'Gira de forma continua'}
                   </span>
                 </div>
                 <button
                   type="button"
-                  onClick={() => crossTrapManager.trigger(selectedEntity.id)}
-                  className="px-2.5 py-1 text-xs font-medium rounded bg-amber-600 hover:bg-amber-500 text-white transition-colors flex items-center gap-1 shadow-sm"
+                  onClick={() => crossTrapManager.togglePause(selectedEntity.id)}
+                  className={`px-2.5 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1 shadow-sm ${
+                    selectedEntity.effect.crossPaused
+                      ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                      : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
+                  }`}
                 >
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  Activar
+                  {selectedEntity.effect.crossPaused ? (
+                    <>
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      Reanudar
+                    </>
+                  ) : (
+                    <>
+                      <Pause className="w-3.5 h-3.5 fill-current" />
+                      Pausar
+                    </>
+                  )}
                 </button>
+              </div>
+
+              <div>
+                <span className="text-xs text-slate-300 block mb-1">Sentido de giro</span>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[
+                    { id: 'cw', label: 'Horario (CW)' },
+                    { id: 'ccw', label: 'Antihorario (CCW)' }
+                  ].map((dir) => (
+                    <button
+                      key={dir.id}
+                      type="button"
+                      onClick={() => crossTrapManager.setDirection(selectedEntity.id, dir.id as 'cw' | 'ccw')}
+                      className={`py-1 text-xs rounded border transition-colors ${
+                        (selectedEntity.effect?.crossDirection ?? 'cw') === dir.id
+                          ? 'bg-amber-950/80 border-amber-500 text-amber-300 font-medium'
+                          : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {dir.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400">Velocidad</span>
+                  <span className="text-white font-mono">
+                    {selectedEntity.effect?.crossSpeed ?? 6} s / vuelta
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="30"
+                  step="0.5"
+                  value={selectedEntity.effect?.crossSpeed ?? 6}
+                  onChange={(e) => crossTrapManager.setSpeed(selectedEntity.id, parseFloat(e.target.value))}
+                  className="w-full accent-amber-500 h-1.5 bg-slate-700 rounded-lg cursor-pointer"
+                />
               </div>
 
               <div>
@@ -2238,35 +2295,6 @@ export const PropertiesTab: React.FC = () => {
                       }`}
                     >
                       {sz}x{sz}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <span className="text-xs text-slate-300 block mb-1">
-                  Distancia de expulsión: {selectedEntity.effect?.launchDistance ?? 2} casillas fuera
-                </span>
-                <div className="grid grid-cols-4 gap-1">
-                  {[1, 2, 3, 4].map((dist) => (
-                    <button
-                      key={dist}
-                      type="button"
-                      onClick={() =>
-                        handleUpdate({
-                          effect: {
-                            ...selectedEntity.effect!,
-                            launchDistance: dist
-                          }
-                        })
-                      }
-                      className={`py-1 text-xs rounded border transition-colors ${
-                        (selectedEntity.effect?.launchDistance ?? 2) === dist
-                          ? 'bg-amber-950/80 border-amber-500 text-amber-300 font-medium'
-                          : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {dist} cas.
                     </button>
                   ))}
                 </div>
@@ -2746,20 +2774,35 @@ export const PropertiesTab: React.FC = () => {
             <span className="text-slate-300">Rotación continua</span>
             <input
               type="checkbox"
-              checked={selectedEntity.animations?.rotation?.enabled ?? false}
-              onChange={(e) =>
-                handleUpdate({
+              checked={
+                selectedEntity.effect?.preset === 'cross_revolving_door'
+                  ? !selectedEntity.effect.crossPaused
+                  : (selectedEntity.animations?.rotation?.enabled ?? false)
+              }
+              onChange={(e) => {
+                const isEnabled = e.target.checked;
+                const now = Date.now();
+                const updates: any = {
                   animations: {
                     ...selectedEntity.animations,
                     rotation: {
-                      enabled: e.target.checked,
+                      enabled: isEnabled,
                       speed: selectedEntity.animations?.rotation?.speed ?? 0.2,
                       direction: selectedEntity.animations?.rotation?.direction ?? 'cw',
-                      isVps: true
+                      isVps: true,
+                      startTime: isEnabled ? now : undefined
                     }
                   }
-                })
-              }
+                };
+                if (selectedEntity.effect?.preset === 'cross_revolving_door') {
+                  updates.effect = {
+                    ...selectedEntity.effect,
+                    crossPaused: !isEnabled,
+                    crossStartTime: isEnabled ? now : undefined
+                  };
+                }
+                handleUpdate(updates);
+              }}
               className="accent-purple-500 rounded cursor-pointer"
             />
           </div>

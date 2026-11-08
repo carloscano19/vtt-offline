@@ -3,6 +3,7 @@ import { getAllWallSegments } from '../walls/wallManager';
 import { computeVisibilityPolygon, clipPolygonToCone } from '../vision/visibilityPolygon';
 import { parseColor, colorToHex } from '../../utils/color';
 import { doorAnimationManager } from '../doors/doorAnimationManager';
+import { getCrossTrapAngle } from '../traps/crossTrapManager';
 
 export interface LightVisibility {
   lightId: string;
@@ -38,8 +39,12 @@ export class LightManager {
    */
   private generateWallPart(entities: Entity[]): string {
     return entities
-      .filter((e) => e.type === 'wall' || e.type === 'door' || e.type === 'map')
+      .filter((e) => e.type === 'wall' || e.type === 'door' || e.type === 'map' || (e.type === 'effect' && e.effect?.preset === 'cross_revolving_door'))
       .map((e) => {
+        if (e.type === 'effect' && e.effect?.preset === 'cross_revolving_door') {
+          const currentAngle = getCrossTrapAngle(e);
+          return `xrd:${e.id}:${Math.round(e.x)}:${Math.round(e.y)}:${currentAngle.toFixed(2)}`;
+        }
         if (e.type === 'door') {
           return `d:${e.id}:${doorAnimationManager.isFullyOpen(e.id, Boolean(e.door?.isOpen))}:${e.door?.isLocked}:${Math.round(e.door?.p1.x || 0)}:${Math.round(e.door?.p1.y || 0)}`;
         }

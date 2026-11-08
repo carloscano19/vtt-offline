@@ -8,6 +8,7 @@ import { parseColor } from '../../utils/color';
 import { ShowAnimationController } from '../utils/showAnimation';
 import { useGameStore } from '../../stores/useGameStore';
 import { playSpikeTrapSound } from '../../modules/audio/trapAudio';
+import { getCrossTrapAngle, getGenericRotationAngle } from '../../modules/traps/crossTrapManager';
 
 interface EffectParticle {
   x: number;
@@ -63,23 +64,35 @@ class ProceduralEffectNode extends Container {
   public update(entity: Entity, deltaSec: number, isVisible: boolean, isMaster: boolean) {
     this.x = entity.x;
     this.y = entity.y;
-    if (
-      entity.effect?.preset === 'cross_revolving_door' &&
-      entity.effect.crossSpinning &&
-      entity.effect.crossSpinStartTime
-    ) {
-      const elapsed = (Date.now() - entity.effect.crossSpinStartTime) / 2200;
-      if (elapsed < 1.0) {
-        const ease = 1 - Math.pow(1 - elapsed, 3);
-        const startA = entity.effect.crossSpinStartAngle ?? entity.rotation;
-        const targetA = entity.effect.crossTargetAngle ?? entity.rotation;
-        this.rotation = startA + (targetA - startA) * ease;
-      } else {
-        this.rotation = entity.rotation;
-      }
-    } else {
-      this.rotation = entity.rotation;
+
+    let totalRot = entity.rotation || 0;
+    if (entity.effect?.preset === 'cross_revolving_door') {
+      totalRot = getCrossTrapAngle(entity, Date.now());
+    } else if (entity.animations?.rotation?.enabled) {
+      totalRot += getGenericRotationAngle(entity, Date.now());
     }
+
+    // Animaciones físicas adicionales: temblor y vaivén
+    let offsetX = 0;
+    let offsetY = 0;
+    if (entity.animations?.shake?.enabled) {
+      const intensity = entity.animations.shake.intensity ?? 4;
+      const freq = (entity.animations.shake.speed ?? 5) * 8;
+      offsetX += Math.sin(this.time * freq) * intensity;
+      offsetY += Math.cos(this.time * freq * 1.3) * intensity;
+    }
+    if (entity.animations?.sway?.enabled) {
+      if (entity.animations.sway.mode === 'pendulum') {
+        const angleDeg = entity.animations.sway.angle ?? 30;
+        const angleRad = (angleDeg * Math.PI) / 180;
+        const swaySpeed = entity.animations.sway.speed ?? 2;
+        totalRot += Math.sin(this.time * swaySpeed) * angleRad;
+      }
+    }
+
+    this.x += offsetX;
+    this.y += offsetY;
+    this.rotation = totalRot;
     this.scale.set(entity.scaleX, entity.scaleY);
     this.zIndex = entity.zIndex ?? 25;
 

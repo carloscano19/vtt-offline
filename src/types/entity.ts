@@ -181,6 +181,8 @@ export interface EntityAnimations {
     speed: number; // vueltas por segundo (v/s)
     direction?: 'cw' | 'ccw';
     isVps?: boolean;
+    startTime?: number; // timestamp en ms para sincronización compartida
+    paused?: boolean;
   };
   shake?: {
     enabled: boolean;
@@ -332,11 +334,10 @@ export interface EffectConfig {
   trapTriggerTime?: number;// Marca temporal de activación sincronizada
   trapMaterial?: 'wood' | 'stone'; // Para cruz giratoria (madera o piedra)
   trapGridSize?: number;   // Tamaño en casillas para trampa (default 3x3 para cruz)
-  launchDistance?: number; // Casillas de expulsión fuera del cruce (default 2)
-  crossSpinning?: boolean;
-  crossSpinStartTime?: number;
-  crossSpinStartAngle?: number;
-  crossTargetAngle?: number;
+  crossSpeed?: number;     // Segundos por vuelta para rotación continua (default 6)
+  crossDirection?: 'cw' | 'ccw'; // Sentido de rotación continua (default 'cw')
+  crossPaused?: boolean;   // Si la rotación continua está en pausa (default false)
+  crossStartTime?: number; // Marca de tiempo compartida para sincronización
 }
 
 export type ShowAnimationType = 'fade' | 'pop' | 'flash' | 'fall';

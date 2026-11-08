@@ -60,6 +60,13 @@ export class PixiRenderer {
   private lastVisibilities: any[] | null = null;
   private lastWorldBounds: { x: number; y: number; width: number; height: number } | null = null;
   private lastSelectedIds: string[] = [];
+  private crossVisionThrottleTimer = 0;
+  private lastFogEnabled = false;
+  private lastIsPlayerPreview = false;
+  private lastFogExplored: any[] = [];
+  private lastFogRevealed: any[] = [];
+  private lastRememberExplored = false;
+  private lastShowDebugOverlay = true;
 
   constructor(isMaster: boolean) {
     this.isMaster = isMaster;
@@ -234,6 +241,55 @@ export class PixiRenderer {
         if (!this.isMaster) {
           this.tokensLayer?.tick(deltaSec);
         }
+
+        // Recálculo de visión limitado a como mucho 10 veces por segundo para cruces giratorias activas
+        const hasSpinningCross = this.lastEntities?.some(
+          (e) => e.type === 'effect' && e.effect?.preset === 'cross_revolving_door' && !e.effect.crossPaused
+        );
+
+        if (hasSpinningCross && this.lastEntities && this.lastCamera && this.app && this.app.renderer) {
+          this.crossVisionThrottleTimer += deltaSec;
+          // Como mucho 10 veces por segundo (cada 100 ms)
+          if (this.crossVisionThrottleTimer >= 0.1) {
+            this.crossVisionThrottleTimer = 0;
+            const currentGrid = this.lastGridSize || 70;
+            const visibilities = visionManager.getTokensVisibility(this.lastEntities, currentGrid);
+            const lights = lightManager.getLightsVisibility(this.lastEntities, currentGrid);
+            this.lastVisibilities = visibilities;
+            this.lastLights = lights;
+
+            if (this.lastAmbient && this.lastWorldBounds) {
+              this.ambientLayer?.update(
+                this.lastAmbient,
+                lights,
+                this.lastWorldBounds,
+                deltaSec,
+                visibilities
+              );
+            }
+
+            if (this.lastWorldBounds && this.fogLayer) {
+              const isPlayerPrev = this.lastIsPlayerPreview ?? false;
+              const fogEn = this.lastFogEnabled ?? false;
+              this.fogLayer.update(
+                this.app.renderer as Renderer,
+                fogEn,
+                isPlayerPrev,
+                visibilities,
+                this.lastFogExplored ?? [],
+                this.lastWorldBounds,
+                currentGrid,
+                this.lastFogRevealed ?? [],
+                this.lastRememberExplored ?? false,
+                lights
+              );
+            }
+
+            if (this.lastShowDebugOverlay && !this.lastIsPlayerPreview) {
+              this.debugVttLayer?.update(this.lastEntities, true);
+            }
+          }
+        }
       });
 
       this.unsubTextureInvalidated = onTextureInvalidated((assetId) => {
@@ -315,6 +371,12 @@ export class PixiRenderer {
     this.lastVisibilities = visibilities;
     this.lastWorldBounds = worldBounds;
     this.lastSelectedIds = selectedIds;
+    this.lastFogEnabled = game.fog.enabled;
+    this.lastIsPlayerPreview = isPlayerPreview;
+    this.lastFogExplored = game.fog.explored ?? [];
+    this.lastFogRevealed = game.fog.revealed ?? [];
+    this.lastRememberExplored = game.fog.rememberExplored ?? false;
+    this.lastShowDebugOverlay = showDebugOverlay;
 
     // Sincronizar capas
     this.mapsLayer.syncEntities(game.entities);

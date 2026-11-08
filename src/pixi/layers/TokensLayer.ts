@@ -598,7 +598,10 @@ export class TokensLayer extends Container {
           const dirMultiplier = anim.rotation.direction === 'ccw' ? -1 : 1;
           const vps = anim.rotation.speed ?? 0.2;
           const rotSpeed = vps * (Math.PI * 2) * dirMultiplier;
-          extraRot += this.animTime * rotSpeed;
+          const elapsed = anim.rotation.startTime && anim.rotation.startTime > 0
+            ? (Date.now() - anim.rotation.startTime) / 1000
+            : this.animTime;
+          extraRot += elapsed * rotSpeed;
         }
 
         // Temblor / Shake

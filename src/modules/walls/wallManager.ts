@@ -1,6 +1,7 @@
 import { Entity, Point2D } from '../../types/entity';
 import { localToWorld } from '../../pixi/utils/coordinates';
 import { doorAnimationManager } from '../doors/doorAnimationManager';
+import { getCrossTrapAngle } from '../traps/crossTrapManager';
 
 export interface WallSegment {
   p1: Point2D;
@@ -14,7 +15,7 @@ export interface WallSegment {
  * existentes en la partida (paredes UVTT + paredes invisibles dibujadas + puertas cerradas).
  * Función consumida directamente por los algoritmos de visión y FoW en la Fase 2.
  */
-export function getAllWallSegments(entities: Entity[]): WallSegment[] {
+export function getAllWallSegments(entities: Entity[], now: number = Date.now()): WallSegment[] {
   const segments: WallSegment[] = [];
   const mapEntitiesById = new Map<string, Entity>();
 
@@ -117,7 +118,8 @@ export function getAllWallSegments(entities: Entity[]): WallSegment[] {
         ? localToWorld({ x: ent.x, y: ent.y }, mapPos, mapRot, mapScaleX, mapScaleY)
         : { x: ent.x, y: ent.y };
 
-      const baseRot = parentMap ? ent.rotation + mapRot : ent.rotation;
+      const trapAngle = getCrossTrapAngle(ent, now);
+      const baseRot = parentMap ? trapAngle + mapRot : trapAngle;
       const gridSize = parentMap?.mapData?.pixelsPerGrid ?? 70;
       const trapGridSize = ent.effect.trapGridSize ?? 3;
       const armLength = (trapGridSize / 2) * gridSize * (ent.scaleX || 1);
