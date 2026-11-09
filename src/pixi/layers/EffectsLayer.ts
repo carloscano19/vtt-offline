@@ -1,6 +1,6 @@
 import { Container, Graphics, Sprite, Texture, ColorMatrixFilter } from 'pixi.js';
 import { Entity, EffectConfig, EffectPresetId, Point2D, ShowAnimationType } from '../../types/entity';
-import { CameraState } from '../../types/game';
+import { CameraState, ExploredMultiPolygon } from '../../types/game';
 import { getTextureForAsset, getGifDataForAsset, getCachedTexture } from '../utils/textureCache';
 import { videoManager } from '../../modules/media/videoManager';
 import { AnimatedGifData, getFrameTextureForTime } from '../../modules/media/gifDecoder';
@@ -9,6 +9,7 @@ import { ShowAnimationController } from '../utils/showAnimation';
 import { useGameStore } from '../../stores/useGameStore';
 import { playSpikeTrapSound } from '../../modules/audio/trapAudio';
 import { getCrossTrapAngle, getGenericRotationAngle } from '../../modules/traps/crossTrapManager';
+import { isPointInMultiPolygon } from '../../modules/vision/fogRegions';
 
 interface EffectParticle {
   x: number;
@@ -61,7 +62,15 @@ class ProceduralEffectNode extends Container {
     this.showAnimCtrl.trigger(this.entityId, animType, this, 70);
   }
 
-  public update(entity: Entity, deltaSec: number, isVisible: boolean, isMaster: boolean) {
+  public update(
+    entity: Entity,
+    deltaSec: number,
+    isVisible: boolean,
+    isMaster: boolean,
+    isPlayerPreview = false,
+    fogEnabled = true,
+    totalVisibleRegion?: ExploredMultiPolygon
+  ) {
     this.x = entity.x;
     this.y = entity.y;
 
@@ -97,8 +106,9 @@ class ProceduralEffectNode extends Container {
     this.zIndex = entity.zIndex ?? 25;
 
     // Opacidad configurable combinada con visibilidad para jugadores
+    const evaluatePlayerVisibility = !isMaster || isPlayerPreview;
     const entityOpacity = typeof entity.opacity === 'number' ? entity.opacity : 1.0;
-    if (isMaster) {
+    if (!evaluatePlayerVisibility) {
       this.alpha = (entity.visibleToPlayers ? 1.0 : 0.45) * entityOpacity;
       if (!isVisible) {
         this.visible = false;
@@ -106,7 +116,17 @@ class ProceduralEffectNode extends Container {
       }
       this.visible = true;
     } else {
-      const target = entity.visibleToPlayers ? 1.0 : 0.0;
+      let target = entity.visibleToPlayers ? 1.0 : 0.0;
+      if (fogEnabled && target > 0) {
+        const pt = { x: entity.x, y: entity.y };
+        const isInside = totalVisibleRegion && totalVisibleRegion.length > 0
+          ? isPointInMultiPolygon(pt, totalVisibleRegion)
+          : false;
+        if (!isInside) {
+          target = 0.0;
+        }
+      }
+
       if (!this.hasInitializedFade) {
         this.hasInitializedFade = true;
         this.fadeFactor = target;
@@ -1396,10 +1416,13 @@ export class EffectsLayer extends Container {
     camera: CameraState,
     screenWidth: number,
     screenHeight: number,
-    deltaSeconds: number = 0.016
+    deltaSeconds: number = 0.016,
+    isPlayerPreview = false,
+    fogEnabled = true,
+    totalVisibleRegion?: ExploredMultiPolygon
   ) {
     const effectEntities = entities.filter(
-      (e) => e.type === 'effect' && (this.isMaster || e.visibleToPlayers !== false)
+      (e) => e.type === 'effect' && ((this.isMaster && !isPlayerPreview) || e.visibleToPlayers !== false)
     );
 
     const currentIds = new Set<string>();
@@ -1442,7 +1465,15 @@ export class EffectsLayer extends Container {
         ent.y <= maxWorldY;
 
       (node as any)._lastEntity = ent;
-      node.update(ent, deltaSeconds, isVisibleInView, this.isMaster);
+      node.update(
+        ent,
+        deltaSeconds,
+        isVisibleInView,
+        this.isMaster,
+        isPlayerPreview,
+        fogEnabled,
+        totalVisibleRegion
+      );
     }
 
     // Limpiar efectos eliminados

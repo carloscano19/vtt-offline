@@ -3,7 +3,7 @@ import polygonClipping from 'polygon-clipping';
 import { Point2D } from '../src/types/entity';
 import { ExploredMultiPolygon } from '../src/types/game';
 import { unionExplored, visionToMulti } from '../src/modules/vision/fogMemory';
-import { computeFogRegions, multiPolygonArea } from '../src/modules/vision/fogRegions';
+import { computeFogRegions, multiPolygonArea, isPointInMultiPolygon } from '../src/modules/vision/fogRegions';
 
 describe('computeFogRegions (Render Lógico de Niebla)', () => {
   const bounds = { x: -1000, y: -1000, width: 2000, height: 2000 };
@@ -166,5 +166,132 @@ describe('computeFogRegions (Render Lógico de Niebla)', () => {
       regions.visibleDim
     ) as ExploredMultiPolygon;
     expect(multiPolygonArea(overlap)).toBe(0);
+  });
+
+  describe('Niebla de guerra sobre las luces (Cartulina con agujero)', () => {
+    // Jugador en (0, 0) con radio de visión 150 y línea de visión ilimitada (hasta 800)
+    const tokenVis = {
+      tokenId: 'player',
+      brightPolygon: [
+        { x: -150, y: -150 },
+        { x: 150, y: -150 },
+        { x: 150, y: 150 },
+        { x: -150, y: 150 }
+      ],
+      totalPolygon: [
+        { x: -150, y: -150 },
+        { x: 150, y: -150 },
+        { x: 150, y: 150 },
+        { x: -150, y: 150 }
+      ],
+      losPolygon: [
+        { x: -800, y: -800 },
+        { x: 800, y: -800 },
+        { x: 800, y: 800 },
+        { x: -800, y: 800 }
+      ]
+    };
+
+    it('1. Una antorcha fuera del radio de visión pero con línea de visión no se ve; si entra en el radio de visión, sí', () => {
+      // Antorcha lejana a (500, 0) fuera del radio de visión (150) pero dentro del LoS
+      const farTorchLight = {
+        lightId: 'torch-far',
+        x: 500,
+        y: 0,
+        brightPolygon: [
+          { x: 450, y: -50 },
+          { x: 550, y: -50 },
+          { x: 550, y: 50 },
+          { x: 450, y: 50 }
+        ],
+        totalPolygon: [
+          { x: 400, y: -100 },
+          { x: 600, y: -100 },
+          { x: 600, y: 100 },
+          { x: 400, y: 100 }
+        ]
+      };
+
+      // Por defecto (showFarLightsInLoS = false): la antorcha lejana NO amplía el agujero visible
+      const regionsOutside = computeFogRegions([], [tokenVis], bounds, [], false, [farTorchLight], false);
+      expect(isPointInMultiPolygon({ x: 500, y: 0 }, regionsOutside.visible)).toBe(false);
+
+      // Si la antorcha está dentro del radio de visión (en (100, 0)): sí está dentro del agujero visible
+      expect(isPointInMultiPolygon({ x: 100, y: 0 }, regionsOutside.visible)).toBe(true);
+
+      const nearTorchLight = {
+        lightId: 'torch-near',
+        x: 100,
+        y: 0,
+        brightPolygon: [
+          { x: 50, y: -50 },
+          { x: 150, y: -50 },
+          { x: 150, y: 50 },
+          { x: 50, y: 50 }
+        ],
+        totalPolygon: [
+          { x: 0, y: -100 },
+          { x: 200, y: -100 },
+          { x: 200, y: 100 },
+          { x: 0, y: 100 }
+        ]
+      };
+      const regionsInside = computeFogRegions([], [tokenVis], bounds, [], false, [nearTorchLight], false);
+      expect(isPointInMultiPolygon({ x: 100, y: 0 }, regionsInside.visible)).toBe(true);
+    });
+
+    it('2. Un enemigo con luz propia fuera del radio de visión no se ve', () => {
+      // Enemigo a (450, 450) con luz propia
+      const enemyLight = {
+        lightId: 'enemy-torch',
+        x: 450,
+        y: 450,
+        brightPolygon: [
+          { x: 400, y: 400 },
+          { x: 500, y: 400 },
+          { x: 500, y: 500 },
+          { x: 400, y: 500 }
+        ],
+        totalPolygon: [
+          { x: 350, y: 350 },
+          { x: 550, y: 350 },
+          { x: 550, y: 550 },
+          { x: 350, y: 550 }
+        ]
+      };
+
+      const regions = computeFogRegions([], [tokenVis], bounds, [], false, [enemyLight], false);
+
+      // La posición del enemigo y su luz están fuera de la región visible de los jugadores
+      expect(isPointInMultiPolygon({ x: 450, y: 450 }, regions.visible)).toBe(false);
+      expect(isPointInMultiPolygon({ x: 400, y: 400 }, regions.visible)).toBe(false);
+      // El área visible es estrictamente la del jugador (150*2 x 150*2 = 90,000)
+      expect(multiPolygonArea(regions.visible)).toBeCloseTo(90000, -2);
+    });
+
+    it('3. Con el selector activado (showFarLightsInLoS = true), vuelve el comportamiento anterior', () => {
+      const farTorchLight = {
+        lightId: 'torch-far',
+        x: 500,
+        y: 0,
+        brightPolygon: [
+          { x: 450, y: -50 },
+          { x: 550, y: -50 },
+          { x: 550, y: 50 },
+          { x: 450, y: 50 }
+        ],
+        totalPolygon: [
+          { x: 400, y: -100 },
+          { x: 600, y: -100 },
+          { x: 600, y: 100 },
+          { x: 400, y: 100 }
+        ]
+      };
+
+      // Con showFarLightsInLoS = true, la luz en línea de visión sí amplía la región visible
+      const regionsWithFar = computeFogRegions([], [tokenVis], bounds, [], false, [farTorchLight], true);
+      expect(isPointInMultiPolygon({ x: 500, y: 0 }, regionsWithFar.visible)).toBe(true);
+      expect(multiPolygonArea(regionsWithFar.visible)).toBeGreaterThan(120000);
+    });
   });
 });

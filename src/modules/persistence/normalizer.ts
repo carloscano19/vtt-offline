@@ -395,6 +395,7 @@ export function normalizeGameState(game: GameState): GameState {
       fog: {
         enabled: game.fog?.enabled ?? true,
         rememberExplored: game.fog?.rememberExplored ?? false,
+        showFarLightsInLoS: game.fog?.showFarLightsInLoS ?? false,
         explored: (() => {
           const exp = game.fog?.explored;
           if (!exp || !Array.isArray(exp)) return [];

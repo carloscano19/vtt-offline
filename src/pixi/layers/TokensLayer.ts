@@ -141,13 +141,16 @@ export class TokensLayer extends Container {
       if (evaluatePlayerVisibility) {
         if (!entity.visibleToPlayers) {
           targetVisibility = 0.0;
-        } else if (fogEnabled && (entity.side === 'enemigo' || entity.side === 'neutral' || entity.type === 'object')) {
-          const pt = { x: entity.x, y: entity.y };
-          const isInside = totalVisibleRegion && totalVisibleRegion.length > 0
-            ? isPointInMultiPolygon(pt, totalVisibleRegion)
-            : visibilities.some((v) => isPointInPolygon(pt, v.polygon));
-          if (!isInside) {
-            targetVisibility = 0.0;
+        } else if (fogEnabled) {
+          const hasOwnVision = entity.side === 'jugador' && Boolean(entity.vision?.active);
+          if (!hasOwnVision) {
+            const pt = { x: entity.x, y: entity.y };
+            const isInside = totalVisibleRegion && totalVisibleRegion.length > 0
+              ? isPointInMultiPolygon(pt, totalVisibleRegion)
+              : visibilities.some((v) => isPointInPolygon(pt, v.polygon));
+            if (!isInside) {
+              targetVisibility = 0.0;
+            }
           }
         }
       }

@@ -66,6 +66,7 @@ export class PixiRenderer {
   private lastFogExplored: any[] = [];
   private lastFogRevealed: any[] = [];
   private lastRememberExplored = false;
+  private lastShowFarLightsInLoS = false;
   private lastShowDebugOverlay = true;
 
   constructor(isMaster: boolean) {
@@ -281,7 +282,8 @@ export class PixiRenderer {
                 currentGrid,
                 this.lastFogRevealed ?? [],
                 this.lastRememberExplored ?? false,
-                lights
+                lights,
+                this.lastShowFarLightsInLoS ?? false
               );
             }
 
@@ -376,6 +378,7 @@ export class PixiRenderer {
     this.lastFogExplored = game.fog.explored ?? [];
     this.lastFogRevealed = game.fog.revealed ?? [];
     this.lastRememberExplored = game.fog.rememberExplored ?? false;
+    this.lastShowFarLightsInLoS = game.fog.showFarLightsInLoS ?? false;
     this.lastShowDebugOverlay = showDebugOverlay;
 
     // Sincronizar capas
@@ -397,7 +400,8 @@ export class PixiRenderer {
       gridSize,
       game.fog.revealed ?? [],
       game.fog.rememberExplored ?? false,
-      lights
+      lights,
+      game.fog.showFarLightsInLoS ?? false
     );
     this.tokensLayer.setTokenNameVisibility(game.tokenNameVisibility || 'master_only');
     this.tokensLayer.syncEntities(
@@ -410,7 +414,16 @@ export class PixiRenderer {
       camera.zoom,
       this.fogLayer.getVisibleRegion()
     );
-    this.effectsLayer.update(game.entities, camera, width, height, 0.016);
+    this.effectsLayer.update(
+      game.entities,
+      camera,
+      width,
+      height,
+      0.016,
+      isPlayerPreview,
+      game.fog.enabled,
+      this.fogLayer.getVisibleRegion()
+    );
     this.ambientLayer.update(game.ambient, lights, worldBounds, 0.016, visibilities);
     this.weatherLayer.update(game.weather, camera, width, height, 0.016);
     const isRoomOpen = Boolean(

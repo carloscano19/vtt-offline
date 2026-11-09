@@ -70,6 +70,7 @@ export interface FogConfig {
   rememberExplored?: boolean; // Recordar zonas exploradas (default: false)
   explored: ExploredMultiPolygon; // Memoria de exploración acumulada de tokens
   revealed?: ExploredMultiPolygon; // Zonas reveladas manualmente con la herramienta
+  showFarLightsInLoS?: boolean; // Las luces lejanas se ven si hay línea de visión (default: false)
 }
 
 export interface PlayerViewport {

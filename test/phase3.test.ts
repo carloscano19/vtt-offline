@@ -106,15 +106,30 @@ describe('Phase 3: Luces, Visión a Distancia y Chroma Key', () => {
 
     const bounds = { x: -1000, y: -1000, width: 2000, height: 2000 };
 
-    // Fog calculation with line of sight seeing distant light
-    // Signature: computeFogRegions(explored, visibilities, bounds, revealed, rememberExplored, lights)
+    // Por defecto showFarLightsInLoS = false: la luz lejana no amplía la visión del jugador
+    const fogDefault = computeFogRegions(
+      [],
+      tokenVisibilities,
+      bounds,
+      [],
+      false,
+      lights,
+      false
+    );
+    const anyPointNearLightDefault = fogDefault.tokenVisionTotal.some((poly) =>
+      poly.some((ring) => ring.some(([px]) => px > 400))
+    );
+    expect(anyPointNearLightDefault).toBe(false);
+
+    // Con showFarLightsInLoS = true: la zona iluminada a x ~ 500 se vuelve visible
     const fogRegions = computeFogRegions(
       [],
       tokenVisibilities,
       bounds,
       [],
       false, // rememberExplored = false
-      lights
+      lights,
+      true // showFarLightsInLoS = true
     );
 
     // Visible map polygon must contain the distant illuminated zone (x around 500, y around 0)

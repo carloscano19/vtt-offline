@@ -88,7 +88,8 @@ export class FogLayer extends Container {
     _gridSize: number,
     revealed: ExploredMultiPolygon = [],
     rememberExplored = false,
-    lights: any[] = []
+    lights: any[] = [],
+    showFarLightsInLoS = false
   ) {
     const shouldRenderFog = fogEnabled && (!this.isMaster || isPlayerPreview);
     if (!shouldRenderFog) {
@@ -116,7 +117,7 @@ export class FogLayer extends Container {
           `${l.lightId}:${Math.round(l.center?.x || 0)}:${Math.round(l.center?.y || 0)}:${l.brightPolygon?.length || 0}:${l.totalPolygon?.length || 0}:${l.shape || 'circle'}:${l.coneAngle || 60}:${l.directionOffset || 0}:${Math.round((l.rotation || 0) * 100) / 100}`
       )
       .join('|');
-    const key = `${exploredSignature(explored)}#${exploredSignature(revealed)}#${rememberExplored}#${visKey}#${lightsKey}#${Math.round(bx)},${Math.round(by)},${Math.round(bw)},${Math.round(bh)}`;
+    const key = `${exploredSignature(explored)}#${exploredSignature(revealed)}#${rememberExplored}#${showFarLightsInLoS}#${visKey}#${lightsKey}#${Math.round(bx)},${Math.round(by)},${Math.round(bw)},${Math.round(bh)}`;
     if (key === this.lastKey) return;
     this.lastKey = key;
 
@@ -126,7 +127,8 @@ export class FogLayer extends Container {
       { x: bx, y: by, width: bw, height: bh },
       revealed,
       rememberExplored,
-      lights
+      lights,
+      showFarLightsInLoS
     );
     this.lastVisibleRegion = regions.visible;
 

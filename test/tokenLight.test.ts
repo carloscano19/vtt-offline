@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Entity } from '../src/types/entity';
 import { normalizeGameState } from '../src/modules/persistence/normalizer';
 import { lightManager } from '../src/modules/lights/lightManager';
-import { computeFogRegions, multiPolygonArea } from '../src/modules/vision/fogRegions';
+import { computeFogRegions, multiPolygonArea, isPointInMultiPolygon } from '../src/modules/vision/fogRegions';
 import { LightPolygonData } from '../src/modules/vision/fogTypes';
 
 describe('Bloque 1: Luz propia en tokens', () => {
@@ -188,10 +188,10 @@ describe('Bloque 1: Luz propia en tokens', () => {
     expect(visibleArea).toBeCloseTo(40000, -2);
   });
 
-  it('la luz propia de un enemigo en línea de visión de un jugador se vuelve visible para los jugadores', () => {
+  it('un enemigo con luz propia fuera del radio de visión no es visible por defecto; con showFarLightsInLoS activo sí se vuelve visible', () => {
     const bounds = { x: -1000, y: -1000, width: 2000, height: 2000 };
 
-    // Luz del enemigo a x: 500..600
+    // Luz del enemigo a x: 550, y: 550
     const enemyLightPoly: LightPolygonData = {
       lightId: 'enemy-light',
       x: 550,
@@ -241,10 +241,18 @@ describe('Bloque 1: Luz propia en tokens', () => {
       ]
     };
 
-    const regions = computeFogRegions([], [playerVision], bounds, [], false, [enemyLightPoly]);
+    // 1. Por defecto (showFarLightsInLoS = false): la luz del enemigo no amplía la región visible del jugador
+    const regionsDefault = computeFogRegions([], [playerVision], bounds, [], false, [enemyLightPoly], false);
+    const visibleAreaDefault = multiPolygonArea(regionsDefault.visible);
+    // Solo incluye la visión del jugador (100 * 100 = 10,000)
+    expect(visibleAreaDefault).toBeCloseTo(10000, -2);
+    // El punto del enemigo (550, 550) NO está dentro de la región visible
+    expect(isPointInMultiPolygon({ x: 550, y: 550 }, regionsDefault.visible)).toBe(false);
 
-    // La región visible ahora debe incluir la visión corta del jugador (10,000) MÁS la luz del enemigo (total 200x200 = 40,000)
-    const visibleArea = multiPolygonArea(regions.visible);
-    expect(visibleArea).toBeGreaterThan(45000);
+    // 2. Con showFarLightsInLoS = true: la región visible incluye la luz del enemigo (vuelve comportamiento anterior)
+    const regionsWithFar = computeFogRegions([], [playerVision], bounds, [], false, [enemyLightPoly], true);
+    const visibleAreaWithFar = multiPolygonArea(regionsWithFar.visible);
+    expect(visibleAreaWithFar).toBeGreaterThan(45000);
+    expect(isPointInMultiPolygon({ x: 550, y: 550 }, regionsWithFar.visible)).toBe(true);
   });
 });

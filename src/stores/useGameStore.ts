@@ -89,6 +89,7 @@ function createDefaultGame(): GameState {
     fog: {
       enabled: true,
       rememberExplored: false,
+      showFarLightsInLoS: false,
       explored: [],
       revealed: []
     },

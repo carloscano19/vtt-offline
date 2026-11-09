@@ -46,7 +46,8 @@ export function computeFogRegions(
   bounds: { x: number; y: number; width: number; height: number },
   revealed: ExploredMultiPolygon = [],
   rememberExplored = false,
-  lights: any[] = []
+  lights: any[] = [],
+  showFarLightsInLoS = false
 ): FogRegions {
   const cleanExplored = snapMulti(explored || []);
   const cleanRevealed = snapMulti(revealed || []);
@@ -86,8 +87,8 @@ export function computeFogRegions(
     tokenVisionTotal = simplifyMulti(safeClip.union(totalRings));
   }
 
-  // Integración de luces dinámicas con línea de visión ilimitada de tokens (estilo D&D)
-  if (lights.length > 0 && losPolysList.length > 0) {
+  // Integración de luces dinámicas con línea de visión ilimitada de tokens (solo si showFarLightsInLoS está activo)
+  if (showFarLightsInLoS && lights.length > 0 && losPolysList.length > 0) {
     const lightBrightPolys = lights.map((l) => l.brightPolygon).filter((p) => p && p.length >= 3);
     const lightTotalPolys = lights.map((l) => l.totalPolygon).filter((p) => p && p.length >= 3);
 

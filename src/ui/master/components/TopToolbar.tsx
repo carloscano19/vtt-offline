@@ -781,6 +781,23 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
                 <span className="font-mono text-xs font-bold">{game.fog.rememberExplored ? 'SÍ' : 'NO'}</span>
               </button>
 
+              {/* Las luces lejanas se ven si hay línea de visión */}
+              <button
+                onClick={() => setFogConfig({ showFarLightsInLoS: !game.fog.showFarLightsInLoS })}
+                className={`w-full p-2 rounded flex items-center justify-between border transition-all text-left ${
+                  game.fog.showFarLightsInLoS
+                    ? 'bg-amber-950/80 border-amber-500 text-amber-200'
+                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                }`}
+                title="Las luces lejanas se ven si hay línea de visión: si está activo, las fuentes de luz lejanas en línea de visión de los tokens revelan la niebla a su alrededor. Si está desactivado, solo la visión propia de los tokens y las zonas reveladas disipan la niebla."
+              >
+                <span className="flex items-center gap-2 pr-2">
+                  <Flame className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="text-xs">Las luces lejanas se ven si hay línea de visión</span>
+                </span>
+                <span className="font-mono text-xs font-bold shrink-0">{game.fog.showFarLightsInLoS ? 'SÍ' : 'NO'}</span>
+              </button>
+
               <div className="border-t border-slate-800 my-1" />
 
               {/* Herramientas de Revelar y Ocultar zona */}
