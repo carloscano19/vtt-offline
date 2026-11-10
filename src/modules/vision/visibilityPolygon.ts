@@ -188,16 +188,80 @@ function getRayIntersection(
 export function computeVisibilityPolygon(
   origin: Point2D,
   rangePx: number,
-  segments: WallSegment[]
+  segments: WallSegment[],
+  hintTowards?: Point2D
 ): Point2D[] {
   // Radio efectivo: si rangePx <= 0 (ilimitado), usar un radio amplio
   const maxRadius = rangePx > 0 ? rangePx : 5000;
+
+  let effOrigin = { x: origin.x, y: origin.y };
+
+  // Detectar si el origen está situado exactamente sobre alguna pared (ej. antorchas de dd2vtt pegadas a la pared)
+  const touchingSegments: WallSegment[] = [];
+  for (const seg of segments) {
+    if (distToSegment(origin, seg.p1, seg.p2) < 0.5) {
+      touchingSegments.push(seg);
+    }
+  }
+
+  if (touchingSegments.length > 0) {
+    let shiftX = 0;
+    let shiftY = 0;
+
+    let targetCenter: Point2D | null = hintTowards || null;
+    if (!targetCenter) {
+      const otherPoints: Point2D[] = [];
+      for (const seg of segments) {
+        if (!touchingSegments.includes(seg)) {
+          otherPoints.push(seg.p1, seg.p2);
+        }
+      }
+      if (otherPoints.length > 0) {
+        let sumX = 0;
+        let sumY = 0;
+        for (const pt of otherPoints) {
+          sumX += pt.x;
+          sumY += pt.y;
+        }
+        targetCenter = { x: sumX / otherPoints.length, y: sumY / otherPoints.length };
+      }
+    }
+
+    for (const seg of touchingSegments) {
+      const dx = seg.p2.x - seg.p1.x;
+      const dy = seg.p2.y - seg.p1.y;
+      const len = Math.hypot(dx, dy);
+      if (len === 0) continue;
+      let nx = -dy / len;
+      let ny = dx / len;
+
+      if (targetCenter) {
+        const toCenterX = targetCenter.x - origin.x;
+        const toCenterY = targetCenter.y - origin.y;
+        if (nx * toCenterX + ny * toCenterY < 0) {
+          nx = -nx;
+          ny = -ny;
+        }
+      }
+      shiftX += nx;
+      shiftY += ny;
+    }
+
+    const shiftLen = Math.hypot(shiftX, shiftY);
+    if (shiftLen > 1e-6) {
+      const SHIFT_DIST = 0.25;
+      effOrigin = {
+        x: origin.x + (shiftX / shiftLen) * SHIFT_DIST,
+        y: origin.y + (shiftY / shiftLen) * SHIFT_DIST
+      };
+    }
+  }
 
   // 1. Filtrar segmentos que crucen o estén dentro del alcance usando distancia real al segmento
   const relevantSegments: { p1: Point2D; p2: Point2D }[] = [];
   const pad = 10;
   for (const seg of segments) {
-    if (distToSegment(origin, seg.p1, seg.p2) <= maxRadius + pad) {
+    if (distToSegment(effOrigin, seg.p1, seg.p2) <= maxRadius + pad) {
       relevantSegments.push({ p1: seg.p1, p2: seg.p2 });
     }
   }
@@ -208,8 +272,8 @@ export function computeVisibilityPolygon(
   for (let i = 0; i < circleSteps; i++) {
     const angle = (i / circleSteps) * Math.PI * 2;
     circlePoints.push({
-      x: origin.x + Math.cos(angle) * maxRadius,
-      y: origin.y + Math.sin(angle) * maxRadius
+      x: effOrigin.x + Math.cos(angle) * maxRadius,
+      y: effOrigin.y + Math.sin(angle) * maxRadius
     });
   }
   for (let i = 0; i < circleSteps; i++) {
@@ -225,7 +289,7 @@ export function computeVisibilityPolygon(
 
   for (const seg of relevantSegments) {
     for (const pt of [seg.p1, seg.p2]) {
-      const baseAngle = Math.atan2(pt.y - origin.y, pt.x - origin.x);
+      const baseAngle = Math.atan2(pt.y - effOrigin.y, pt.x - effOrigin.x);
       angleSet.add(normalizeAngle(baseAngle - delta));
       angleSet.add(normalizeAngle(baseAngle));
       angleSet.add(normalizeAngle(baseAngle + delta));
@@ -248,12 +312,12 @@ export function computeVisibilityPolygon(
 
     let closestT = maxRadius;
     let closestPt: Point2D = {
-      x: origin.x + dx * maxRadius,
-      y: origin.y + dy * maxRadius
+      x: effOrigin.x + dx * maxRadius,
+      y: effOrigin.y + dy * maxRadius
     };
 
     for (const seg of relevantSegments) {
-      const hit = getRayIntersection(origin, dx, dy, seg.p1, seg.p2);
+      const hit = getRayIntersection(effOrigin, dx, dy, seg.p1, seg.p2);
       if (hit && hit.distance < closestT) {
         closestT = hit.distance;
         closestPt = hit.point;

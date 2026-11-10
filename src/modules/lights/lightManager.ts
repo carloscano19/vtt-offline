@@ -46,10 +46,11 @@ export class LightManager {
           return `xrd:${e.id}:${Math.round(e.x)}:${Math.round(e.y)}:${currentAngle.toFixed(2)}`;
         }
         if (e.type === 'door') {
-          return `d:${e.id}:${doorAnimationManager.isFullyOpen(e.id, Boolean(e.door?.isOpen))}:${e.door?.isLocked}:${Math.round(e.door?.p1.x || 0)}:${Math.round(e.door?.p1.y || 0)}`;
+          return `d:${e.id}:${doorAnimationManager.isFullyOpen(e.id, Boolean(e.door?.isOpen))}:${e.door?.isLocked}:${Math.round(e.door?.p1.x || 0)}:${Math.round(e.door?.p1.y || 0)}:${Math.round(e.door?.p2.x || 0)}:${Math.round(e.door?.p2.y || 0)}:${e.mapId || ''}`;
         }
         if (e.type === 'wall') {
-          return `w:${e.id}:${Math.round(e.x)}:${Math.round(e.y)}:${e.points?.length}`;
+          const pts = e.points ? e.points.map((p) => `${Math.round(p.x)},${Math.round(p.y)}`).join('_') : '';
+          return `w:${e.id}:${Math.round(e.x)}:${Math.round(e.y)}:${Boolean(e.closed)}:${e.mapId || ''}:${pts}`;
         }
         if (e.type === 'map') {
           return `m:${e.id}:${Math.round(e.x)}:${Math.round(e.y)}:${e.scaleX}:${e.rotation}`;

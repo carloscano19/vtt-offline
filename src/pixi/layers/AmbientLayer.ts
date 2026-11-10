@@ -35,18 +35,20 @@ export class AmbientLayer extends Container {
 
   private darknessGfx = new Graphics();
 
-  // Contenedor con máscara stencil para degradado radial suave de oscuridad en zona iluminada
+  // Contenedor para degradado radial suave de oscuridad en zona iluminada (máscara por sprite)
   private dimContainer = new Container();
-  private dimMaskGfx = new Graphics();
   private dimSpritesContainer = new Container();
+  private dimGroups: Container[] = [];
   private dimSprites: Sprite[] = [];
+  private dimMasks: Graphics[] = [];
   private darknessFilter: DarknessInvertFilter | null = null;
 
-  // Contenedor con máscara stencil para haz continuo de luz con degradado suave
+  // Contenedor para haz continuo de luz con degradado suave (máscara por sprite)
   private tintDimContainer = new Container();
-  private tintDimMaskGfx = new Graphics();
   private tintDimSpritesContainer = new Container();
+  private tintDimGroups: Container[] = [];
   private tintDimSprites: Sprite[] = [];
+  private tintDimMasks: Graphics[] = [];
 
   // Estado para la transición suave
   private currentR = 200;
@@ -78,8 +80,7 @@ export class AmbientLayer extends Container {
     this.addChild(this.darknessGfx);
 
     // 2. Degradado suave de oscuridad en todas las zonas iluminadas
-    this.dimContainer.mask = this.dimMaskGfx;
-    this.dimContainer.addChild(this.dimMaskGfx);
+    // Cada sprite dentro de dimSpritesContainer tiene su propia máscara recortada a su polígono
     this.dimContainer.addChild(this.dimSpritesContainer);
 
     if (typeof document !== 'undefined') {
@@ -94,8 +95,7 @@ export class AmbientLayer extends Container {
     this.addChild(this.dimContainer);
 
     // 3. Haz continuo de tinte de luz (sin polígonos planos ni cortes en radio claro)
-    this.tintDimContainer.mask = this.tintDimMaskGfx;
-    this.tintDimContainer.addChild(this.tintDimMaskGfx);
+    // Cada sprite dentro de tintDimSpritesContainer tiene su propia máscara recortada a su polígono
     this.tintDimContainer.addChild(this.tintDimSpritesContainer);
     this.addChild(this.tintDimContainer);
   }
@@ -167,14 +167,18 @@ export class AmbientLayer extends Container {
 
     const lightsKey = lights
       .map(
-        (l) =>
-          `${l.lightId}:${Math.round(l.center.x)}:${Math.round(l.center.y)}:${l.brightRangePx}:${l.totalRangePx}:${l.shape || 'circle'}:${l.coneAngle || 60}:${l.directionOffset || 0}:${Math.round((l.rotation || 0) * 100) / 100}`
+        (l) => {
+          const polyHash = l.totalPolygon ? l.totalPolygon.reduce((acc, p) => (acc + Math.round(p.x * 31 + p.y * 17)) | 0, 0) : 0;
+          return `${l.lightId}:${Math.round(l.center.x)}:${Math.round(l.center.y)}:${l.brightRangePx}:${l.totalRangePx}:${l.shape || 'circle'}:${l.coneAngle || 60}:${l.directionOffset || 0}:${Math.round((l.rotation || 0) * 100) / 100}:${l.totalPolygon?.length || 0}:${polyHash}`;
+        }
       )
       .join('|');
     const tokensKey = illuminatingTokens
       .map(
-        (t) =>
-          `${t.tokenId}:${Math.round(t.center.x)}:${Math.round(t.center.y)}:${t.brightRangePx}:${t.totalRangePx}:${t.shape || 'circle'}:${t.coneAngle || 60}:${t.directionOffset || 0}:${Math.round((t.rotation || 0) * 100) / 100}`
+        (t) => {
+          const polyHash = t.totalPolygon ? t.totalPolygon.reduce((acc, p) => (acc + Math.round(p.x * 31 + p.y * 17)) | 0, 0) : 0;
+          return `${t.tokenId}:${Math.round(t.center.x)}:${Math.round(t.center.y)}:${t.brightRangePx}:${t.totalRangePx}:${t.shape || 'circle'}:${t.coneAngle || 60}:${t.directionOffset || 0}:${Math.round((t.rotation || 0) * 100) / 100}:${t.totalPolygon?.length || 0}:${polyHash}`;
+        }
       )
       .join('|');
     const geoKey = `${bx},${by},${bw},${bh}__${lightsKey}__${tokensKey}`;
@@ -212,11 +216,8 @@ export class AmbientLayer extends Container {
       this.darknessGfx.clear();
       this.renderMulti(this.darknessGfx, outsideMulti, 0xffffff, 1.0);
 
-      // 4b. Regenerar máscara stencil única para degradado de oscuridad de todas las luces y tokens
-      this.dimMaskGfx.clear();
+      // 4b. Regenerar máscara stencil individual por sprite para degradado de oscuridad de cada luz y token
       if (totalMulti.length > 0) {
-        this.renderMulti(this.dimMaskGfx, totalMulti, 0xffffff, 1.0);
-
         let darkSpriteIdx = 0;
 
         // Sprites de reducción de oscuridad para las luces
@@ -225,13 +226,30 @@ export class AmbientLayer extends Container {
           const rTotal = light.totalRangePx || 0;
           if (rTotal <= 0 || !light.center) continue;
 
+          let group = this.dimGroups[darkSpriteIdx];
           let sprite = this.dimSprites[darkSpriteIdx];
-          if (!sprite) {
+          let mask = this.dimMasks[darkSpriteIdx];
+          if (!group) {
+            group = new Container();
             sprite = new Sprite();
             sprite.anchor.set(0.5);
+            mask = new Graphics();
+            group.mask = mask;
+            group.addChild(mask);
+            group.addChild(sprite);
+            this.dimGroups.push(group);
             this.dimSprites.push(sprite);
-            this.dimSpritesContainer.addChild(sprite);
+            this.dimMasks.push(mask);
+            this.dimSpritesContainer.addChild(group);
           }
+
+          mask.clear();
+          if (light.totalPolygon && light.totalPolygon.length >= 3) {
+            mask.poly(light.totalPolygon.map((p) => [p.x, p.y]).flat());
+            mask.fill({ color: 0xffffff, alpha: 1.0 });
+            (mask as any)._polygon = light.totalPolygon;
+          }
+
           const ratio = rTotal > 0 ? rBright / rTotal : 1.0;
           const isCone = light.shape === 'cone';
           const coneAngle = light.coneAngle ?? 60;
@@ -253,6 +271,7 @@ export class AmbientLayer extends Container {
           sprite.width = rTotal * 2;
           sprite.height = rTotal * 2;
           sprite.visible = true;
+          group.visible = true;
           darkSpriteIdx++;
         }
 
@@ -262,13 +281,30 @@ export class AmbientLayer extends Container {
           const rTotal = token.totalRangePx || 0;
           if (rTotal <= 0 || !token.center) continue;
 
+          let group = this.dimGroups[darkSpriteIdx];
           let sprite = this.dimSprites[darkSpriteIdx];
-          if (!sprite) {
+          let mask = this.dimMasks[darkSpriteIdx];
+          if (!group) {
+            group = new Container();
             sprite = new Sprite();
             sprite.anchor.set(0.5);
+            mask = new Graphics();
+            group.mask = mask;
+            group.addChild(mask);
+            group.addChild(sprite);
+            this.dimGroups.push(group);
             this.dimSprites.push(sprite);
-            this.dimSpritesContainer.addChild(sprite);
+            this.dimMasks.push(mask);
+            this.dimSpritesContainer.addChild(group);
           }
+
+          mask.clear();
+          if (token.totalPolygon && token.totalPolygon.length >= 3) {
+            mask.poly(token.totalPolygon.map((p) => [p.x, p.y]).flat());
+            mask.fill({ color: 0xffffff, alpha: 1.0 });
+            (mask as any)._polygon = token.totalPolygon;
+          }
+
           const ratio = rTotal > 0 ? rBright / rTotal : 1.0;
           const isCone = token.shape === 'cone';
           const coneAngle = token.coneAngle ?? 60;
@@ -290,34 +326,46 @@ export class AmbientLayer extends Container {
           sprite.width = rTotal * 2;
           sprite.height = rTotal * 2;
           sprite.visible = true;
+          group.visible = true;
           darkSpriteIdx++;
         }
 
-        for (let i = darkSpriteIdx; i < this.dimSprites.length; i++) {
-          this.dimSprites[i].visible = false;
+        for (let i = darkSpriteIdx; i < this.dimGroups.length; i++) {
+          this.dimGroups[i].visible = false;
         }
       } else {
-        for (const s of this.dimSprites) s.visible = false;
+        for (const g of this.dimGroups) g.visible = false;
       }
 
-      // 5. Regenerar máscara stencil única y sprites del haz continuo de tinte (únicamente fuentes de luz, no tokens)
-      this.tintDimMaskGfx.clear();
+      // 5. Regenerar máscara stencil individual y sprites del haz continuo de tinte (únicamente fuentes de luz, no tokens)
       let tintSpriteIdx = 0;
       for (const light of lights) {
         if (light.totalPolygon && light.totalPolygon.length >= 3) {
           const rBright = light.brightRangePx || 0;
           const rTotal = light.totalRangePx || 0;
           if (rTotal > 0 && light.center) {
-            this.tintDimMaskGfx.poly(light.totalPolygon.map((p) => [p.x, p.y]).flat());
-            this.tintDimMaskGfx.fill({ color: 0xffffff, alpha: 1.0 });
-
+            let group = this.tintDimGroups[tintSpriteIdx];
             let sprite = this.tintDimSprites[tintSpriteIdx];
-            if (!sprite) {
+            let mask = this.tintDimMasks[tintSpriteIdx];
+            if (!group) {
+              group = new Container();
               sprite = new Sprite();
               sprite.anchor.set(0.5);
+              mask = new Graphics();
+              group.mask = mask;
+              group.addChild(mask);
+              group.addChild(sprite);
+              this.tintDimGroups.push(group);
               this.tintDimSprites.push(sprite);
-              this.tintDimSpritesContainer.addChild(sprite);
+              this.tintDimMasks.push(mask);
+              this.tintDimSpritesContainer.addChild(group);
             }
+
+            mask.clear();
+            mask.poly(light.totalPolygon.map((p) => [p.x, p.y]).flat());
+            mask.fill({ color: 0xffffff, alpha: 1.0 });
+            (mask as any)._polygon = light.totalPolygon;
+
             sprite.blendMode = 'screen';
             const ratio = rTotal > 0 ? rBright / rTotal : 1.0;
             const isCone = light.shape === 'cone';
@@ -332,12 +380,13 @@ export class AmbientLayer extends Container {
             sprite.width = rTotal * 2;
             sprite.height = rTotal * 2;
             sprite.visible = true;
+            group.visible = true;
             tintSpriteIdx++;
           }
         }
       }
-      for (let i = tintSpriteIdx; i < this.tintDimSprites.length; i++) {
-        this.tintDimSprites[i].visible = false;
+      for (let i = tintSpriteIdx; i < this.tintDimGroups.length; i++) {
+        this.tintDimGroups[i].visible = false;
       }
     }
 
@@ -401,10 +450,13 @@ export class AmbientLayer extends Container {
       const rBright = light.brightRangePx || 0;
       const rTotal = light.totalRangePx || 0;
       if (rTotal > 0 && light.center) {
-        const dimSprite = this.dimSprites[activeDimIdx++];
-        if (dimSprite) {
+        const dimSprite = this.dimSprites[activeDimIdx];
+        const dimGroup = this.dimGroups[activeDimIdx];
+        activeDimIdx++;
+        if (dimSprite && dimGroup) {
           dimSprite.alpha = fadeFactor;
           dimSprite.visible = fadeFactor > 0.001;
+          dimGroup.visible = dimSprite.visible;
         }
       }
 
@@ -431,11 +483,14 @@ export class AmbientLayer extends Container {
         : 0;
 
       if (rTotal > 0 && light.center && light.totalPolygon && light.totalPolygon.length >= 3) {
-        const sprite = this.tintDimSprites[activeTintIdx++];
-        if (sprite) {
+        const sprite = this.tintDimSprites[activeTintIdx];
+        const group = this.tintDimGroups[activeTintIdx];
+        activeTintIdx++;
+        if (sprite && group) {
           sprite.tint = colorNum;
           sprite.alpha = baseAlpha * fadeFactor;
           sprite.visible = sprite.alpha > 0.001;
+          group.visible = sprite.visible;
         }
       }
     }
@@ -444,12 +499,35 @@ export class AmbientLayer extends Container {
     for (const token of illuminatingTokens) {
       const rTotal = token.totalRangePx || 0;
       if (rTotal > 0 && token.center) {
-        const dimSprite = this.dimSprites[activeDimIdx++];
-        if (dimSprite) {
+        const dimSprite = this.dimSprites[activeDimIdx];
+        const dimGroup = this.dimGroups[activeDimIdx];
+        activeDimIdx++;
+        if (dimSprite && dimGroup) {
           dimSprite.alpha = 1.0;
           dimSprite.visible = true;
+          dimGroup.visible = true;
         }
       }
     }
+  }
+
+  public get dimMaskGfx(): Graphics | undefined {
+    return this.dimMasks[0];
+  }
+
+  public get tintDimMaskGfx(): Graphics | undefined {
+    return this.tintDimMasks[0];
+  }
+
+  public getDimMask(index: number): Graphics | undefined {
+    return this.dimMasks[index];
+  }
+
+  public getDimGroup(index: number): Container | undefined {
+    return this.dimGroups[index];
+  }
+
+  public getTintDimMask(index: number): Graphics | undefined {
+    return this.tintDimMasks[index];
   }
 }
