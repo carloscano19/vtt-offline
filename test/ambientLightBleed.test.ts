@@ -315,4 +315,79 @@ describe('Light Bleed & Cache Key Tests', () => {
     const hasRightPoints = polyRight.some((pt) => pt.x > 10);
     expect(hasRightPoints).toBe(true);
   });
+
+  it('6. dimContainer.mask exists and contains the union of illuminated polygons (preventing dark squares)', () => {
+    const lightA: Entity = {
+      id: 'light_A',
+      type: 'light',
+      x: -50,
+      y: 0,
+      layer: 'effects',
+      light: {
+        enabled: true,
+        brightRadiusInSquares: 2,
+        dimRadiusInSquares: 2,
+        color: '#ff9a3c',
+        intensity: 0.8
+      }
+    };
+
+    const lightB: Entity = {
+      id: 'light_B',
+      type: 'light',
+      x: 100,
+      y: 0,
+      layer: 'effects',
+      light: {
+        enabled: true,
+        brightRadiusInSquares: 2,
+        dimRadiusInSquares: 2,
+        color: '#ff9a3c',
+        intensity: 0.8
+      }
+    };
+
+    const entities: Entity[] = [lightA, lightB];
+    const lightManager = new LightManager();
+    const visibilities = lightManager.getLightsVisibility(entities, 70);
+
+    const layer = new AmbientLayer(true);
+    const bounds = { x: -500, y: -500, width: 1000, height: 1000 };
+    layer.update({ preset: 'dusk', color: '#c84224', intensity: 60 }, visibilities, bounds, 0.016);
+
+    // dimContainer.mask debe existir y ser dimMaskGfx
+    const dimContainerMask = (layer as any).dimContainer.mask;
+    expect(dimContainerMask).toBeDefined();
+    expect(dimContainerMask).toBe(layer.dimMaskGfx);
+
+    // dimContainer.mask contiene la unión de polígonos
+    const unionMulti = (dimContainerMask as any)._multiPolygon;
+    expect(unionMulti).toBeDefined();
+    expect(unionMulti.length).toBeGreaterThan(0);
+
+    // Puntos dentro de la luz A y dentro de la luz B están dentro de la máscara general
+    const pointInA = { x: -50, y: 0 };
+    const pointInB = { x: 100, y: 0 };
+    const isInsideUnion = (pt: Point2D) => {
+      for (const poly of unionMulti) {
+        if (poly[0] && isPointInPolygon(pt, poly[0].map(([x, y]: [number, number]) => ({ x, y })))) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    expect(isInsideUnion(pointInA)).toBe(true);
+    expect(isInsideUnion(pointInB)).toBe(true);
+
+    // Fuera de ambas luces (ej. (300, 300)), no está en la máscara general,
+    // evitando que DarknessInvertFilter genere rectángulos oscuros sobre darknessGfx
+    expect(isInsideUnion({ x: 300, y: 300 })).toBe(false);
+
+    // Las máscaras individuales siguen existiendo y sólo contienen su propia fuente
+    const maskA = layer.getDimMask(0);
+    const maskB = layer.getDimMask(1);
+    expect(maskA).toBeDefined();
+    expect(maskB).toBeDefined();
+  });
 });

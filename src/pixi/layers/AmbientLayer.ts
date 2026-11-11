@@ -35,8 +35,9 @@ export class AmbientLayer extends Container {
 
   private darknessGfx = new Graphics();
 
-  // Contenedor para degradado radial suave de oscuridad en zona iluminada (máscara por sprite)
+  // Contenedor con máscara stencil para degradado radial suave de oscuridad en zona iluminada
   private dimContainer = new Container();
+  public readonly dimMaskGfx = new Graphics();
   private dimSpritesContainer = new Container();
   private dimGroups: Container[] = [];
   private dimSprites: Sprite[] = [];
@@ -80,7 +81,10 @@ export class AmbientLayer extends Container {
     this.addChild(this.darknessGfx);
 
     // 2. Degradado suave de oscuridad en todas las zonas iluminadas
-    // Cada sprite dentro de dimSpritesContainer tiene su propia máscara recortada a su polígono
+    // dimMaskGfx limita el alcance del DarknessInvertFilter a la unión de polígonos iluminados
+    // Dentro de dimSpritesContainer, cada sprite tiene además su propia máscara recortada a su polígono
+    this.dimContainer.mask = this.dimMaskGfx;
+    this.dimContainer.addChild(this.dimMaskGfx);
     this.dimContainer.addChild(this.dimSpritesContainer);
 
     if (typeof document !== 'undefined') {
@@ -216,8 +220,12 @@ export class AmbientLayer extends Container {
       this.darknessGfx.clear();
       this.renderMulti(this.darknessGfx, outsideMulti, 0xffffff, 1.0);
 
-      // 4b. Regenerar máscara stencil individual por sprite para degradado de oscuridad de cada luz y token
+      // 4b. Regenerar máscara stencil general para dimContainer (limita el filtro DarknessInvertFilter a totalMulti)
+      this.dimMaskGfx.clear();
       if (totalMulti.length > 0) {
+        this.renderMulti(this.dimMaskGfx, totalMulti, 0xffffff, 1.0);
+        (this.dimMaskGfx as any)._multiPolygon = totalMulti;
+
         let darkSpriteIdx = 0;
 
         // Sprites de reducción de oscuridad para las luces
@@ -334,6 +342,7 @@ export class AmbientLayer extends Container {
           this.dimGroups[i].visible = false;
         }
       } else {
+        (this.dimMaskGfx as any)._multiPolygon = [];
         for (const g of this.dimGroups) g.visible = false;
       }
 
@@ -509,10 +518,6 @@ export class AmbientLayer extends Container {
         }
       }
     }
-  }
-
-  public get dimMaskGfx(): Graphics | undefined {
-    return this.dimMasks[0];
   }
 
   public get tintDimMaskGfx(): Graphics | undefined {
