@@ -1,6 +1,7 @@
 import { db, saveAsset } from '../../db/dexie';
 import { GameState, AssetItem } from '../../types/game';
 import { normalizeGameState } from './normalizer';
+import { cloudSync } from '../sync/cloudSync';
 
 export async function exportVttSave(state: GameState): Promise<Blob> {
   const JSZip = (await import('jszip')).default;
@@ -93,6 +94,7 @@ export async function importVttSave(buffer: ArrayBuffer): Promise<GameState> {
       };
 
       await saveAsset(assetItem);
+      cloudSync.enqueueUpload(assetItem.id);
     }
   }
 

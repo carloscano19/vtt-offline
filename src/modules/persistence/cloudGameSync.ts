@@ -237,6 +237,8 @@ class CloudGameSync {
           }
           useGameStore.getState().setGame(restoredGame);
           await saveAutoSaveToDb(restoredGame);
+          const { cloudSync } = await import('../sync/cloudSync');
+          await cloudSync.ensureGameAssets(restoredGame);
         } else if (localAuto && localAuto.entities && localAuto.entities.length > 0) {
           console.log('[cloudGameSync] Subiendo versión local a la nube...');
           if (localAuto.cloudSavedId) {

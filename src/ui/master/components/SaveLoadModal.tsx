@@ -284,6 +284,7 @@ export const SaveLoadModal: React.FC = () => {
       setPinPrompt(null);
       setShowSaveLoadModal(false);
       showStatus(`Partida "${res.game.name}" cargada desde la nube.`);
+      await cloudSync.ensureGameAssets(res.game);
     }
   };
 

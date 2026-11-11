@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { cloudSync, formatStorageBytes } from '../../../modules/sync/cloudSync';
+import { cloudSync, formatStorageBytes, SyncStatus } from '../../../modules/sync/cloudSync';
 import { authManager } from '../../../modules/auth/authManager';
-import { HardDrive } from 'lucide-react';
+import { HardDrive, AlertCircle } from 'lucide-react';
 
 interface StorageIndicatorProps {
   compact?: boolean;
@@ -9,6 +9,7 @@ interface StorageIndicatorProps {
 
 export const StorageIndicator: React.FC<StorageIndicatorProps> = ({ compact = false }) => {
   const [currentUser, setCurrentUser] = useState(authManager.getUser());
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(cloudSync.getStatus());
   const [usage, setUsage] = useState({
     usedBytes: 0,
     totalBytes: 1024 * 1024 * 1024,
@@ -25,7 +26,8 @@ export const StorageIndicator: React.FC<StorageIndicatorProps> = ({ compact = fa
       setCurrentUser(user);
       if (user) updateUsage();
     });
-    const unbindSync = cloudSync.onStatusChange(() => {
+    const unbindSync = cloudSync.onStatusChange((status) => {
+      setSyncStatus(status);
       updateUsage();
     });
     return () => {
@@ -37,6 +39,18 @@ export const StorageIndicator: React.FC<StorageIndicatorProps> = ({ compact = fa
   if (!currentUser) return null;
 
   if (compact) {
+    if (syncStatus.state === 'error') {
+      return (
+        <div
+          className="flex items-center gap-1.5 text-[10px] text-rose-300 select-none py-1 px-2 bg-rose-950/60 rounded border border-rose-800/80 truncate cursor-help"
+          title={`Error de sincronización en la nube: ${syncStatus.message}`}
+        >
+          <AlertCircle className="w-3 h-3 text-rose-400 shrink-0" />
+          <span className="truncate">{syncStatus.message}</span>
+        </div>
+      );
+    }
+
     return (
       <div
         className="flex items-center gap-1.5 text-[10px] text-slate-400 select-none py-1 px-2 bg-slate-950/60 rounded border border-slate-800"
@@ -77,6 +91,15 @@ export const StorageIndicator: React.FC<StorageIndicatorProps> = ({ compact = fa
           style={{ width: `${Math.max(3, Math.min(100, usage.percentage))}%` }}
         />
       </div>
+      {syncStatus.state === 'error' && (
+        <div
+          className="flex items-center gap-1.5 text-[10px] text-rose-300 py-1 px-2 bg-rose-950/60 rounded border border-rose-800/80 truncate mt-1.5"
+          title={syncStatus.message}
+        >
+          <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+          <span className="truncate">{syncStatus.message}</span>
+        </div>
+      )}
     </div>
   );
 };

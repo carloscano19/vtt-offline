@@ -276,6 +276,7 @@ export const LibraryTab: React.FC = () => {
             mapData: parsed.mapData
           };
           await saveAsset(asset);
+          cloudSync.enqueueUpload(asset.id);
         } else {
           let type: 'image' | 'gif' | 'video' = 'image';
           if (file.type.includes('gif') || lower.endsWith('.gif')) type = 'gif';
@@ -370,8 +371,9 @@ export const LibraryTab: React.FC = () => {
               <span>Sin conexión</span>
             </span>
           ) : (
-            <span className="text-rose-400 text-[11px] truncate max-w-[140px]" title={syncStatus.message}>
-              {syncStatus.message || 'Error sync'}
+            <span className="flex items-center gap-1 text-rose-400 font-medium text-[11px] truncate max-w-[170px]" title={syncStatus.message}>
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-400" />
+              <span className="truncate">{syncStatus.message || 'Error sync'}</span>
             </span>
           )}
         </div>

@@ -1,10 +1,11 @@
 import { supabase } from '../supabase/supabaseClient';
 import { authManager } from '../auth/authManager';
 import { db, saveAsset, deleteAsset as deleteLocalAsset, getAllAssets } from '../../db/dexie';
-import { AssetItem, AssetType } from '../../types/game';
+import { AssetItem, AssetType, GameState } from '../../types/game';
 import { invalidateCachedTexture } from '../../pixi/utils/textureCache';
 import { syncChannel } from './syncChannel';
 import { useGameStore } from '../../stores/useGameStore';
+import { useUIStore } from '../../stores/useUIStore';
 import { cloudGameSync } from '../persistence/cloudGameSync';
 
 export type SyncState = 'synced' | 'syncing' | 'offline' | 'unauthenticated' | 'error';
@@ -38,9 +39,11 @@ const QUEUE_STORAGE_KEY = 'vtt_cloud_upload_queue_v1';
 class CloudSyncManager {
   private listeners: Set<SyncListener> = new Set();
   private isSyncing = false;
+  private currentProcessPromise: Promise<void> | null = null;
   private uploadQueue: string[] = []; // IDs de assets pendientes de subir
   private currentState: SyncState = 'unauthenticated';
   private currentMessage = '';
+  private missingNotices: string[] = [];
 
   constructor() {
     this.loadQueueFromStorage();
@@ -150,7 +153,9 @@ class CloudSyncManager {
    * Procesa la cola de subida pendiente a Supabase
    */
   public async processQueue(): Promise<void> {
-    if (this.isSyncing) return;
+    if (this.currentProcessPromise) {
+      return this.currentProcessPromise;
+    }
     if (!authManager.isAuthenticated() || !supabase) {
       this.updateStatus('unauthenticated', 0, 'Inicia sesión para guardar tu biblioteca en la nube');
       return;
@@ -166,11 +171,19 @@ class CloudSyncManager {
     }
 
     this.isSyncing = true;
+    this.currentProcessPromise = this._processQueueInternal().finally(() => {
+      this.isSyncing = false;
+      this.currentProcessPromise = null;
+    });
+
+    return this.currentProcessPromise;
+  }
+
+  private async _processQueueInternal(): Promise<void> {
     this.updateStatus('syncing', this.uploadQueue.length, `Subiendo ${this.uploadQueue.length} elementos...`);
 
     const user = authManager.getUser();
-    if (!user) {
-      this.isSyncing = false;
+    if (!user || !supabase) {
       return;
     }
 
@@ -195,6 +208,15 @@ class CloudSyncManager {
         const fileExt = asset.mimeType?.split('/')[1] || 'bin';
         const storagePath = `shared/${asset.type}/${asset.id}.${fileExt}`;
 
+        const isExceedingSize = asset.blob && asset.blob.size > 50 * 1024 * 1024;
+        if (isExceedingSize) {
+          const sizeMb = ((asset.blob?.size || 0) / (1024 * 1024)).toFixed(1);
+          const errorMsg = `«${asset.name}» supera el límite de 50 MB de Supabase (${sizeMb} MB)`;
+          this.uploadQueue.shift();
+          this.saveQueueToStorage();
+          throw new Error(errorMsg);
+        }
+
         // Subir blob a Storage
         const { error: storageError } = await supabase.storage
           .from('vtt-assets')
@@ -205,7 +227,21 @@ class CloudSyncManager {
 
         if (storageError) {
           console.error(`[cloudSync] Error al subir asset ${asset.id} a Storage:`, storageError);
-          throw storageError;
+          const isSizeError =
+            (asset.blob && asset.blob.size > 50 * 1024 * 1024) ||
+            storageError.message?.toLowerCase().includes('payload too large') ||
+            storageError.message?.toLowerCase().includes('exceeded') ||
+            storageError.message?.toLowerCase().includes('entity too large') ||
+            (storageError as any).statusCode === '413' ||
+            (storageError as any).status === 413;
+
+          const errorMsg = isSizeError
+            ? `«${asset.name}» supera el límite de 50 MB de Supabase`
+            : `Error al subir «${asset.name}»: ${storageError.message || 'Error de almacenamiento'}`;
+
+          this.uploadQueue.shift();
+          this.saveQueueToStorage();
+          throw new Error(errorMsg);
         }
 
         // Registrar o actualizar metadatos en tabla vtt.library_assets
@@ -229,7 +265,9 @@ class CloudSyncManager {
 
         if (dbError) {
           console.error(`[cloudSync] Error al guardar metadatos de ${asset.id}:`, dbError);
-          throw dbError;
+          this.uploadQueue.shift();
+          this.saveQueueToStorage();
+          throw new Error(`Error al sincronizar «${asset.name}»: ${dbError.message || 'Error en metadatos'}`);
         }
 
         // Eliminado con éxito de la cola
@@ -241,9 +279,11 @@ class CloudSyncManager {
       this.updateStatus('synced', 0, 'Biblioteca sincronizada');
     } catch (err: any) {
       console.error('[cloudSync] Error procesando cola de subida:', err);
-      this.updateStatus('error', this.uploadQueue.length, `Error al sincronizar: ${err?.message || String(err)}`);
-    } finally {
-      this.isSyncing = false;
+      const errMsg = err?.message || String(err);
+      this.updateStatus('error', this.uploadQueue.length, errMsg);
+      try {
+        useUIStore.getState().addToast(errMsg, 'warning', 6000);
+      } catch {}
     }
   }
 
@@ -302,6 +342,103 @@ class CloudSyncManager {
     const pool = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
     await Promise.all(pool);
     return successCount;
+  }
+
+  /**
+   * Asegura que los assets referenciados en una partida estén descargados en local (Dexie).
+   * Si faltan en Dexie pero existen en library_assets de Supabase, los descarga concurrentemente.
+   * Si faltan tanto en Dexie como en library_assets, muestra un aviso por cada uno:
+   * "Falta la imagen de «nombre»: vuelve a importarla"
+   */
+  public async ensureGameAssets(game: GameState): Promise<{ downloaded: number; missing: string[] }> {
+    if (!game) return { downloaded: 0, missing: [] };
+
+    // 1. Recopilar todos los assetIds y sus nombres asociados en la partida
+    const assetNameMap = new Map<string, string>();
+    for (const ent of game.entities || []) {
+      if (ent.assetId) {
+        if (!assetNameMap.has(ent.assetId)) {
+          const fallbackName = ent.type === 'map' ? 'Mapa' : (ent.type === 'token' ? 'Token' : 'Objeto');
+          assetNameMap.set(ent.assetId, ent.name?.trim() || fallbackName);
+        }
+      }
+    }
+    for (const track of game.music?.playlist || []) {
+      if (track.assetId && !assetNameMap.has(track.assetId)) {
+        assetNameMap.set(track.assetId, track.name?.trim() || 'Pista de audio');
+      }
+    }
+
+    if (assetNameMap.size === 0) {
+      return { downloaded: 0, missing: [] };
+    }
+
+    // 2. Comprobar cuáles faltan en Dexie
+    const missingAssetIds: string[] = [];
+    for (const assetId of assetNameMap.keys()) {
+      try {
+        const local = await db.assets.get(assetId);
+        if (!local || !local.blob || local.blob.size === 0) {
+          missingAssetIds.push(assetId);
+        }
+      } catch {
+        missingAssetIds.push(assetId);
+      }
+    }
+
+    if (missingAssetIds.length === 0) {
+      return { downloaded: 0, missing: [] };
+    }
+
+    // 3. Consultar library_assets en Supabase para los que faltan
+    let cloudItems: CloudAssetRecord[] = [];
+    if (supabase && authManager.isAuthenticated()) {
+      try {
+        const { data, error } = await supabase
+          .from('library_assets')
+          .select('*')
+          .in('id', missingAssetIds);
+
+        if (!error && data) {
+          cloudItems = data as CloudAssetRecord[];
+        }
+      } catch (err) {
+        console.warn('[cloudSync] Error consultando library_assets en ensureGameAssets:', err);
+      }
+    }
+
+    const foundCloudIds = new Set(cloudItems.map((c) => c.id));
+    const completelyMissingIds = missingAssetIds.filter((id) => !foundCloudIds.has(id));
+
+    // 4. Descargar los que están en library_assets con concurrencia
+    let downloadedCount = 0;
+    if (cloudItems.length > 0) {
+      downloadedCount = await this.downloadBatchWithConcurrency(cloudItems, 4);
+    }
+
+    // 5. Para los que faltan tanto en Dexie como en library_assets, mostrar aviso:
+    // "Falta la imagen de «nombre»: vuelve a importarla"
+    for (const missingId of completelyMissingIds) {
+      const name = assetNameMap.get(missingId) || 'objeto';
+      const msg = `Falta la imagen de «${name}»: vuelve a importarla`;
+      this.missingNotices.push(msg);
+      try {
+        useUIStore.getState().addToast(msg, 'warning', 6000);
+      } catch {}
+    }
+
+    return {
+      downloaded: downloadedCount,
+      missing: completelyMissingIds
+    };
+  }
+
+  public getMissingNotices(): string[] {
+    return [...this.missingNotices];
+  }
+
+  public clearMissingNotices(): void {
+    this.missingNotices = [];
   }
 
   /**

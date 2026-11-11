@@ -213,6 +213,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenGridModal, onOpenR
           };
 
           await saveAsset(asset);
+          cloudSync.enqueueUpload(asset.id);
 
           // Posicionamiento de mapa nuevo:
           // Colocar en el centro de la vista actual del máster

@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useGameStore } from '../../../stores/useGameStore';
 import { AssetItem, MusicTrack } from '../../../types/game';
 import { saveAsset } from '../../../db/dexie';
+import { cloudSync } from '../../../modules/sync/cloudSync';
 import {
   Play,
   Pause,
@@ -56,6 +57,7 @@ export const MusicTab: React.FC = () => {
       };
 
       await saveAsset(asset);
+      cloudSync.enqueueUpload(asset.id);
 
       const track: MusicTrack = {
         id: `track_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
